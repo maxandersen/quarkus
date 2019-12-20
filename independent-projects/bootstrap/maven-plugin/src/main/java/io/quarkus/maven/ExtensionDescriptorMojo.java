@@ -187,7 +187,16 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
             }
         }
         if (!extObject.has("description") && project.getDescription() != null) {
+        	String str = project.getDescription();
+        	if(str == null || str.trim().isEmpty()) {
+        		throw new MojoExecutionException("No description found for extension.");
+        	}
             extObject.put("description", project.getDescription());
+        }
+        
+        String desc = extObject.get("description").asText();
+        if(!desc.equals(project.getDescription())) {
+        	throw new MojoExecutionException("Extension description does not match description from pom.xml");
         }
 
         try (BufferedWriter bw = Files

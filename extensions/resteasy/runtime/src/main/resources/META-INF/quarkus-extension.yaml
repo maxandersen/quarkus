@@ -1,5 +1,6 @@
 ---
 name: "RESTEasy JAX-RS"
+description: "blah"
 metadata:
   short-name: "jax-rs"
   keywords:
