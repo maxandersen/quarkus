@@ -1,0 +1,22 @@
+[id="json-binding_{context}"]
+= JSON Binding
+
+We will expose `Fruit` instances over HTTP in the JSON format.
+Consequently, you also need to add the `quarkus-resteasy-jsonb` extension:
+
+[source,shell]
+----
+./mvnw quarkus:add-extension -Dextensions="resteasy-jsonb"
+----
+
+If you prefer not to use the command line, manually add this to the dependencies section of your `pom.xml` file:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-resteasy-jsonb</artifactId>
+</dependency>
+----
+
+Of course, this is only a requirement for this guide, not any application using the Reactive PostgreSQL Client.

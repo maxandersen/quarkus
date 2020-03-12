@@ -1,0 +1,57 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-resiliency-timeouts_{context}"]
+= Adding Resiliency: Timeouts
+:context: adding-resiliency-timeouts
+
+So what else have we got in MicroProfile Fault Tolerance? Let's look into timeouts.
+
+Add following two methods to our `CoffeeResource` endpoint. Again, no need to restart the server, just paste the code
+and save the file.
+
+[source,java]
+----
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+import org.eclipse.microprofile.faulttolerance.Timeout;
+...
+public class CoffeeResource {
+    ...
+    @GET
+    @Path("/{id}/recommendations")
+    @Timeout(250)
+    public List<Coffee> recommendations(@PathParam int id) {
+        long started = System.currentTimeMillis();
+        final long invocationNumber = counter.getAndIncrement();
+
+        try {
+            randomDelay();
+            LOGGER.infof("CoffeeResource#recommendations() invocation #%d returning successfully", invocationNumber);
+            return coffeeRepository.getRecommendations(id);
+        } catch (InterruptedException e) {
+            LOGGER.errorf("CoffeeResource#recommendations() invocation #%d timed out after %d ms",
+                    invocationNumber, System.currentTimeMillis() - started);
+            return null;
+        }
+    }
+
+    private void randomDelay() throws InterruptedException {
+        Thread.sleep(new Random().nextInt(500));
+    }
+}
+----
+
+We added some new functionality. We want to be able to recommend some related coffees based on a coffee that a user
+is currently looking at. It's not a critical functionality, it's a nice-to-have. When the system is overloaded and the
+logic behind obtaining recommendations takes too long to execute, we would rather time out and render the UI without
+recommendations.
+
+Note that the timeout was configured to 250 ms, and a random artificial delay between 0 to 500 ms was introduced
+into the `CoffeeResource#recommendations()` method.
+
+In your browser, go to `http://localhost:8080/coffee/2/recommendations` and hit refresh a couple of times.
+
+You should see some requests time out with `org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException`.
+Requests that do not time out should show two recommended coffee samples in JSON.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

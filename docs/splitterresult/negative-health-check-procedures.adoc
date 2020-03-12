@@ -1,0 +1,77 @@
+ifdef::context[:parent-context: {context}]
+[id="negative-health-check-procedures_{context}"]
+= Negative health check procedures
+:context: negative-health-check-procedures
+
+In this section, we extend our `Database connection health check` with the option of
+stating that our application is not ready to process requests as the underlying
+database connection cannot be established. For simplicity reasons, we only determine
+whether the database is accessible or not by a configuration property.
+
+Update the `org.acme.microprofile.health.DatabaseConnectionHealthCheck` class:
+
+[source,java]
+----
+package org.acme.microprofile.health;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.HealthCheckResponseBuilder;
+import org.eclipse.microprofile.health.Readiness;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@Readiness
+@ApplicationScoped
+public class DatabaseConnectionHealthCheck implements HealthCheck {
+
+    @ConfigProperty(name = "database.up", defaultValue = "false")
+    private boolean databaseUp;
+
+    @Override
+    public HealthCheckResponse call() {
+
+        HealthCheckResponseBuilder responseBuilder = HealthCheckResponse.named("Database connection health check");
+
+        try {
+            simulateDatabaseConnectionVerification();
+            responseBuilder.up();
+        } catch (IllegalStateException e) {
+            // cannot access the database
+            responseBuilder.down();
+        }
+
+        return responseBuilder.build();
+    }
+
+    private void simulateDatabaseConnectionVerification() {
+        if (!databaseUp) {
+            throw new IllegalStateException("Cannot contact database");
+        }
+    }
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+Until now we used a simplified method of building a `HealthCheckResponse`
+through the `HealthCheckResponse#up(String)` (there is also
+`HealthCheckResponse#down(String)`) which will directly build the response object.
+From now on, we utilize the full builder capabilities provided by the
+`HealthCheckResponseBuilder` class.
+====
+
+If you now rerun the readiness health check (at `http://localhost:8080/health/ready`)
+the overall `status` should be DOWN. You can also check the liveness check at
+`http://localhost:8080/health/live` which will return the overall `status` UP because
+it isn't influenced by the readiness checks.
+
+As we shouldn't leave this application with a readiness check in a DOWN state and
+because we are running Quarkus in dev mode you can add `database.up=true` in
+`src/main/resources/application.properties` and rerun the readiness health check again
+-- it should be up again.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

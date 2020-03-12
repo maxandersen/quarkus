@@ -1,0 +1,105 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-the-bare-entities_{context}"]
+= Creating the bare entities
+:context: creating-the-bare-entities
+
+First, let's create our Hibernate ORM entities `Book` and `Author` in the `model` subpackage.
+
+[source,java]
+----
+package org.acme.hibernate.search.elasticsearch.model;
+
+import java.util.List;
+import java.util.Objects;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.OneToMany;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+
+@Entity
+public class Author extends PanacheEntity { // <1>
+
+    public String firstName;
+
+    public String lastName;
+
+    @OneToMany(mappedBy = "author", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER) // <2>
+    public List<Book> books;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Author)) {
+            return false;
+        }
+
+        Author other = (Author) o;
+
+        return Objects.equals(id, other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31;
+    }
+}
+----
+
+[arabic]
+<1> We are using Hibernate ORM with Panache, it is not mandatory.
+<2> We are loading these elements eagerly so that they are present in the JSON output.
+In a real world application, you should probably use a DTO approach.
+
+[source,java]
+----
+package org.acme.hibernate.search.elasticsearch.model;
+
+import java.util.Objects;
+
+import javax.json.bind.annotation.JsonbTransient;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+
+@Entity
+public class Book extends PanacheEntity {
+
+    public String title;
+
+    @ManyToOne
+    @JsonbTransient // <1>
+    public Author author;
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Book)) {
+            return false;
+        }
+
+        Book other = (Book) o;
+
+        return Objects.equals(id, other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31;
+    }
+}
+----
+
+[arabic]
+<1> We mark this property with `@JsonbTransient` to avoid infinite loops when serializing with JSON-B.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

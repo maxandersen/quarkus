@@ -1,0 +1,14 @@
+[id="configure-connection-with-infinispan-server_{context}"]
+= Configure connection with Infinispan server
+
+Add following into the src/main/resources/application.properties file (create the file if it does not exist)
+
+[source,plain]
+----
+quarkus.infinispan-client.server-list=localhost:11222
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+Adjust the host and port number according to your Infinispan server installation.
+====

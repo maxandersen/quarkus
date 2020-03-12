@@ -1,0 +1,78 @@
+ifdef::context[:parent-context: {context}]
+[id="the-coverage-does-not-seem-to-correspond-to-the-reality_{context}"]
+= The coverage does not seem to correspond to the reality
+:context: the-coverage-does-not-seem-to-correspond-to-the-reality
+
+You can now run the tests: `./mvnw clean verify` As explained earlier, it will run the unit tests first, then the integration tests. And finally, it will generate two separate reports. First a report of the coverage of the unit tests in `target/site/jacoco-ut` then a report of the coverage of the integration tests in `target/site/jacoco-it`.
+
+Given the content of `GreetingResourceTest`, `GreetingResource` should have been covered. But when we open the report `target/site/jacoco-it/index.html`, the class `GreetingResource` is reported with 0% of coverage. But the fact that `GreetingService` is reported as covered shows that the test execution was actually recorded. How come?
+
+During the report generation, you may have noticed a warning:
+
+[source,shell,subs="attributes+"]
+----
+[WARNING] Classes in bundle '***' do no match with execution data. For report generation the same class files must be used as at runtime.
+[WARNING] Execution data for class org/acme/testcoverage/GreetingResource does not match.
+----
+
+It seems that Quarkus and JaCoCo step on each other's toes. What happens is that Quarkus transforms the JAX-RS resources (and also the Panache files).
+You may have noticed that `GreetingResource` was not written in the simplest way like:
+
+[source,java]
+----
+...
+@Path("/hello")
+public class GreetingResource {
+
+    @Inject
+    GreetingService service;
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("/greeting/{name}")
+    public String greeting(@PathParam("name") String name) {
+        return service.greeting(name);
+    }
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+}
+----
+
+Above, the constructor is implicit and we use injection to have an instance of `GreetingService`. Note that, with this code relying on an implicit constructor, the coverage would have been reported properly by JaCoCo.
+Instead, we introduced a constructor based injection:
+
+[source,java]
+----
+...
+@Path("/hello")
+public class GreetingResource {
+
+    private final GreetingService service;
+
+    @Inject
+    public GreetingResource(GreetingService service) {
+        this.service = service;
+    }
+...
+}
+----
+
+Some might say that this approach is preferable since the field can be *final* like this. Anyway, in some cases you might need an explicit constructor. And, in that case, the coverage is not reported properly by JaCoCo.
+This is because Quarkus generates a constructor without any parameter and does some bycode manipulations in order to add it to the class. That is what happened here, just before the execution of the integration tests:
+
+[source,shell,subs="attributes+"]
+----
+[INFO] --- quarkus-maven-plugin:0.16.0:build (default) @ getting-started-testing ---
+[INFO] [io.quarkus.deployment.QuarkusAugmentor] Beginning quarkus augmentation
+...
+----
+
+As a consequence, JaCoCo does not recognize the classes when it wants to create its report. But wait... there is a solution.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

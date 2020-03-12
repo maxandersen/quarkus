@@ -1,0 +1,25 @@
+[id="annotation-transformations_{context}"]
+= Annotation Transformations
+
+A very common task is to override the annotations found on the bean classes.
+For example you might want to add an interceptor binding to a specific bean class.
+Here is how to do it - use the `AnnotationsTransformerBuildItem`:
+
+[source,java]
+----
+@BuildStep
+AnnotationsTransformerBuildItem transform() {
+    return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
+
+        public boolean appliesTo(org.jboss.jandex.AnnotationTarget.Kind kind) {
+            return kind == org.jboss.jandex.AnnotationTarget.Kind.CLASS;
+        }
+
+        public void transform(TransformationContext context) {
+            if (contex.getTarget().asClass().name().toString().equals("com.foo.Bar")) {
+                context.transform().add(MyInterceptorBinding.class).done();
+            }
+        }
+    });
+}
+----

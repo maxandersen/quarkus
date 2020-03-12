@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="feedback-looking-for-help_{context}"]
+= Feedback, looking for help?
+:context: feedback-looking-for-help
+
+You can contact the project team using:
+
+* the https://groups.google.com/forum/#!forum/quarkus-dev[quarkus-dev Google Groups]
+* chat using https://quarkus.zulipchat.com[Zulip]
+
+Your help is more than welcome! Don't hesitate to join the crowd.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

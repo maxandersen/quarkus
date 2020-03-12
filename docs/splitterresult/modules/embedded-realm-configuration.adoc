@@ -1,0 +1,33 @@
+[id="embedded-realm-configuration_{context}"]
+= Embedded Realm Configuration
+
+The embedded realm also supports mapping of users to password and users to roles. It uses the main `application.properties` Quarkus configuration file to embed this information. They are configured with properties starting with `quarkus.security.users.embedded`.
+
+The following is an example application.properties file section illustrating the embedded realm configuration:
+
+.example application.properties file section for embedded realm
+[source,properties]
+----
+quarkus.security.users.embedded.enabled=true
+quarkus.security.users.embedded.plain-text=true
+quarkus.security.users.embedded.users.scott=jb0ss
+quarkus.security.users.embedded.users.stuart=test
+quarkus.security.users.embedded.users.jdoe=p4ssw0rd
+quarkus.security.users.embedded.users.noadmin=n0Adm1n
+quarkus.security.users.embedded.roles.scott=Admin,admin,Tester,user
+quarkus.security.users.embedded.roles.stuart=admin,user
+quarkus.security.users.embedded.roles.jdoe=NoRolesUser
+quarkus.security.users.embedded.roles.noadmin=user
+----
+
+As with the first example this file has the usernames and passwords stored in plain text, which is not recommended. If plain-text is set to false
+(or omitted) in the config then passwords must be stored in the form `MD5 ( username : realm : password )`. This can
+be generated for the first example above by running the command `echo -n scott:MyRealm:jb0ss | md5` from the command line.
+
+[id="embedded-users_{context}"]
+== Embedded Users
+:context: embedded-users
+
+[id="embedded-roles_{context}"]
+== Embedded Roles
+:context: embedded-roles

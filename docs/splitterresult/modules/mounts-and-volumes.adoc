@@ -1,0 +1,77 @@
+[id="mounts-and-volumes_{context}"]
+= Mounts and Volumes
+
+.Mount
+[table,tablepcwidth="100",rowcount="4",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| path | String |  | 
+| sub-path | String |  | 
+| read-only | boolean |  | false
+|===
+
+.ConfigMapVolume
+[table,tablepcwidth="100",rowcount="4",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| config-map-name | String |  | 
+| default-mode | int |  | 0600
+| optional | boolean |  | false
+|===
+
+.SecretVolume
+[table,tablepcwidth="100",rowcount="4",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| secret-name | String |  | 
+| default-mode | int |  | 0600
+| optional | boolean |  | false
+|===
+
+.AzureDiskVolume
+[table,tablepcwidth="100",rowcount="7",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| disk-name | String |  | 
+| disk-uri | String |  | 
+| kind | String |  | Managed
+| caching-mode | String |  | ReadWrite
+| fs-type | String |  | ext4
+| read-only | boolean |  | false
+|===
+
+.AwsElasticBlockStoreVolume
+[table,tablepcwidth="100",rowcount="5",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| volume-id | String |  | 
+| partition | int |  | 
+| fs-type | String |  | ext4
+| read-only | boolean |  | false
+|===
+
+.GitRepoVolume
+[table,tablepcwidth="100",rowcount="4",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| repository | String |  | 
+| directory | String |  | 
+| revision | String |  | 
+|===
+
+.PersistentVolumeClaimVolume
+[table,tablepcwidth="100",rowcount="3",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| claim-name | String |  | 
+| read-only | boolean |  | false
+|===
+
+.AzureFileVolume
+[table,tablepcwidth="100",rowcount="4",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| share-name | String |  | 
+| secret-name | String |  | 
+| read-only | boolean |  | false
+|===

@@ -1,0 +1,23 @@
+ifdef::context[:parent-context: {context}]
+[id="generate-jwt-tokens_{context}"]
+= Generate JWT tokens with Smallrye JWT
+:context: generate-jwt-tokens
+
+JWT claims can be signed or encrypted or signed first and the nested JWT token encrypted.
+Signing the claims is used most often to secure the claims. What is known today as a JWT token is typically produced by signing the claims in a JSON format using the steps described in the link:https://tools.ietf.org/html/rfc7515[JSON Web Signature] specification.
+However, when the claims are sensitive, their confidentiality can be guaranteed by following the steps described in the link:https://tools.ietf.org/html/rfc7516[JSON Web Encryption] specification to produce a JWT token with the encrypted claims.
+Finally both the confidentiality and integrity of the claims can be further enforced by signing them first and then encrypting the nested JWT token.
+
+SmallRye JWT provides an API for securing the JWT claims using all of these options.
+
+include::modules/create-jwtclaimsbuilder-and-set-the-claims.adoc[leveloffset=+1]
+
+include::modules/sign-the-claims.adoc[leveloffset=+1]
+
+include::modules/encrypt-the-claims.adoc[leveloffset=+1]
+
+include::modules/sign-the-claims-and-encrypt-the-nested-jwt-token.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

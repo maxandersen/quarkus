@@ -1,0 +1,50 @@
+[id="including-the-documentation-in-the-extension-guide_{context}"]
+= Including the documentation in the extension guide
+
+Now that you have generated the configuration reference documentation for your extension, you need to include it in your guide (and review it).
+
+This is simple, include the generated documentation in your guide:
+
+[source,asciidoc]
+----
+include::{generated-dir}/config/quarkus-your-extension.adoc[opts=optional, leveloffset=+1]
+----
+
+If you are interested in including the generated documentation for the config group, you can use the include statement below
+
+[source,asciidoc]
+----
+include::{generated-dir}/config/hyphenated-config-group-class-name-with-runtime-or-deployment-namespace-replaced-by-config-group-namespace.adoc[opts=optional, leveloffset=+1]
+----
+
+For example, the `io.quarkus.vertx.http.runtime.FormAuthConfig` configuration group will be generated in a file named `quarkus-vertx-http-config-group-form-auth-config.adoc`.
+
+A few recommendations:
+
+* `opts=optional` is mandatory as we don't want the build to fail if only part of the configuration documentation has been generated
+* The documentation is generated with a title level of 2 (i.e. `==`).
+You usually need to adjust it.
+It can be done with `leveloffset=+N`.
+
+It is not recommended to include the whole configuration documentation in the middle of your guide as it's heavy.
+If you have an `application.properties` extract with your configuration, just do as follows.
+
+First, include a tip just below your `application.properties` extract:
+
+[source,asciidoc]
+----
+[TIP]
+For more information about the extension configuration please refer to the <<configuration-reference, Configuration Reference>>.
+----
+
+Then, at the end of your documentation, include the extensive documentation:
+
+[source,asciidoc]
+----
+[[configuration-reference]]
+== Configuration Reference
+
+include::{generated-dir}/config/quarkus-your-extension.adoc[opts=optional, leveloffset=+1]
+----
+
+Finally, generate the documentation and check it out.

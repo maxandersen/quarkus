@@ -1,0 +1,26 @@
+ifdef::context[:parent-context: {context}]
+[id="invoke-the-lambda_{context}"]
+= Invoke the Lambda
+:context: invoke-the-lambda
+
+Use the `invoke` command to invoke your function.
+
+[source,subs="attributes+"]
+----
+sh manage.sh invoke
+----
+
+The example lambda takes input passed in via the `--payload` switch which points to a json file
+in the root directory of the project.  If you want to see the output of the lambda, open the `response.txt` file.
+The lambda can also be invoked locally like this:
+
+[source]
+----
+sam local invoke --template sam.jvm.yaml --event payload.json
+----
+
+If you are working with your native image build, simply replace the template name above with the native version.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="launch-modes_{context}"]
+= Launch Modes
+:context: launch-modes
+
+Quarkus has 3 different launch modes, `NORMAL` (i.e. production), `DEVELOPMENT` and `TEST`. If you are running `quarkus:dev`
+then the mode will be `DEVELOPMENT`, if you are running a JUnit test it will be `TEST`, otherwise it will be `NORMAL`.
+
+Your application can get the launch mode by injecting the `io.quarkus.runtime.LaunchMode` enum into a CDI bean,
+or by invoking the static method `io.quarkus.runtime.LaunchMode.current()`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

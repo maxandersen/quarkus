@@ -1,0 +1,9 @@
+[id="root-logger-configuration_{context}"]
+= Root logger configuration
+
+The root logger category is handled separately, and is configured via the following properties:
+
+[table,tablepcwidth="100",rowcount="2",header-option="",colcount="3",cols="<m,<m,<2"]
+|===
+| quarkus.log.level | INFO | The default minimum log level for every log category.
+|===

@@ -1,0 +1,109 @@
+ifdef::context[:parent-context: {context}]
+[id="using-hibernate-search-annotations_{context}"]
+= Using Hibernate Search annotations
+:context: using-hibernate-search-annotations
+
+Let's go back to our entities.
+
+Enabling full text search capabilities for them is as simple as adding a few annotations.
+
+Let's edit the `Author` entity again to include this content:
+
+[source,java]
+----
+package org.acme.hibernate.search.elasticsearch.model;
+
+import java.util.Objects;
+
+import javax.json.bind.annotation.JsonbTransient;
+import javax.persistence.Entity;
+import javax.persistence.ManyToOne;
+
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+
+@Entity
+@Indexed // <1>
+public class Book extends PanacheEntity {
+
+    @FullTextField(analyzer = "english") // <2>
+    public String title;
+
+    @ManyToOne
+    @JsonbTransient
+    public Author author;
+
+    // Preexisting equals()/hashCode() methods
+}
+----
+
+[arabic]
+<1> First, let's use the `@Indexed` annotation to register our `Book` entity as part of the full text index.
+<2> The `@FullTextField` annotation declares a field in the index specifically tailored for full text search.
+In particular, we have to define an analyzer to split and analyze the tokens (~ words) - more on this later.
+
+Now that our books are indexed, we can do the same for the authors.
+
+Open the `Author` class and include the content below.
+
+Things are quite similar here: we use the `@Indexed`, `@FullTextField` and `@KeywordField` annotations.
+
+There are a few differences/additions though. Let's check them out.
+
+[source,java]
+----
+package org.acme.hibernate.search.elasticsearch.model;
+
+import java.util.List;
+import java.util.Objects;
+
+import javax.persistence.CascadeType;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.OneToMany;
+
+import org.hibernate.search.engine.backend.types.Sortable;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.FullTextField;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.Indexed;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.IndexedEmbedded;
+import org.hibernate.search.mapper.pojo.mapping.definition.annotation.KeywordField;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+
+@Entity
+@Indexed
+public class Author extends PanacheEntity {
+
+    @FullTextField(analyzer = "name") // <1>
+    @KeywordField(name = "firstName_sort", sortable = Sortable.YES, normalizer = "sort") // <2>
+    public String firstName;
+
+    @FullTextField(analyzer = "name")
+    @KeywordField(name = "lastName_sort", sortable = Sortable.YES, normalizer = "sort")
+    public String lastName;
+
+    @OneToMany(mappedBy = "author", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @IndexedEmbedded // <3>
+    public List<Book> books;
+
+    // Preexisting equals()/hashCode() methods
+}
+----
+
+[arabic]
+<1> We use a `@FullTextField` similar to what we did for `Book` but you'll notice that the analyzer is different - more on this later.
+<2> As you can see, we can define several fields for the same property.
+Here, we define a `@KeywordField` with a specific name.
+The main difference is that a keyword field is not tokenized (the string is kept as one single token) but can be normalized (i.e. filtered) - more on this later.
+This field is marked as sortable as our intention is to use it for sorting our authors.
+<3> The purpose of `@IndexedEmbedded` is to include the `Book` fields into the `Author` index.
+In this case, we just use the default configuration: all the fields of the associated `Book` entities are included in the index (i.e. the `title` field).
+The nice thing with `@IndexedEmbedded` is that it is able to automatically reindex an `Author` if one of its ``Book``s has been updated thanks to the bidirectional relation.
+`@IndexedEmbedded` also supports nested documents (using the `storage = NESTED` attribute) but we don't need it here.
+You can also specify the fields you want to include in your parent index using the `includePaths` attribute if you don't want them all.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

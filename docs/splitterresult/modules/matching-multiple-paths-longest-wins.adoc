@@ -1,0 +1,22 @@
+[id="matching-multiple-paths-longest-wins_{context}"]
+= Matching multiple paths: longest wins
+
+Matching is always done on a longest path basis, less specific permission sets are not considered if a more specific one
+has been matched:
+
+[source,properties]
+----
+quarkus.http.auth.permission.permit1.paths=/public/*
+quarkus.http.auth.permission.permit1.policy=permit
+quarkus.http.auth.permission.permit1.methods=GET,HEAD
+
+quarkus.http.auth.permission.deny1.paths=/public/forbidden-folder/*
+quarkus.http.auth.permission.deny1.policy=deny
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+Given the above permission set, `GET /public/forbidden-folder/foo` would match both permission sets' paths,
+but because it matches the `deny1` permission set's path on a longer match, `deny1` will be chosen and the request will
+be rejected.
+====

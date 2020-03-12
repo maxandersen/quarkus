@@ -1,0 +1,28 @@
+ifdef::context[:parent-context: {context}]
+[id="setting-up-and-configuring-mongodb-with-panache_{context}"]
+= Setting up and configuring MongoDB with Panache
+:context: setting-up-and-configuring-mongodb-with-panache
+
+To get started:
+
+* add your settings in `{config-file}`
+* Make your entities extend `PanacheMongoEntity` (optional if you are using the repository pattern)
+* Use the `@MongoEntity` annotation to specify the name of the database and the name of the collection (it will default to the name of your entity).
+
+Then add the relevant configuration properties in `{config-file}`.
+
+[source,properties]
+----
+# configure the MongoDB client for a replica set of two nodes
+quarkus.mongodb.connection-string = mongodb://mongo1:27017,mongo2:27017
+# mandatory if you don't specify the name of the database using @MongoEntity
+quarkus.mongodb.database = person
+----
+
+The `quarkus.mongodb.database` property will be used by MongoDB with Panache to determine the name of the database where your entities will be persisted.
+
+For advanced configuration of the MongoDB client, you can follow the link:mongodb#configuring-the-mongodb-database[Configuring the MongoDB database guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

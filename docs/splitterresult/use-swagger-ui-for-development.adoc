@@ -1,0 +1,60 @@
+ifdef::context[:parent-context: {context}]
+[id="use-swagger-ui-for-development_{context}"]
+= Use Swagger UI for development
+:context: use-swagger-ui-for-development
+
+When building APIs, developers want to test them quickly. https://swagger.io/tools/swagger-ui/[Swagger UI] is a great tool
+permitting to visualize and interact with your APIs.
+The UI is automatically generated from your OpenAPI specification.
+
+The Quarkus `smallrye-openapi` extension comes with a `swagger-ui` extension embedding a properly configured Swagger UI page.
+
+[NOTE,textlabel="Note",name="note"]
+====
+By default, Swagger UI is only available when Quarkus is started in dev or test mode.If you want to make it available in production too, you can include the following configuration in your `application.properties`:[source,properties]
+----
+quarkus.swagger-ui.always-include=true
+----
+====
+
+By default, Swagger UI is accessible at `/swagger-ui`.
+
+You can update this path by setting the `quarkus.swagger-ui.path` property in your `application.properties`:
+
+[source,properties]
+----
+quarkus.swagger-ui.path=/my-custom-path
+----
+
+[WARNING,textlabel="Warning",name="warning"]
+====
+The value `/` is not allowed as it blocks the application from serving anything else.
+====
+
+Now, we are ready to run our application:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+You can check the Swagger UI path in your application's log:
+
+[source]
+----
+00:00:00,000 INFO  [io.qua.swa.run.SwaggerUiServletExtension] Swagger UI available at /swagger-ui
+----
+
+Once your application is started, you can go to http://localhost:8080/swagger-ui and play with your API.
+
+You can visualize your API's operations and schemas.
+image:openapi-swaggerui-guide-screenshot01.png[alt=Visualize your API]
+
+You can also interact with your API in order to quickly test it.
+image:openapi-swaggerui-guide-screenshot02.png[alt=Interact with your API]
+
+Hit `CTRL+C` to stop the application.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

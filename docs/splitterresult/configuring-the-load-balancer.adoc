@@ -1,0 +1,31 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-load-balancer_{context}"]
+= Configuring the load balancer
+:context: configuring-the-load-balancer
+
+In the root directory, create a `nginx.conf` file with the following content:
+
+[source,conf]
+----
+user  nginx;
+
+events {
+    worker_connections   1000;
+}
+
+http {
+        server {
+              listen 8080;
+              location / {
+                proxy_pass http://tasks:8080; <1>
+              }
+        }
+}
+----
+
+[arabic]
+. Route all traffic to our tasks application
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

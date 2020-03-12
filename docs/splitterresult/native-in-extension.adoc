@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="native-in-extension_{context}"]
+= Supporting native in a Quarkus extension
+:context: native-in-extension
+
+Supporting native in a Quarkus extension is even easier as Quarkus provides a lot of tools to simplify all this.
+
+[WARNING,textlabel="Warning",name="warning"]
+====
+Everything described here will only work in the context of Quarkus extensions, it won't work in an application.
+====
+
+include::modules/register-reflection.adoc[leveloffset=+1]
+
+include::modules/alternative-with-registerforreflection.adoc[leveloffset=+1]
+
+include::modules/including-resources-2.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

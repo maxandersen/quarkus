@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="counters_{context}"]
+= Counters
+:context: counters
+
+Infinispan also has a notion of counters and the Quarkus Infinispan client supports them out of
+the box.
+
+The Quarkus Infinispan client extension allows for Dependency Injection
+of the `CounterManager` directly. All you need to do is annotate your field, constructor or method
+and you get it with no fuss. You can then use counters as you would normally.
+
+[source,java]
+----
+@Inject
+CounterManager counterManager;
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,80 @@
+[id="query-results-traversal_{context}"]
+= Query results traversal
+
+In development mode, the database is set up with a few rows in the `fruits` table.
+To retrieve all the data, we will use the `query` method again:
+
+[source,java]
+----
+Uni<RowSet> rowSet = client.query("SELECT id, name FROM fruits ORDER BY name ASC");
+----
+
+When the operation completes, we will get a `RowSet` that has all the rows buffered in memory.
+As an `java.lang.Iterable<Row>`, it can be traversed with a _for-each_ loop:
+
+[source,java]
+----
+Uni<List<Fruit>> fruits = rowSet
+    .map(pgRowSet -> {
+        List<Fruit> list = new ArrayList<>(pgRowSet.size());
+        for (Row row : pgRowSet) {
+            list.add(from(row));
+        }
+        return list;
+    });
+----
+
+The `from` method converts a `Row` instance to a `Fruit` instance.
+It is extracted as a convenience for the implementation of the other data management methods:
+
+.src/main/java/org/acme/vertx/Fruit.java
+[source,java]
+----
+private static Fruit from(Row row) {
+    return new Fruit(row.getLong("id"), row.getString("name"));
+}
+----
+
+Putting it all together, the `Fruit.findAll` method looks like:
+
+.src/main/java/org/acme/vertx/Fruit.java
+[source,java]
+----
+    public static Uni<List<Fruit>> findAll(PgPool client) {
+        return client.query("SELECT id, name FROM fruits ORDER BY name ASC")
+            .map(pgRowSet -> {
+                List<Fruit> list = new ArrayList<>(pgRowSet.size());
+                for (Row row : pgRowSet) {
+                    list.add(from(row));
+                }
+                return list;
+            });
+    }
+----
+
+And the endpoint to get all fruits from the backend:
+
+.src/main/java/org/acme/vertx/FruitResource.java
+[source,java]
+----
+@GET
+public Uni<Response> get() {
+    return Fruit.findAll(client)
+            .map(Response::ok)
+            .map(ResponseBuilder::build);
+}
+----
+
+Now start Quarkus in `dev` mode with:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+Lastly, open your browser and navigate to http://localhost:8080/fruits, you should see:
+
+[source,shell]
+----
+[{"id":3,"name":"Apple"},{"id":1,"name":"Orange"},{"id":2,"name":"Pear"}]
+----

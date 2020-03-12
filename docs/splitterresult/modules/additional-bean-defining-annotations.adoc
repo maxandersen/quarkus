@@ -1,0 +1,18 @@
+[id="additional-bean-defining-annotations_{context}"]
+= Additional Bean Defining Annotations
+
+As described in <<bean_discovery>> bean classes that don’t have a bean defining annotation are not discovered.
+However, `BeanDefiningAnnotationBuildItem` can be used to extend the set of default bean defining annotations (`@Dependent`, `@Singleton`, `@ApplicationScoped`, `@RequestScoped` and `@Stereotype` annotations):
+
+[source,java]
+----
+@BuildStep
+BeanDefiningAnnotationBuildItem additionalBeanDefiningAnnotation() {
+    return new BeanDefiningAnnotationBuildItem(DotName.createSimple("javax.ws.rs.Path")));
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+Bean registrations that are result of a `BeanDefiningAnnotationBuildItem` are unremovable by default. See also <<remove_unused_beans>>.
+====

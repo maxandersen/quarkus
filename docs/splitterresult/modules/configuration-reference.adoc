@@ -1,0 +1,4 @@
+[id="configuration-reference_{context}"]
+= Configuration Reference
+
+link:{generated-dir}/config/quarkus-artemis-core.adoc[]

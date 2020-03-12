@@ -1,0 +1,26 @@
+[id="bootstrap-three-phases_{context}"]
+= Three Phases of Bootstrap and Quarkus Philosophy
+
+There are three distinct bootstrap phases of a Quarkus app:
+
+Augmentation:: This is the first phase, and is done by the <<Build Step Processors>>. These processors have access to Jandex annotation
+information and can parse any descriptors and read annotations, but should not attempt to load any application classes. The output of these
+build steps is some recorded bytecode, using an extension of the ObjectWeb ASM project called Gizmo(ext/gizmo), that is used to actually bootstrap the application at runtime. Depending on the `io.quarkus.deployment.annotations.ExecutionTime` value of the `@io.quarkus.deployment.annotations.Record` annotation associated with the build step,
+the step may be run in a different JVM based on the following two modes.
+Static Init::
++
+There are some restrictions on what can be done in this stage as the Substrate VM disallows some objects in the native executable. For example you should not attempt to listen on a port or start threads in this phase. In addition, it is disallowed to read run time configuration during static initialization.In non-native pure JVM mode, there is no real difference between Static and Runtime Init, except that Static Init is always executed first. This mode benefits from the same build phase augmentation as native mode as the descriptor parsing and annotation scanning are done
+at build time and any associated class/framework dependencies can be removed from the build output jar. In servers like
+WildFly, deployment related classes such as XML parsers hang around for the life of the application, using up valuable
+memory. Quarkus aims to eliminate this, so that the only classes loaded at runtime are actually used at runtime.As an example, the only reason that a Quarkus application should load an XML parser is if the user is using XML in their
+application. Any XML parsing of configuration should be done in the Augmentation phase.
+Runtime Init:: If bytecode is recorded with `@Record(RUNTIME_INIT)` then it is executed from the application's main method. This code
+will be run on native executable boot. In general as little code as possible should be executed in this phase, and should
+be restricted to code that needs to open ports etc.
+
+Pushing as much as possible into the `@Record(STATIC_INIT)` phase allows for two different optimizations:
+
+[arabic]
+. In both native executable and pure JVM mode this allows the app to start as fast as possible since processing was done during build time. This also minimizes the classes/native code needed in the application to pure runtime related behaviors.
+. Another benefit with native executable mode is that Substrate can more easily eliminate features that are not used. If features are directly initialized via bytecode, Substrate can detect that a method is never called and eliminate
+that method. If config is read at runtime, Substrate cannot reason about the contents of the config and so needs to keep all features in case they are required.

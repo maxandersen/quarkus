@@ -1,0 +1,13 @@
+[id="deploying_{context}"]
+= Deploying
+
+To trigger a deployment:
+
+[source,subs="attributes+"]
+----
+./mvnw clean package -Dquarkus.kubernetes.deploy=true
+----
+
+The command above will trigger a container image build and will apply the generated Openshift resources, right after.
+The generated resources are using Openshift's `DeploymentConfig` that is configured to automatically trigger a redeployment when a change in the `ImageStream` is noticed.
+In other words, any container image build after the inital deployment will automatically trigger redeployment, without the need to delete, update or re-apply the generated resources.

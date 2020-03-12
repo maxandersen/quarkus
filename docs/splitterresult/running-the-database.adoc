@@ -1,0 +1,18 @@
+ifdef::context[:parent-context: {context}]
+[id="running-the-database_{context}"]
+= Running the database
+:context: running-the-database
+
+In a separate terminal, run the below command:
+
+[source,shell]
+----
+docker-compose up postgres <1>
+----
+
+[arabic]
+. Start the database instance using the configuration options supplied in the `docker-compose.yml` file
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

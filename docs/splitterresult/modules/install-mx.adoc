@@ -1,0 +1,10 @@
+[id="install-mx_{context}"]
+= Install MX
+
+Now you need to install Graal’s special build tool, `mx`.
+
+[source,shell]
+----
+git clone https://github.com/graalvm/mx.git
+export PATH=`pwd`/mx:$PATH
+----

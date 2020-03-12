@@ -1,0 +1,75 @@
+ifdef::context[:parent-context: {context}]
+[id="enabling-the-cache_{context}"]
+= Enabling the cache
+:context: enabling-the-cache
+
+Now that your Quarkus application is up and running, let's tremendously improve its response time by caching the external meteorological service responses.
+Update the `WeatherForecastService` class like this:
+
+[source,java]
+----
+package org.acme.cache;
+
+import java.time.LocalDate;
+
+import javax.enterprise.context.ApplicationScoped;
+
+import io.quarkus.cache.CacheResult;
+
+@ApplicationScoped
+public class WeatherForecastService {
+
+    @CacheResult(cacheName = "weather-cache") <1>
+    public String getDailyForecast(LocalDate date, String city) {
+        try {
+            Thread.sleep(2000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return date.getDayOfWeek() + " will be " + getDailyResult(date.getDayOfMonth() % 4) + " in " + city;
+    }
+
+    private String getDailyResult(int dayOfMonthModuloFour) {
+        switch (dayOfMonthModuloFour) {
+            case 0:
+                return "sunny";
+            case 1:
+                return "cloudy";
+            case 2:
+                return "chilly";
+            case 3:
+                return "rainy";
+            default:
+                throw new IllegalArgumentException();
+        }
+    }
+}
+----
+
+[arabic]
+<1> We only added this annotation (and the associated import of course).
+
+Let's try to call `http://localhost:8080/weather?city=Raleigh` again.
+You're still waiting a long time before receiving an answer.
+This is normal since the server just restarted and the cache was empty.
+
+Wait a second! The server restarted by itself after the `WeatherForecastService` update?
+Yes, this is one of Quarkus amazing features for developers called `live coding`.
+
+Now that the cache was loaded during the previous call, try calling the same URL.
+This time, you should get a super fast answer with an `executionTimeInMs` value close to 0.
+
+Let's see what happens if we start from one day in the future using the `http://localhost:8080/weather?city=Raleigh&daysInFuture=1` URL.
+You should get an answer two seconds later since two of the requested days were already loaded in the cache.
+
+You can also try calling the same URL with a different city and see the cache in action again.
+The first call will take six seconds and the following ones will be answered immediately.
+
+Congratulations! You just added application data caching to your Quarkus application with a single line of code!
+
+Do you want to learn more about the Quarkus application data caching abilities?
+The following sections will show you everything there is to know about it.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

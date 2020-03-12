@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="supporting-secure-connections-with-ssl_{context}"]
+= Supporting secure connections with SSL
+:context: supporting-secure-connections-with-ssl
+
+In order to have Quarkus support secure connections, you must either provide a certificate and associated key file, or supply a keystore.
+
+In both cases, a password must be provided. See the designated paragraph for a detailed description of how to provide it.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+To enable SSL support with native executables, please refer to our link:native-and-ssl[Using SSL With Native Executables guide].
+====
+
+include::modules/providing-a-certificate-and-key-file.adoc[leveloffset=+1]
+
+include::modules/providing-a-keystore.adoc[leveloffset=+1]
+
+include::modules/setting-the-password.adoc[leveloffset=+1]
+
+include::modules/disable-the-http-port.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

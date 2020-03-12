@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="simplifying-mongodb-with-panache_{context}"]
+= Simplifying MongoDB with Panache
+:context: simplifying-mongodb-with-panache
+
+The link:mongodb-panache[MongoDB with Panache] extension facilitates the usage of MongoDB by providing active record style entities (and repositories) like you have in link:hibernate-orm-panache.html[Hibernate ORM with Panache] and focuses on making your entities trivial and fun to write in Quarkus.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

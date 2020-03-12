@@ -1,0 +1,38 @@
+ifdef::context[:parent-context: {context}]
+[id="installing_{context}"]
+= Installing
+:context: installing
+
+This mechanism uses the Vert.x EventBus, so you need to enable the `vertx` extension to use this feature.
+If you are creating a new project, set the `extensions` parameter are follows:
+
+[source,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=vertx-quickstart \
+    -Dextensions="vertx"
+cd vertx-quickstart
+----
+
+If you have an already created project, the `vertx` extension can be added to an existing Quarkus project with
+the `add-extension` command:
+
+[source]
+----
+./mvnw quarkus:add-extension -Dextensions="vertx"
+----
+
+Otherwise, you can manually add this to the dependencies section of your `pom.xml` file:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-vertx</artifactId>
+</dependency>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

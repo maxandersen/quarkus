@@ -1,0 +1,45 @@
+[id="bean-deployment-validation_{context}"]
+= Bean Deployment Validation
+
+Once the bean deployment is ready an extension can perform additional validations and inspect the found beans, observers and injection points.
+Register a `BeanDeploymentValidatorBuildItem`:
+
+[source,java]
+----
+@BuildStep
+BeanDeploymentValidatorBuildItem beanDeploymentValidator() {
+    return new BeanDeploymentValidatorBuildItem(new BeanDeploymentValidator() {
+         public void validate(ValidationContext validationContext) {
+             for (InjectionPointInfo injectionPoint : validationContext.get(Key.INJECTION_POINTS)) {
+                 System.out.println("Injection point: " + injectionPoint);
+             }
+         }
+    });
+}
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You can easily filter all registered beans via the convenient `BeanStream` returned from the `ValidationContext.beans()` method.
+====
+
+If an extension needs to produce other build items during the "validation" phase it should use the `ValidationPhaseBuildItem` instead.
+The reason is that injected objects are only valid during a `@BuildStep` method invocation.
+
+[source,java]
+----
+@BuildStep
+void validate(ValidationPhaseBuildItem validationPhase,
+            BuildProducer<MyBuildItem> myBuildItem,
+            BuildProducer<ValidationErrorBuildItem> errors) {
+   if (someCondition) {
+     errors.produce(new ValidationErrorBuildItem(new IllegalStateException()));
+     myBuildItem.produce(new MyBuildItem());
+   }
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+See `ValidationPhaseBuildItem` javadoc for more information.
+====

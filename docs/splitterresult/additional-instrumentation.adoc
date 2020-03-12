@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="additional-instrumentation_{context}"]
+= Additional instrumentation
+:context: additional-instrumentation
+
+The https://github.com/opentracing-contrib[OpenTracing API Contributions project] offers additional instrumentation that can be used to add tracing to a large variety of technologies/components.
+
+The instrumentation documented in this section has been tested with Quarkus and works in both standard and native mode.
+
+include::modules/jdbc.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

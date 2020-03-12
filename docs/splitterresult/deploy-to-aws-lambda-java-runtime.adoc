@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="deploy-to-aws-lambda-java-runtime_{context}"]
+= Deploy to AWS Lambda Java Runtime
+:context: deploy-to-aws-lambda-java-runtime
+
+There are a few steps to get your lambda running on AWS.  The generated maven project contains a helpful script to
+create, update, delete, and invoke your lambdas for pure Java and native deployments.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,44 @@
+[id="reading-nodes_{context}"]
+= Reading nodes
+
+Add the following method to the fruit resource:
+
+.src/main/java/org/acme/neo4j/FruitResource.java
+[source,java]
+----
+@GET
+public CompletionStage<Response> get() {
+    AsyncSession session = driver.asyncSession(); // <1>
+    return session
+        .runAsync("MATCH (f:Fruit) RETURN f ORDER BY f.name")  // <2>
+        .thenCompose(cursor ->  // <3>
+            cursor.listAsync(record -> Fruit.from(record.get("f").asNode()))
+        )
+        .thenCompose(fruits ->  // <4>
+            session.closeAsync().thenApply(signal -> fruits)
+        )
+        .thenApply(Response::ok) // <5>
+        .thenApply(ResponseBuilder::build);
+}
+----
+[arabic]
+<1> Open a new, asynchronous session with Neo4j
+<2> Execute a query. This is a Cypher statement.
+<3> Retrieve a cursor, list the results and create ``Fruit``s.
+<4> Close the session after processing
+<5> Create a JAX-RS response
+Now start Quarkus in `dev` mode with:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+and retrieve the endpoint like this
+
+[source,shell]
+----
+curl localhost:8080/fruits
+----
+
+There are not any fruits, so let's create some.

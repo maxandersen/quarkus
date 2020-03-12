@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="a-slick-web-frontend_{context}"]
+= A slick web frontend
+:context: a-slick-web-frontend
+
+All chat applications need a _nice_ UI, well, this one may not be that nice, but does the work.
+Quarkus automatically serves static resources contained in the `META-INF/resources` directory.
+Create the `src/main/resources/META-INF/resources` directory and copy this {quickstarts-blob-url}/websockets-quickstart/src/main/resources/META-INF/resources/index.html[index.html] file in it.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

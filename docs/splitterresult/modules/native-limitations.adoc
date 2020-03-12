@@ -1,0 +1,9 @@
+[id="native-limitations_{context}"]
+= Native Limitations
+
+When running Infinispan in native mode, some limitations apply:
+
+* JMX management is not supported.
++ GraalVM does not allow native VM interfaces.
+* `UDP`/`Multicast` is not supported.
++ You must use `TCP` transport and a non-UDP based membership protocol with JGroups.

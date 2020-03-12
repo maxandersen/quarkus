@@ -1,0 +1,134 @@
+[id="picking-the-right-dependency_{context}"]
+= Picking the right dependency
+
+Depending on the API model you want to use you need to add the right dependency to your `pom.xml` file:
+
+[source,xml,subs="attributes+"]
+----
+<!-- bare API -->
+<dependency>
+  <groupId>io.vertx</groupId>
+  <artifactId>vertx-web-client</artifactId>
+</dependency>
+
+<!-- Mutiny API -->
+<dependency>
+  <groupId>io.smallrye.reactive</groupId>
+  <artifactId>smallrye-mutiny-vertx-web-client</artifactId>
+</dependency>
+
+<!-- Axle API -->
+<dependency>
+  <groupId>io.smallrye.reactive</groupId>
+  <artifactId>smallrye-axle-web-client</artifactId>
+</dependency>
+
+<!-- RX Java 2 API -->
+<dependency>
+  <groupId>io.vertx</groupId>
+  <artifactId>vertx-rx-java2</artifactId>
+</dependency>
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+The `vertx-rx-java2` provides the RX Java 2 API for the whole Vert.x stack, not only the web client.
+====
+
+In this guide, we are going to use the Axle API, so:
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>io.smallrye.reactive</groupId>
+  <artifactId>smallrye-mutiny-vertx-web-client</artifactId>
+</dependency>
+----
+
+Now, create a new resource in your project with the following content:
+
+.src/main/java/org/acme/vertx/ResourceUsingWebClient.java
+[source,java]
+----
+package org.acme.vertx;
+
+
+import javax.annotation.PostConstruct;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import io.smallrye.mutiny.Uni;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import io.vertx.mutiny.core.Vertx;
+import io.vertx.mutiny.ext.web.client.WebClient;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.client.WebClientOptions;
+
+@Path("/fruit-data")
+public class ResourceUsingWebClient {
+
+    @Inject
+    Vertx vertx;
+
+    private WebClient client;
+
+    @PostConstruct
+    void initialize() {
+        this.client = WebClient.create(vertx,
+                new WebClientOptions().setDefaultHost("fruityvice.com")
+                    .setDefaultPort(443).setSsl(true).setTrustAll(true));
+    }
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/{name}")
+    public Uni<JsonObject> getFruitData(@PathParam("name") String name) {
+        return client.get("/api/fruit/" + name)
+                .send()
+                .onItem().apply(resp -> {
+                    if (resp.statusCode() == 200) {
+                        return resp.bodyAsJsonObject();
+                    } else {
+                        return new JsonObject()
+                                .put("code", resp.statusCode())
+                                .put("message", resp.bodyAsString());
+                    }
+                });
+    }
+
+}
+
+----
+
+This resource creates a `WebClient` and upon request use this client to invoke the _fruityvice_ API.
+Depending on the result the response is forwarded as it's received, or a new JSON object is created with the status and body.
+The `WebClient` is obviously asynchronous (and non-blocking), to the endpoint returns a `Uni`.
+
+Run the application with:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+And then, open a browser to: `http://localhost:8080/fruit-data/pear`. You should get some details about pears.
+
+The application can also run as a native executable.
+But, first, we need to instruct Quarkus to enable _ssl_.
+Open the `src/main/resources/application.properties` and add:
+
+[source]
+----
+quarkus.ssl.native=true
+----
+
+Then, create the native executable with:
+
+[source,shell]
+----
+./mvnw package -Pnative
+----

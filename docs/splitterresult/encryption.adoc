@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="encryption_{context}"]
+= Encryption
+:context: encryption
+
+Encryption at this point requires additional steps to get working.
+
+The first step is to configure the `hotrod-client.properties` file to point to your truststore
+and/or keystore. This is further detailed at
+https://infinispan.org/docs/dev/user_guide/user_guide.html#hr_encryption.
+
+The Infinispan Client extension enables SSL by default. You can read more about this
+at link:native-and-ssl[Using SSL With Native Executables].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

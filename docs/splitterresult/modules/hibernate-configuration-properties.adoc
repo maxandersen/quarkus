@@ -1,0 +1,31 @@
+[id="hibernate-configuration-properties_{context}"]
+= Hibernate ORM configuration properties
+
+There are various optional properties useful to refine your `EntityManagerFactory` or guide guesses of Quarkus.
+
+There are no required properties, as long as a default datasource is configured.
+
+When no property is set, Quarkus can typically infer everything it needs to setup Hibernate ORM
+and will have it use the default datasource.
+
+The configuration properties listed here allow you to override such defaults, and customize and tune various aspects.
+
+link:{generated-dir}/config/quarkus-hibernate-orm.adoc[]
+
+[NOTE,textlabel="Note",name="note"]
+====
+Do not mix `persistence.xml` and `quarkus.hibernate-orm.*` properties in `{config-file}`.
+Quarkus will raise an exception.
+Make up your mind on which approach you want to use.
+====
+
+[TIP,textlabel="Tip",name="tip"]
+====
+Want to start a PostgreSQL server on the side with Docker?[source,shell]
+----
+docker run --ulimit memlock=-1:-1 -it --rm=true --memory-swappiness=0 \
+           --name postgres-quarkus-hibernate -e POSTGRES_USER=hibernate \
+           -e POSTGRES_PASSWORD=hibernate -e POSTGRES_DB=hibernate_db \
+           -p 5432:5432 postgres:10.5
+----This will start a non-durable empty database: ideal for a quick experiment!
+====

@@ -1,0 +1,29 @@
+ifdef::context[:parent-context: {context}]
+[id="running-the-health-check_{context}"]
+= Running the health check
+:context: running-the-health-check
+
+Importing the `smallrye-health` extension directly exposes three REST endpoints:
+
+- `/health/live` - The application is up and running.
+- `/health/ready` - The application is ready to serve requests.
+- `/health` - Accumulating all health check procedures in the application.
+
+To check that the `smallrye-health` extension is working as expected:
+
+* start your Quarkus application with `./mvnw compile quarkus:dev`
+* access the `http://localhost:8080/health/live` endpoint using your browser or
+`curl http://localhost:8080/health/live`
+
+All of the health REST endpoints return a simple JSON object with two fields:
+
+* `status` -- the overall result of all the health check procedures
+* `checks` -- an array of individual checks
+
+The general `status` of the health check is computed as a logical AND of all the
+declared health check procedures. The `checks` array is empty as we have not specified
+any health check procedure yet so let's define some.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

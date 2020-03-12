@@ -1,0 +1,4 @@
+[id="mysql_{context}"]
+= MySQL
+
+link:{generated-dir}/config/quarkus-reactive-mysql-client.adoc[]

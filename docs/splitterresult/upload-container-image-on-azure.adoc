@@ -1,0 +1,32 @@
+ifdef::context[:parent-context: {context}]
+[id="upload-container-image-on-azure_{context}"]
+= Upload Container Image on Azure
+:context: upload-container-image-on-azure
+
+If you've followed the build native image guide, you should have a local container image named `quarkus-quickstart/getting-started`.
+
+To upload this image to your ACR, you must tag and push the image under the ACR login server. To find the login server of the Azure Container Registry, run this command:
+
+[source,shell]
+----
+$ az acr show -n <registry-name> --query loginServer
+----
+
+To upload, now do:
+
+[source,shell]
+----
+$ docker tag quarkus-quickstart/getting-started <acr-login-server>/quarkus-quickstart/getting-started
+$ docker push <acr-login-server>/quarkus-quickstart/getting-started
+----
+
+At this point, you should have your Quarkus container image on your Azure Container Registry. To verify, run the following command:
+
+[source,shell]
+----
+$ az acr repository list -n <registry-name>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

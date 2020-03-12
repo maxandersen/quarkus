@@ -1,0 +1,15 @@
+[id="configure-the-artemis-properties_{context}"]
+= Configure the Artemis properties
+
+We need to configure the Artemis connection properties.
+This is done in the `src/main/resources/application.properties` file.
+
+[source]
+----
+# Configures the Artemis properties.
+quarkus.artemis.url=tcp://localhost:61616
+quarkus.artemis.username=quarkus
+quarkus.artemis.password=quarkus
+----
+
+With the Artemis properties configured, you can resume the steps above from <<get-it-running>>.

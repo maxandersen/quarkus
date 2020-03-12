@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="deploy-to-azure-app-service-on-linux-containers_{context}"]
+= Deploy to Azure App Service on Linux Containers
+:context: deploy-to-azure-app-service-on-linux-containers
+
+This service provides scalability out of the box for web applications. If more instances are required, it will provide a load-balancing automatically, plus monitoring, metrics, logging and so on.
+
+To deploy your Quarkus Native container image to this service, follow this tutorial:
+
+https://docs.microsoft.com/en-us/azure/app-service/containers/tutorial-custom-docker-image?WT.mc_id=opensource-quarkus-brborges[Tutorial: Build a custom image and run in App Service from a private registry]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

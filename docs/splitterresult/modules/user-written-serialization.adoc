@@ -1,0 +1,139 @@
+[id="user-written-serialization_{context}"]
+= User written serialization
+
+The previous method is suggested for any case when the user can annotate their classes.
+Unfortunately the user may not be able to annotate all classes they will put in the
+cache. In this case you must define your schema and create your own Marshaller(s)
+yourself.
+
+Protobuf schema::
++
+[arabic]
+. Proto File
+  +
+  You can put the `.proto` file in the `META-INF` directory of the project. These files will
+automatically be picked up at initialization time.
++
+.library.proto
+[listing]
+----
+package book_sample;
+
+message Book {
+  required string title = 1;
+  required string description = 2;
+  required int32 publicationYear = 3; // no native Date type available in Protobuf
+
+  repeated Author authors = 4;
+}
+
+message Author {
+  required string name = 1;
+  required string surname = 2;
+}
+----
+. In Code
+  +
+  Or you can define the proto schema directly in user code by defining a produced bean of type
+`org.infinispan.protostream.FileDescriptorSource`.
++
+[source,java]
+----
+   @Produces
+   FileDescriptorSource bookProtoDefinition() {
+      return FileDescriptorSource.fromString("library.proto", "package book_sample;\n" +
+            "\n" +
+            "message Book {\n" +
+            "  required string title = 1;\n" +
+            "  required string description = 2;\n" +
+            "  required int32 publicationYear = 3; // no native Date type available in Protobuf\n" +
+            "\n" +
+            "  repeated Author authors = 4;\n" +
+            "}\n" +
+            "\n" +
+            "message Author {\n" +
+            "  required string name = 1;\n" +
+            "  required string surname = 2;\n" +
+            "}");
+   }
+----
+User Marshaller::
++
+Here is the Marshaller class for our Author & Book classes.[NOTE,textlabel="Note",name="note"]
+====
+The type name must match the `<protobuf package>.<protobuf message>` exactly!
+====.AuthorMarshaller.java
+[source,java]
+----
+public class AuthorMarshaller implements MessageMarshaller<Author> {
+
+   @Override
+   public String getTypeName() {
+      return "book_sample.Author";
+   }
+
+   @Override
+   public Class<? extends Author> getJavaClass() {
+      return Author.class;
+   }
+
+   @Override
+   public void writeTo(ProtoStreamWriter writer, Author author) throws IOException {
+      writer.writeString("name", author.getName());
+      writer.writeString("surname", author.getSurname());
+   }
+
+   @Override
+   public Author readFrom(ProtoStreamReader reader) throws IOException {
+      String name = reader.readString("name");
+      String surname = reader.readString("surname");
+      return new Author(name, surname);
+   }
+}
+----.BookMarshaller.java
+[source,java]
+----
+public class BookMarshaller implements MessageMarshaller<Book> {
+
+   @Override
+   public String getTypeName() {
+      return "book_sample.Book";
+   }
+
+   @Override
+   public Class<? extends Book> getJavaClass() {
+      return Book.class;
+   }
+
+   @Override
+   public void writeTo(ProtoStreamWriter writer, Book book) throws IOException {
+      writer.writeString("title", book.getTitle());
+      writer.writeString("description", book.getDescription());
+      writer.writeInt("publicationYear", book.getPublicationYear());
+      writer.writeCollection("authors", book.getAuthors(), Author.class);
+   }
+
+   @Override
+   public Book readFrom(ProtoStreamReader reader) throws IOException {
+      String title = reader.readString("title");
+      String description = reader.readString("description");
+      int publicationYear = reader.readInt("publicationYear");
+      Set<Author> authors = reader.readCollection("authors", new HashSet<>(), Author.class);
+      return new Book(title, description, publicationYear, authors);
+   }
+}
+----And you pass the marshaller by defining the following:[source,java]
+----
+   @Produces
+   MessageMarshaller authorMarshaller() {
+      return new AuthorMarshaller();
+   }
+
+   @Produces
+   MessageMarshaller bookMarshaller() {
+      return new BookMarshaller();
+   }
+----[NOTE,textlabel="Note",name="note"]
+====
+The above produced Marshaller method MUST return `MessageMarshaller` without types or else it will not be found.
+====

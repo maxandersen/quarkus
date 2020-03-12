@@ -1,0 +1,36 @@
+[id="defining-your-entity-2_{context}"]
+= Defining your entity
+
+You can define your entity as regular POJO.
+You can add the `@MongoEntity` annotation to your entity if you need to customize the name of the collection and/or the database.
+
+[source,java]
+----
+@MongoEntity(collection="ThePerson")
+public class Person  {
+    public ObjectId id; // used by MongoDB for the _id field
+    public String name;
+    public LocalDate birth;
+    public Status status;
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+annotating with `@MongoEntity` is optional, it allows you to configure the name of the collection and the name of the database.
+Here the entity will be stored in the `ThePerson` collection instead of the default `Person` collection.
+====
+
+MongoDB with Panache uses the link:{mongodb-doc-root-url}/bson/pojos/[PojoCodecProvider] to map your entities to a MongoDB `Document`.
+
+You will be allowed to use the following annotations to customize this mapping:
+
+- `@BsonId`: allows you to customize the ID field, see <<custom-ids,Custom IDs>>.
+- `@BsonProperty`: customize the serialized name of the field.
+- `@BsonIgnore`: ignore a field during the serialization.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You can use public fields or private fields with getters/setters.
+If you don't want to manage the ID by yourself, you can make your entity extends `PanacheMongoEntity`.
+====

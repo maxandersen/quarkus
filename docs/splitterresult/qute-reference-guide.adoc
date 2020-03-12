@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="qute-reference-guide_{context}"]
+= Qute Reference Guide
+:context: qute-reference-guide
+
+To learn more about Qute, please refer to the link:qute-reference[Qute reference guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

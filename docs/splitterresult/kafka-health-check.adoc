@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="kafka-health-check_{context}"]
+= Kafka Health Check
+:context: kafka-health-check
+
+If you are using the `quarkus-smallrye-health` extension, `quarkus-kafka` can add a readiness health check
+to validate the connection to the broker. This is disabled by default.
+
+If enabled, when you access the `/health/ready` endpoint of your application you will have information about the connection validation status.
+
+This behavior can be enabled by setting the `quarkus.kafka.health.enabled` property to `true` in your `application.properties`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

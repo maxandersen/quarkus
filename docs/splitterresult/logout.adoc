@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="logout_{context}"]
+= Logout
+:context: logout
+
+The extension only supports logout based on the expiration time of the ID Token issued by the OpenID Connect Provider. When the token expires, users are redirected to the OpenID Connect Provider again to authenticate. If the session at the OpenID Connect Provider is still active, users are automatically re-authenticated without having to provide their credentials again.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

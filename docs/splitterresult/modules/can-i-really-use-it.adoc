@@ -1,0 +1,8 @@
+[id="can-i-really-use-it_{context}"]
+= Can I really use it?
+
+While Hibernate Search 6 is still at Beta stage, the code is of production quality and can be relied on.
+
+What we don't guarantee is that there might be API changes along the way to the final release of Hibernate Search 6 and you might have to adapt your code.
+
+If it is not a major issue for you, then sure you can use it.

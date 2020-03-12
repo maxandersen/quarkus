@@ -1,0 +1,42 @@
+ifdef::context[:parent-context: {context}]
+[id="choose-your-lambda_{context}"]
+= Choose Your Lambda
+:context: choose-your-lambda
+
+The `quarkus-amazon-lambda` extension scans your project for a class that implements the Amazon `RequestHandler` interface.
+It must find a class in your project that implements this interface or it will throw a build time failure.
+If it finds more than one handler class, a build time exception will also be thrown.
+
+Sometimes, though, you might have a few related lambdas that share code and creating multiple maven modules is just
+an overhead you don't want to do.  The `quarkus-amazon-lambda` extension allows you to bundle multiple lambdas in one
+project and use configuration or an environment variable to pick the handler you want to deploy.
+
+The generated project has two lambdas within it.  One that is used and one that is unused.  If you open up
+`src/main/resources/application.properties` you'll see this:
+
+[source,subs="attributes+"]
+----
+quarkus.lambda.handler=test
+----
+
+The `quarkus.lambda.handler` property tells Quarkus which lambda handler to deploy. This can be overridden
+with an environment variable too.
+
+If you look at the two generated handler classes in the project, you'll see that they are `@Named` differently.
+
+[source,subs="attributes+"]
+----
+@Named("test")
+public class TestLambda implements RequestHandler<InputObject, OutputObject> {
+}
+
+@Named("unused")
+public class UnusedLambda implements RequestHandler<InputObject, OutputObject> {
+}
+----
+
+The CDI name of the handler class must match the value specified within the `quarkus.lambda.handler` property.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

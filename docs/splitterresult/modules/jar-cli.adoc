@@ -1,0 +1,17 @@
+[id="jar-cli_{context}"]
+= Jar CLI
+
+Download the jar-file here:
+* https://coming-soon[jar-file] (coming soon)
+
+As with the native CLI we recommend that you copy the binary to a specific folder, eg '~/quarkus'.
+The jar file requires Java 8 or newer to run. To start the CLI:
+
+[source,shell]
+----
+$ java -jar quarkus-cli.jar
+----
+
+The jar file CLI accepts all the same options and commands as the native binary.
+
+Note: In the examples below switch out 'quarkus' with 'java -jar quarkus-cli.jar'.

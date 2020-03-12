@@ -1,0 +1,46 @@
+ifdef::context[:parent-context: {context}]
+[id="first-an-example_{context}"]
+= First: an example
+:context: first-an-example
+
+What we're doing in Panache is allow you to write your Hibernate ORM entities like this:
+
+[source,java]
+----
+@Entity
+public class Person extends PanacheEntity {
+    public String name;
+    public LocalDate birth;
+    public Status status;
+
+    public static Person findByName(String name){
+        return find("name", name).firstResult();
+    }
+
+    public static List<Person> findAlive(){
+        return list("status", Status.Alive);
+    }
+
+    public static void deleteStefs(){
+        delete("name", "Stef");
+    }
+}
+----
+
+You have noticed how much more compact and readable the code is?
+Does this look interesting? Read on!
+
+[NOTE,textlabel="Note",name="note"]
+====
+the `list()` method might be surprising at first. It takes fragments of HQL (JP-QL) queries and contextualizes the rest. That makes for very concise but yet readable code.
+====
+
+[NOTE,textlabel="Note",name="note"]
+====
+what was described above is essentially the link:https://www.martinfowler.com/eaaCatalog/activeRecord.html[active record pattern], sometimes just called the entity pattern.
+Hibernate with Panache also allows for the use of the more classical link:https://martinfowler.com/eaaCatalog/repository.html[repository pattern] via `PanacheRepository`.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

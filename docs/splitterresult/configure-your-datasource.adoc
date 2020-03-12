@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="configure-your-datasource_{context}"]
+= Configure your datasource
+:context: configure-your-datasource
+
+Datasource configuration is extremely simple, but is covered in a different guide as technically
+it's implemented by the Agroal connection pool extension for Quarkus.
+
+Jump over to link:datasource[Quarkus - Datasources] for all details.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

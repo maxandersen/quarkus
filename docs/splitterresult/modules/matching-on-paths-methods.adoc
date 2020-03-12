@@ -1,0 +1,12 @@
+[id="matching-on-paths-methods_{context}"]
+= Matching on paths, methods
+
+Permission sets can also specify paths and methods as a comma separated list. If a path ends with '*' then it is considered
+to be a wildcard match and will match all sub paths, otherwise it is an exact match and will only match that specific path:
+
+[source,properties]
+----
+quarkus.http.auth.permission.permit1.paths=/public/*,/css/*,/js/*,/robots.txt
+quarkus.http.auth.permission.permit1.policy=permit
+quarkus.http.auth.permission.permit1.methods=GET,HEAD
+----

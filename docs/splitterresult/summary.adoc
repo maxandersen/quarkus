@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="summary_{context}"]
+= Summary
+:context: summary
+
+Congratulations!
+You have just developed a Quarkus application with https://www.optaplanner.org/[OptaPlanner]!
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

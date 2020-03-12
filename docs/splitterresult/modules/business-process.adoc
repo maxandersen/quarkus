@@ -1,0 +1,6 @@
+[id="business-process_{context}"]
+= Business process
+
+The business process will be responsible for encapsulating business logic of our microservice.
+It should provide complete set of steps to achieve a business goal.
+At the same time this is the entry point to the service that can be consumed by clients.

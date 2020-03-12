@@ -1,0 +1,64 @@
+ifdef::context[:parent-context: {context}]
+[id="define-the-entity_{context}"]
+= Define the Entity
+:context: define-the-entity
+
+Throughout the course of this guide, the following JPA Entity will be used:
+
+[source,java]
+----
+package org.acme.spring.data.jpa;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+
+@Entity
+public class Fruit {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String name;
+
+    private String color;
+
+
+    public Fruit() {
+    }
+
+    public Fruit(String name, String color) {
+        this.name = name;
+        this.color = color;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getColor() {
+        return color;
+    }
+
+    public void setColor(String color) {
+        this.color = color;
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,9 @@
+[id="cloud-native-memory-limits_{context}"]
+= Cloud Native Memory Limits
+
+It is important to measure the whole memory to see the impact of a Cloud Native application.
+It is particularly true of container environments which will kill a process based on its full RSS memory usage.
+
+Likewise, don't fall into the trap of only measuring private memory which is what the process uses that is not shareable with other processes.
+While private memory might be useful in a environment deploying many different applications (and thus sharing memory a lot),
+it is very misleading in environments like Kubernetes/OpenShift.

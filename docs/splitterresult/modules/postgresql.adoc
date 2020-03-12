@@ -1,0 +1,4 @@
+[id="postgresql_{context}"]
+= PostgreSQL
+
+link:{generated-dir}/config/quarkus-reactive-pg-client.adoc[]

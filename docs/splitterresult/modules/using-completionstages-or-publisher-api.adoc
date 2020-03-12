@@ -1,0 +1,18 @@
+[id="using-completionstages-or-publisher-api_{context}"]
+= Using CompletionStages or Publisher API
+
+If you are facing an API using `CompletionStage`, `CompletableFuture`, or `Publisher`, you can convert back and forth.
+First, both `Uni` and `Multi` can be created from a `CompletionStage` or from a `Supplier<CompletionStage>`. For example:
+
+[source,java]
+----
+CompletableFuture<String> future = Uni
+        // Create from a Completion Stage
+        .createFrom().completionStage(CompletableFuture.supplyAsync(() -> "hello"));
+----
+
+On `Uni`, you can also produce a `CompletionStage` using `subscribeAsCompletionStage()` that produces a `CompletionStage` that would get the item or failure emitted by the `Uni`.
+
+You can also create `Unis` and `Multis` from instances of `Publisher` using `createFrom().publisher(Publisher)`.
+You can transform a `Uni` into a `Publisher` using `toMulti`.
+Indeed, `Multi` implements `Publisher`.

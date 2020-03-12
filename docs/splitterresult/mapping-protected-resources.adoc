@@ -1,0 +1,18 @@
+ifdef::context[:parent-context: {context}]
+[id="mapping-protected-resources_{context}"]
+= Mapping Protected Resources
+:context: mapping-protected-resources
+
+By default, the extension loads all the protected resources managed by Keycloak where their `URI` are used to map the resources
+in your application that should be protected. This is done during the application startup.
+
+If you want to disable this behavior and map resources on-demand, you can use the following configuration:
+
+[source,properties]
+----
+quarkus.keycloak.policy-enforcer.lazy-load-paths=true
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

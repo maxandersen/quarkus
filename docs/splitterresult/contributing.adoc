@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="contributing_{context}"]
+= Contributing
+:context: contributing
+
+Check the https://github.com/quarkus-project/quarkus/blob/master/CONTRIBUTING.md[Contribution Guide] for details on reporting issues and the process for submitting pull requests.
+
+Every contribution is valuable.
+It can be a bug report, an example application, a feature request, a fix in the documentation or just feedback.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

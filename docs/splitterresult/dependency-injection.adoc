@@ -1,0 +1,38 @@
+ifdef::context[:parent-context: {context}]
+[id="dependency-injection_{context}"]
+= Dependency Injection
+:context: dependency-injection
+
+As you saw above we support the user injecting Marshaller configuration. You can do the inverse with
+the Infinispan client extension providing injection for `RemoteCacheManager` and `RemoteCache` objects.
+There is one global `RemoteCacheManager` that takes all of the configuration
+parameters setup in the above sections.
+
+It is very simple to inject these components. All you need to do is to add the Inject annotation to
+the field, constructor or method. In the below code we utilize field and constructor injection.
+
+.SomeClass.java
+[source,java]
+----
+    @Inject SomeClass(RemoteCacheManager remoteCacheManager) {
+       this.remoteCacheManager = remoteCacheManager;
+    }
+
+    @Inject @Remote("myCache")
+    RemoteCache<String, Book> cache;
+
+    RemoteCacheManager remoteCacheManager;
+----
+
+If you notice the `RemoteCache` declaration has an additional optional annotation named `Remote`.
+This is a qualifier annotation allowing you to specify which named cache that will be injected. This
+annotation is not required and if it is not supplied, the default cache will be injected.
+
+[NOTE,textlabel="Note",name="note"]
+====
+Other types may be supported for injection, please see other sections for more information
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

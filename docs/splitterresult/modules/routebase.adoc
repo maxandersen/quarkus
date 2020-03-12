@@ -1,0 +1,18 @@
+[id="routebase_{context}"]
+= <code>@RouteBase</code>
+
+This annotation can be used to configure some defaults for reactive routes declared on a class.
+
+[source,java]
+----
+@RouteBase(path = "simple", produces = "text/plain") <1>
+public class SimpleRoutes {
+
+    @Route(path = "ping") // the final path is /simple/ping
+    void ping(RoutingContext rc) {
+        rc.response().end("pong");
+    }
+}
+----
+[arabic]
+<1> The `path` value is used as a prefix for any route method declared on the class where `Route#path()` is used. The `produces` value is used for content-based routing for all routes where `Route#produces()` is empty.

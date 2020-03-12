@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="running-native_{context}"]
+= Running Native
+:context: running-native
+
+You can build the native executable with:
+
+[source,shell]
+----
+./mvnw package -Pnative
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

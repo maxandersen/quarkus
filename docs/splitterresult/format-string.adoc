@@ -1,0 +1,40 @@
+ifdef::context[:parent-context: {context}]
+[id="format-string_{context}"]
+= Format String
+:context: format-string
+
+The logging format string supports the following symbols:
+
+[table,tablepcwidth="100",rowcount="25",header-option="",colcount="3",cols="<m,<3,<5"]
+|===
+| %% | `%` | Renders a simple `%` character.
+| %c | Category | Renders the category name.
+| %C | Source class | Renders the source class name.footnote:calc[Format sequences which examine caller information may affect performance]
+| %d{xxx} | Date | Renders a date with the given date format string, which uses the syntax defined by `java.text.SimpleDateFormat`.
+| %e | Exception | Renders the thrown exception, if any.
+| %F | Source file | Renders the source file name.footnote:calc[]
+| %h | Host name | Renders the system simple host name.
+| %H | Qualified host name | Renders the system's fully qualified host name, which may be the same as the simple host name, depending on OS configuration.
+| %i | Process ID | Render the current process PID.
+| %l | Source location | Renders the source location information, which includes source file name, line number, class name, and method name.footnote:calc[]
+| %L | Source line | Renders the source line number.footnote:calc[]
+| %m | Full Message | Renders the log message plus exception (if any).
+| %M | Source method | Renders the source method name.footnote:calc[]
+| %n | Newline | Renders the platform-specific line separator string.
+| %N | Process name | Render the name of the current process.
+| %p | Level | Render the log level of the message.
+| %r | Relative time | Render the time in milliseconds since the start of the application log.
+| %s | Simple message | Renders just the log message, with no exception trace.
+| %t | Thread name | Render the thread name.
+| %t{id} | Thread ID | Render the thread ID.
+| %z{<zone name>} | Time zone | Set the time zone of the output to `<zone name>`.
+| %X{<MDC property name>} | Mapped Diagnostics Context Value | Renders the value from Mapped Diagnostics Context
+| %X | Mapped Diagnostics Context Values | Renders all the values from Mapped Diagnostics Context in format {property.key=property.value}
+| %x | Nested Diagnostics context values | Renders all the values from Nested Diagnostics Context in format {value1.value2}
+|===
+
+include::modules/alt-console-format.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

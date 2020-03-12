@@ -1,0 +1,50 @@
+[id="resteasy-integration_{context}"]
+= RESTEasy Integration
+
+If you want to use Qute in your JAX-RS application, you'll need to add the `quarkus-resteasy-qute` extension first.
+In your `pom.xml` file, add:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-resteasy-qute</artifactId>
+</dependency>
+----
+
+This extension registers a special `ContainerResponseFilter` implementation so that a resource method can return a `TemplateInstance` and the filter takes care of all necessary steps.
+A simple JAX-RS resource may look like this:
+
+.HelloResource.java
+[source,java]
+----
+package org.acme.quarkus.sample;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
+
+import io.quarkus.qute.TemplateInstance;
+import io.quarkus.qute.Template;
+
+@Path("hello")
+public class HelloResource {
+
+    @Inject
+    Template hello; <1>
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public TemplateInstance get(@QueryParam("name") String name) {
+        return hello.data("name", name); <2> <3>
+    }
+}
+----
+[arabic]
+<1> If there is no `@ResourcePath` qualifier provided, the field name is used to locate the template. In this particular case, we're injecting a template with path `templates/hello.txt`.
+<2> `Template.data()` returns a new template instance that can be customized before the actual rendering is triggered. In this case, we put the name value under the key `name`. The data map is accessible during rendering.
+<3> Note that we don't trigger the rendering - this is done automatically by a special `ContainerResponseFilter` implementation.
+[id="variant-templates_{context}"]
+== Variant Templates
+:context: variant-templates

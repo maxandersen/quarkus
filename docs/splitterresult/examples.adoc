@@ -1,0 +1,54 @@
+ifdef::context[:parent-context: {context}]
+[id="examples_{context}"]
+= Examples
+:context: examples
+
+.Console DEBUG Logging, No color, Shortened Time, Shortened Category Prefixes
+[source,properties]
+----
+quarkus.log.console.enable=true
+quarkus.log.console.format=%d{HH:mm:ss} %-5p [%c{2.}] (%t) %s%e%n
+quarkus.log.console.level=DEBUG
+quarkus.log.console.color=false
+
+quarkus.log.category."io.quarkus".level=DEBUG
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you are adding these properties via command line make sure `"` is escaped.
+For example `-Dquarkus.log.category.\"io.quarkus\".level=DEBUG`.
+====
+
+.File TRACE Logging Configuration
+[id="category-example_{context}" source,properties,id="category-example"]
+----
+quarkus.log.file.enable=true
+# Send output to a trace.log file under the /tmp directory
+quarkus.log.file.path=/tmp/trace.log
+quarkus.log.file.level=TRACE
+quarkus.log.file.format=%d{HH:mm:ss} %-5p [%c{2.}] (%t) %s%e%n
+# Set 2 categories (io.quarkus.smallrye.jwt, io.undertow.request.security) to TRACE level
+quarkus.log.category."io.quarkus.smallrye.jwt".level=TRACE
+quarkus.log.category."io.undertow.request.security".level=TRACE
+----
+
+.Named handlers attached to a category
+[id="category-named-handlers-example_{context}" source,properties,id="category-named-handlers-example"]
+----
+# Send output to the console
+quarkus.log.file.path=/tmp/trace.log
+quarkus.log.console.format=%d{HH:mm:ss} %-5p [%c{2.}] (%t) %s%e%n
+# Configure a named handler that logs to console
+quarkus.log.handler.console."STRUCTURED_LOGGING".format=%e%n
+# Configure a named handler that logs to file
+quarkus.log.handler.file."STRUCTURED_LOGGING_FILE".enable=true
+quarkus.log.handler.file."STRUCTURED_LOGGING_FILE".format=%e%n
+# Configure the category and link the two named handlers to it
+quarkus.log.category."io.quarkus.category".level=INFO
+quarkus.log.category."io.quarkus.category".handlers=STRUCTURED_LOGGING,STRUCTURED_LOGGING_FILE
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

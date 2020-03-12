@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="more-about-configuring-protected-resources_{context}"]
+= More About Configuring Protected Resources
+:context: more-about-configuring-protected-resources
+
+In the default configuration, Keycloak is responsible for managing the roles and deciding who can access which routes.
+
+To configure the protected routes using the `@RolesAllowed` annotation or the `application.properties` file, check the link:security-openid-connect[Using OpenID Connect Adapter to Protect JAX-RS Applications] guide. For more details, check the link:security[Security guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

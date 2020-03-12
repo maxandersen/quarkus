@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="building-stm-applications_{context}"]
+= Building STM applications
+:context: building-stm-applications
+
+There is also a fully worked example in the quickstarts which you may access by cloning the
+Git repository: `git clone {quickstarts-clone-url}`, or by downloading an {quickstarts-archive-url}[archive].
+Look for the `software-transactional-memory-quickstart` example. This will help to understand how you
+can build STM-aware applications with Quarkus. However, before we do so there are a few basic concepts
+which we need to cover.
+
+Note, as you will see, STM in Quarkus relies on a number of annotations to define behaviours. The lack
+of these annotations causes sensible defaults to be assumed but it is important for the developer to
+understand what these may be. Please refer to the https://narayana.io/docs/project/index.html#d0e16066[Narayana STM manual]
+and the https://narayana.io//docs/project/index.html#d0e16133[STM annotations guide] for more details on
+all of the annotations Narayana STM provides.
+
+link:./status-include.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

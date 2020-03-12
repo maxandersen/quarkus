@@ -1,0 +1,62 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-user-specific-data-to-the-health-check-response_{context}"]
+= Adding user-specific data to the health check response
+:context: adding-user-specific-data-to-the-health-check-response
+
+In previous sections, we saw how to create simple health checks with only the minimal
+attributes, namely, the health check name and its status (UP or DOWN). However, the
+MicroProfile specification also provides a way for the applications to supply
+arbitrary data in the form of key-value pairs sent to the consuming end. This can be
+done by using the `withData(key, value)` method of the health check response
+builder API.
+
+Let's create a new health check procedure `org.acme.microprofile.health.DataHealthCheck`:
+
+[source,java]
+----
+package org.acme.microprofile.health;
+
+import org.eclipse.microprofile.health.Liveness;
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@Liveness
+@ApplicationScoped
+public class DataHealthCheck implements HealthCheck {
+
+    @Override
+    public HealthCheckResponse call() {
+        return HealthCheckResponse.named("Health check with data")
+                .up()
+                .withData("foo", "fooValue")
+                .withData("bar", "barValue")
+                .build();
+    }
+}
+----
+
+If you rerun the liveness health check procedure by accessing the `/health/live`
+endpoint you can see that the new health check `Health check with data` is present
+in the `checks` array. This check contains a new attribute called `data` which is a
+JSON object consisting of the properties we have defined in our health check procedure.
+
+This functionality is specifically useful in failure scenarios where you can pass the
+error along with the health check response.
+
+[source,java]
+----
+        try {
+            simulateDatabaseConnectionVerification();
+            responseBuilder.up();
+        } catch (IllegalStateException e) {
+            // cannot access the database
+            responseBuilder.down()
+                    .withData("error", e.getMessage()); // pass the exception message
+        }
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-maven-dependencies_{context}"]
+= Adding maven dependencies
+:context: adding-maven-dependencies
+
+Next, you will need to add the `quarkus-agroal` dependency to your project.
+
+You can add it using a simple Maven command:
+
+[source,shell]
+----
+./mvnw quarkus:add-extension -Dextensions="agroal"
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+Agroal comes as a transitive dependency of the Hibernate ORM extension so if you are using Hibernate ORM,
+you don't need to add the Agroal extension dependency explicitly.
+====
+
+You will also need to choose, and add, the Quarkus extension for your relational database driver.
+
+Quarkus provides driver extensions for:
+
+* H2 - jdbc-h2
+* PostgreSQL - jdbc-postgresql
+* MariaDB - jdbc-mariadb
+* MySQL - jdbc-mysql
+* Microsoft SQL Server - jdbc-mssql
+* Derby - jdbc-derby
+
+[NOTE,textlabel="Note",name="note"]
+====
+The H2 and Derby databases can normally be configured to run in "embedded mode"; the extension does not support compiling the embedded database engine into native images.Read <<in-memory-databases,Testing with in-memory databases>> (below) for suggestions regarding integration testing.
+====
+
+As usual, you can install the extension using `add-extension`.
+
+To install the PostgreSQL driver dependency for instance, just run the following command:
+
+[source,shell]
+----
+./mvnw quarkus:add-extension -Dextensions="jdbc-postgresql"
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="tuning-the-generated-resources-using-application-properties_{context}"]
+= Tuning the generated resources using application.properties
+:context: tuning-the-generated-resources-using-application-properties
+
+The Kubernetes extension allows tuning the generated manifest, using the `application.properties` file.
+Here are some examples:
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

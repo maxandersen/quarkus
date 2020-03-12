@@ -1,0 +1,38 @@
+[id="build-step-processors_{context}"]
+= Build Step Processors
+
+Work is done at augmentation time by _build steps_ which produce and consume _build items_.  The build steps found in
+the deployment modules that correspond to the extensions in the project build are automatically wired together and executed
+to produce the final build artifact(s).
+
+[id="build-steps_{context}"]
+== Build steps
+:context: build-steps
+
+[id="build-items_{context}" id="build-items"]
+== Build items
+:context: build-items
+
+[id="injection_{context}" id="injection"]
+== Injection
+:context: injection
+
+[id="producing-values_{context}" id="producing-values"]
+== Producing values
+:context: producing-values
+
+[id="consuming-values_{context}" id="consuming-values"]
+== Consuming values
+:context: consuming-values
+
+[id="capabilities_{context}"]
+== Capabilities
+:context: capabilities
+
+[id="application-archives_{context}"]
+== Application Archives
+:context: application-archives
+
+[id="using-threads-context-class-loader_{context}"]
+== Using Thread&#8217;s Context Class Loader
+:context: using-threads-context-class-loader

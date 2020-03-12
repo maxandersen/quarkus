@@ -1,0 +1,19 @@
+[id="syntax-and-building-blocks_{context}"]
+= Syntax and Building Blocks
+
+The dynamic parts of a template include:
+
+* *Comment*
+** `{! This is a comment !}`,
+** Could be multi-line,
+** May contain expressions and sections: `{! {#if true} !}`.
+* *Expression*
+** Outputs the evaluated value,
+** Simple properties: `{foo}`, `{item.name}`,
+** Virtual methods: `{item.get(name)}`, `{name ?: 'John'}`,
+** With namespace: `{inject:colors}`.
+* *Section*
+** May contain expressions and sections: `{#if foo}{foo.name}{/if}`,
+** The name in the closing tag is optional: `{#if active}ACTIVE!{/}`,
+** Can be empty: `{#myTag image=true /}`,
+** May declare nested section blocks: `{#if item.valid} Valid. {#else} Invalid. {/if}` and decide which block to render.

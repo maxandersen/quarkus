@@ -1,0 +1,93 @@
+ifdef::context[:parent-context: {context}]
+[id="declaring-reactive-routes_{context}"]
+= Declaring reactive routes
+:context: declaring-reactive-routes
+
+The first way to use reactive routes is to use the `@Route` annotation.
+To have access to this annotation, you need to add the `quarkus-vertx-web` extension:
+
+In your `pom.xml` file, add:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-vertx-web</artifactId>
+</dependency>
+----
+
+Then in a _bean_, you can use the `@Route` annotation as follows:
+
+[source,java]
+----
+package org.acme.reactive.routes;
+
+import io.quarkus.vertx.web.Route;
+import io.quarkus.vertx.web.RoutingExchange;
+import io.vertx.core.http.HttpMethod;
+import io.vertx.ext.web.RoutingContext;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped <1>
+public class MyDeclarativeRoutes {
+
+    // neither path nor regex is set - match a path derived from the method name
+    @Route(methods = HttpMethod.GET) <2>
+    void hello(RoutingContext rc) { <3>
+        rc.response().end("hello");
+    }
+
+    @Route(path = "/greetings", methods = HttpMethod.GET)
+    void greetings(RoutingExchange ex) { <4>
+        ex.ok("hello " + ex.getParam("name").orElse("world"));
+    }
+}
+----
+
+[arabic]
+<1> If there is a reactive route found on a class with no scope annotation then `@javax.inject.Singleton` is added automatically.
+<2> The `@Route` annotation indicates that the method is a reactive route. Again, by default, the code contained in the method must not block.
+<3> The method gets a https://vertx.io/docs/apidocs/io/vertx/ext/web/RoutingContext.html[`RoutingContext`] as a parameter. From the `RoutingContext` you can retrieve the HTTP request (using `request()`) and write the response using `response().end(...)`.
+<4> `RoutingExchange` is a convenient wrapper of `RoutingContext` which provides some useful methods.
+
+More details about using the `RoutingContext` is available in the https://vertx.io/docs/vertx-web/java/[Vert.x Web documentation].
+
+The `@Route` annotation allows to configure:
+
+* The `path` - for routing by path, using the https://vertx.io/docs/vertx-web/java/#_capturing_path_parameters[Vert.x Web format]
+* The `regex` - for routing with regular expressions, see https://vertx.io/docs/vertx-web/java/#_routing_with_regular_expressions[for more details]
+* The `methods` - the HTTP verb triggering the route such as `GET`, `POST`...
+* The `type` - it can be _normal_ (non-blocking), _blocking_ (method dispatched on a worker thread), or _failure_ to indicate that this route is called on failures
+* The `order` - the order of the route when several routes are involved in handling the incoming request.
+Must be positive for regular user routes.
+* The produced and consumed mime types using `produces`, and `consumes`
+
+For instance, you can declare a blocking route as follows:
+
+[source,java]
+----
+@Route(methods = HttpMethod.POST, path = "/post", type = Route.HandlerType.BLOCKING)
+public void blocking(RoutingContext rc) {
+    // ...
+}
+----
+
+You can also declare several routes for a single method using `@Routes`:
+
+[source,java]
+----
+@Route(path = "/first")
+@Route(path = "/second")
+public void route(RoutingContext rc) {
+    // ...
+}
+----
+
+Each route can use different paths, methods...
+
+include::modules/routebase.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

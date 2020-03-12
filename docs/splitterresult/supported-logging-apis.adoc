@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="supported-logging-apis_{context}"]
+= Supported Logging APIs
+:context: supported-logging-apis
+
+Applications and components may use any of the following APIs for logging, and the logs will be merged:
+
+* JDK `java.util.logging`
+* https://github.com/jboss-logging/jboss-logging[JBoss Logging]
+* https://www.slf4j.org/[SLF4J]
+* https://commons.apache.org/proper/commons-logging/[Apache Commons Logging]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

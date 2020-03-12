@@ -1,0 +1,11 @@
+[id="building_{context}"]
+= Building
+
+Building is handled by the link:container-image#s2i[container-image-s2i] extension. To trigger a build:
+
+[source,subs="attributes+"]
+----
+./mvnw clean package -Dquarkus.container-image.build=true
+----
+
+The command above will trigger an s2i binary build.

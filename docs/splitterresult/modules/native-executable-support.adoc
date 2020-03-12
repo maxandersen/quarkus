@@ -1,0 +1,19 @@
+[id="native-executable-support_{context}"]
+= Native Executable Support
+
+There Quarkus provides a lot of build items that control aspects of the native executable build. This allows for extensions
+to programmatically perform tasks such as registering classes for reflection or adding static resources to the native
+executable. Some of these build items are listed below:
+
+`io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem`:: Includes static resources into the native executable.
+`io.quarkus.deployment.builditem.nativeimage.NativeImageResourceDirectoryBuildItem`:: Includes directory's static resources into the native executable.
+`io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem`:: A class that will be reinitialized at runtime by Substrate. This will result in the static initializer running twice.
+`io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem`:: A system property that will be set at native executable build time.
+`io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBundleBuildItem`:: Includes a resource bundle in the native executable.
+`io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem`:: Registers a class for reflection in Substrate. Constructors are always registered, while methods and fields are optional.
+`io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem`:: A class that will be initialized at runtime rather than build time. This will cause the build to fail if the class is initialized as part of the native executable build process, so care must be taken.
+`io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem`:: A convenience feature that allows you to control most of the above features from a single build item.
+`io.quarkus.deployment.builditem.NativeImageEnableAllCharsetsBuildItem`:: Indicates that all charsets should be enabled in native image.
+`io.quarkus.deployment.builditem.NativeImageEnableAllTimeZonesBuildItem`:: Indicates that all timezones should be enabled in native image.
+`io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem`:: A convenient way to tell Quarkus that the extension requires SSL and it should be enabled during native image build.
+When using this feature, remember to add your extension to the list of extensions that offer SSL support automatically on the https://github.com/quarkusio/quarkus/blob/master/docs/src/main/asciidoc/native-and-ssl.adoc[native and ssl guide].

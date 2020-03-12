@@ -1,0 +1,14 @@
+[id="providing-a-certificate-and-key-file_{context}"]
+= Providing a certificate and key file
+
+If the certificate has not been loaded into a keystore, it can be provided directly using the properties listed below.
+Quarkus will first try to load the given files as resources, and uses the filesystem as a fallback.
+The certificate / key pair will be loaded into a newly created keystore on startup.
+
+Your `application.properties` would then look like this:
+
+[source,properties]
+----
+quarkus.http.ssl.certificate.file=/path/to/certificate
+quarkus.http.ssl.certificate.key-file=/path/to/key
+----

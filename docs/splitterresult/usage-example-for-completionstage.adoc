@@ -1,0 +1,58 @@
+ifdef::context[:parent-context: {context}]
+[id="usage-example-for-completionstage_{context}"]
+= Usage example for <code>CompletionStage</code>
+:context: usage-example-for-completionstage
+
+If you are using link:https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/util/concurrent/CompletionStage.html[`CompletionStage`]
+you need manual context propagation. You can do that by injecting a `ThreadContext`
+or `ManagedExecutor` that will propagate every context. For example, here we use the link:vertx[Vert.x Web Client]
+to get the list of Star Wars people, then store them in the database using
+link:hibernate-orm-panache[Hibernate ORM with Panache] (all in the same transaction) before returning
+them to the client as JSON using link:rest-json[JSON-B or Jackson]:
+
+[source,java]
+----
+    @Inject ThreadContext threadContext;
+    @Inject ManagedExecutor managedExecutor;
+    @Inject Vertx vertx;
+
+    @Transactional
+    @GET
+    @Path("/people")
+    @Produces(MediaType.APPLICATION_JSON)
+    public CompletionStage<List<Person>> people() throws SystemException {
+        // Create a REST client to the Star Wars API
+        WebClient client = WebClient.create(vertx,
+                         new WebClientOptions()
+                          .setDefaultHost("swapi.co")
+                          .setDefaultPort(443)
+                          .setSsl(true));
+        // get the list of Star Wars people, with context capture
+        return threadContext.withContextCapture(client.get("/api/people/").send())
+                .thenApplyAsync(response -> {
+                    JsonObject json = response.bodyAsJsonObject();
+                    List<Person> persons = new ArrayList<>(json.getInteger("count"));
+                    // Store them in the DB
+                    // Note that we're still in the same transaction as the outer method
+                    for (Object element : json.getJsonArray("results")) {
+                        Person person = new Person();
+                        person.name = ((JsonObject) element).getString("name");
+                        person.persist();
+                        persons.add(person);
+                    }
+                    return persons;
+                }, managedExecutor);
+    }
+----
+
+Using `ThreadContext` or `ManagedExecutor` you can wrap most useful functional types and `CompletionStage`
+in order to get context propagated.
+
+[NOTE,textlabel="Note",name="note"]
+====
+The injected `ManagedExecutor` uses the Quarkus thread pool.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

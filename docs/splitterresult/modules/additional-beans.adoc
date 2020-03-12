@@ -1,0 +1,20 @@
+[id="additional-beans_{context}"]
+= Additional Beans
+
+`AdditionalBeanBuildItem` is used to specify additional bean classes to be analyzed during discovery.
+Additional bean classes are transparently added to the application index processed by the container.
+
+[source,java]
+----
+@BuildStep
+List<AdditionalBeanBuildItem> additionalBeans() {
+     return Arrays.asList(
+          new AdditionalBeanBuildItem(SmallRyeHealthReporter.class),
+          new AdditionalBeanBuildItem(HealthServlet.class));
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+A bean registration that is a result of an `AdditionalBeanBuildItem` is removable by default. See also <<remove_unused_beans>>.
+====

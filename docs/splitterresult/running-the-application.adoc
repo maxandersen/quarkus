@@ -1,0 +1,50 @@
+ifdef::context[:parent-context: {context}]
+[id="running-the-application_{context}"]
+= Running the application
+:context: running-the-application
+
+Now we are ready to run our application.
+Use: `./mvnw compile quarkus:dev`:
+
+[source,shell]
+----
+$ ./mvnw compile quarkus:dev
+[INFO] --------------------< org.acme:getting-started >---------------------
+[INFO] Building getting-started 1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- maven-resources-plugin:2.6:resources (default-resources) @ getting-started ---
+[INFO] Using 'UTF-8' encoding to copy filtered resources.
+[INFO] skip non existing resourceDirectory /Users/starksm/Dev/JBoss/Quarkus/starksm64-quarkus-quickstarts/getting-started/src/main/resources
+[INFO]
+[INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ getting-started ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 2 source files to /Users/starksm/Dev/JBoss/Quarkus/starksm64-quarkus-quickstarts/getting-started/target/classes
+[INFO]
+[INFO] --- quarkus-maven-plugin:<version>:dev (default-cli) @ getting-started ---
+Listening for transport dt_socket at address: 5005
+2019-02-28 17:05:22,347 INFO  [io.qua.dep.QuarkusAugmentor] (main) Beginning quarkus augmentation
+2019-02-28 17:05:22,635 INFO  [io.qua.dep.QuarkusAugmentor] (main) Quarkus augmentation completed in 288ms
+2019-02-28 17:05:22,770 INFO  [io.quarkus] (main) Quarkus started in 0.668s. Listening on: http://localhost:8080
+2019-02-28 17:05:22,771 INFO  [io.quarkus] (main) Installed features: [cdi, resteasy]
+----
+
+Once started, you can request the provided endpoint:
+
+[source]
+----
+$ curl -w "\n" http://localhost:8080/hello
+hello
+----
+
+Hit `CTRL+C` to stop the application, or keep it running and enjoy the blazing fast hot-reload.
+
+.Automatically add newline with <code>curl -w "\n"</code>
+[TIP,textlabel="Tip",name="tip"]
+====
+We are using `curl -w "\n"` in this example to avoid your terminal printing a '%' or put both result and next command prompt on the same line.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

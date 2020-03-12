@@ -1,0 +1,27 @@
+[id="readiness-health-check_{context}"]
+= Readiness health check
+
+Here is an example of the readiness check:
+
+[source]
+----
+curl -i http://aggregator:8080/health/ready
+
+HTTP/1.1 503 Service Unavailable
+content-type: application/json; charset=UTF-8
+content-length: 265
+
+{
+    "status": "DOWN",
+    "checks": [
+        {
+            "name": "Kafka Streams topics health check",
+            "status": "DOWN",
+            "data": {
+                "missing_topics": "weather-stations,temperature-values"
+            }
+        }
+    ]
+}
+
+----

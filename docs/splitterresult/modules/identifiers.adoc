@@ -1,0 +1,37 @@
+[id="identifiers_{context}"]
+= Identifiers
+
+Expressions/tags must start with a curly bracket (`{`) followed by a valid identifier.
+A valid identifier is a digit, an alphabet character, underscore (`_`), or a section command (`#`).
+Expressions/tags starting with an invalid identifier are ignored.
+A closing curly bracket (`}`) is ignored if not inside an expression/tag.
+
+.hello.html
+[source,html]
+----
+<html>
+   <body>
+   {_foo}       <1>
+   {  foo}      <2>
+   {{foo}}      <3>
+   {"foo":true} <4>
+   </body>
+</html>
+----
+[arabic]
+<1> Evaluated: expression starts with underscore.
+<2> Ignored: expression starts with whitespace.
+<3> Ignored: expression starts with `{`.
+<4> Ignored: expression starts with `"`.
+[TIP,textlabel="Tip",name="tip"]
+====
+It is also possible to use escape sequences `\{` and `\}` to insert delimiters in the text. In fact, an escape sequence is usually only needed for the start delimiter, ie. `\\{foo}` will be rendered as `{foo}` (no evaluation will happen).
+====
+
+[id="expressions_{context}"]
+== Expressions
+:context: expressions
+
+[id="sections_{context}"]
+== Sections
+:context: sections

@@ -1,0 +1,25 @@
+[id="matching-multiple-paths-most-specific-method-wins_{context}"]
+= Matching multiple paths: most specific method wins
+
+If a path is registered with multiple permission sets then any permission sets that specify a HTTP method will take
+precedence and permissions sets without a method will not be considered (assuming of course the method matches). In this
+instance, the permission sets without methods will only come into effect if the request method does not match any of the
+sets with method permissions.
+
+[source,properties]
+----
+quarkus.http.auth.permission.permit1.paths=/public/*
+quarkus.http.auth.permission.permit1.policy=permit
+quarkus.http.auth.permission.permit1.methods=GET,HEAD
+
+quarkus.http.auth.permission.deny1.paths=/public/*
+quarkus.http.auth.permission.deny1.policy=deny
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+Given the above permission set, `GET /public/foo` would match both permission sets' paths,
+but because it matches the `permit1` permission set's explicit method, `permit1` will be chosen and the request will
+be accepted. `PUT /public/foo` on the other hand, will not match the method permissions of `permit1` and so
+`deny1` will be activated and reject the request.
+====

@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="building-with-gradlew-build_{context}"]
+= Building with <code>./gradlew build</code>
+:context: building-with-gradlew-build
+
+Starting from 1.1.0.Final, `./gradlew build` will no longer build the native image. Use the `buildNative` task explicitly as explained above if needed.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

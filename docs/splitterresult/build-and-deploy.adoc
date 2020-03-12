@@ -1,0 +1,27 @@
+ifdef::context[:parent-context: {context}]
+[id="build-and-deploy_{context}"]
+= Build and Deploy
+:context: build-and-deploy
+
+Build the project using maven.
+
+[source,subs="attributes+"]
+----
+./mvnw clean install
+----
+
+This will compile the code and run the unit tests included within the generated project.
+Unit testing is the same as any other Java project and does not require running on Amazon.  Quarkus dev-mode is also
+available with this extension.
+
+If you want to build for native too, make sure you have GraalVM installed correctly and just add a `native` property
+to the build
+
+[source,subs="attributes+"]
+----
+./mvnw clean install -Dnative
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

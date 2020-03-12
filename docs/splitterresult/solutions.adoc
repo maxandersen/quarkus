@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="solutions_{context}"]
+= Solutions
+:context: solutions
+
+We recommend that you follow the instructions from <<bootstrapping-the-project,Boostrapping project>> and onwards to create the application step by step.
+
+However, you can go right to the completed example.
+
+Download an {quickstarts-archive-url}[archive] or clone the git repository:
+
+[source,shell,subs="attributes+"]
+----
+git clone {quickstarts-clone-url}
+----
+
+The solutions are located in the `getting-started-reactive` and `getting-started-reactive-crud` directories.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

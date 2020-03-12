@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="installing-aws-bits_{context}"]
+= Installing AWS bits
+:context: installing-aws-bits
+
+Installing all the AWS bits is probably the most difficult thing about this guide.  Make sure that you follow all the steps
+for installing AWS SAM CLI.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="usage_{context}"]
+= Usage
+:context: usage
+
+Quarkus configures a Bean of type `KubernetesClient` which can be injected into application code using the well known CDI methods.
+This client can be configured using various properties as can be seen in the following example:
+
+[source]
+----
+quarkus.kubernetes-client.trust-certs=false
+quarkus.kubernetes-client.namespace=default
+----
+
+Note that the full list of properties is available in the https://github.com/quarkusio/quarkus/blob/master/extensions/kubernetes-client/runtime-internal/src/main/java/io/quarkus/kubernetes/client/runtime/KubernetesClientBuildConfig.java[KubernetesClientBuildConfig] class.
+
+include::modules/overriding.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

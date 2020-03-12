@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="a-frontend_{context}"]
+= A frontend
+:context: a-frontend
+
+Now let's add the simple web page to interact with our `BookResource`.
+Quarkus automatically serves static resources contained in the `META-INF/resources` directory.
+In the `src/main/resources/META-INF/resources` directory, replace the `index.html` file with the content from this {quickstarts-blob-url}/validation-quickstart/src/main/resources/META-INF/resources/index.html[index.html] file in it.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

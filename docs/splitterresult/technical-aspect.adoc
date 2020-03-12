@@ -1,0 +1,40 @@
+ifdef::context[:parent-context: {context}]
+[id="technical-aspect_{context}"]
+= Technical aspect
+:context: technical-aspect
+
+include::modules/bootstrap-three-phases.adoc[leveloffset=+1]
+
+include::modules/maven-setup.adoc[leveloffset=+1]
+
+include::modules/build-step-processors.adoc[leveloffset=+1]
+
+include::modules/configuration.adoc[leveloffset=+1]
+
+include::modules/conditional-step-inclusion.adoc[leveloffset=+1]
+
+include::modules/bytecode-recording.adoc[leveloffset=+1]
+
+include::modules/contexts-and-dependency-injection.adoc[leveloffset=+1]
+
+include::modules/extension-health-check.adoc[leveloffset=+1]
+
+include::modules/extension-metrics.adoc[leveloffset=+1]
+
+include::modules/customizing-json-handling-from-an-extension.adoc[leveloffset=+1]
+
+include::modules/testing-extensions.adoc[leveloffset=+1]
+
+include::modules/testing-hot-reload.adoc[leveloffset=+1]
+
+include::modules/native-executable-support.adoc[leveloffset=+1]
+
+include::modules/ide-support-tips.adoc[leveloffset=+1]
+
+include::modules/troubleshooting-debugging-tips.adoc[leveloffset=+1]
+
+include::modules/sample-test-extension.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

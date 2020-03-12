@@ -1,0 +1,50 @@
+[id="basic-types_{context}"]
+= Basic Types
+
+.Env
+[table,tablepcwidth="100",rowcount="5",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| value | String |  | 
+| secret | String |  | 
+| configmap | String |  | 
+| field | String |  | 
+|===
+
+.Probe
+[table,tablepcwidth="100",rowcount="7",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| http-action-path | String |  | 
+| exec-action | String |  | 
+| tcp-socket-action | String |  | 
+| initial-delay-seconds | int |  | 0
+| period-seconds | int |  | 30
+| timeout-seconds | int |  | 10
+|===
+
+.Port
+[table,tablepcwidth="100",rowcount="5",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| container-port | int |  | 
+| host-port | int |  | 0
+| path | String |  | /
+| protocol | Protocol |  | TCP
+|===
+
+.Container
+[table,tablepcwidth="100",rowcount="11",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| image | String |  | 
+| env-vars | Env[] |  | 
+| working-dir | String |  | 
+| command | String[] |  | 
+| arguments | String[] |  | 
+| ports | Port[] |  | 
+| mounts | Mount[] |  | 
+| image-pull-policy | ImagePullPolicy |  | IfNotPresent
+| liveness-probe | Probe |  | 
+| readiness-probe | Probe |  | 
+|===

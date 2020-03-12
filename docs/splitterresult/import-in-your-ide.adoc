@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="import-in-your-ide_{context}"]
+= Import in your IDE
+:context: import-in-your-ide
+
+Once you have a <<project-creation, project generated>>, you can import it in your favorite IDE.
+The only requirement is the ability to import a Gradle project.
+
+**Eclipse**
+
+In Eclipse, click on: `File -> Import`.
+In the wizard, select: `Gradle -> Existing Gradle Project`.
+On the next screen, select the root location of the project.
+The next screen list the found modules; select the generated project and click on `Finish`. Done!
+
+In a separated terminal, run `./gradlew quarkusDev`, and enjoy a highly productive environment.
+
+**IntelliJ**
+
+In IntelliJ:
+
+[arabic]
+. From inside IntelliJ select `File -> New -> Project From Existing Sources...` or, if you are on the welcome dialog, select `Import project`.
+. Select the project root
+. Select `Import project from external model` and `Gradle`
+. Next a few times (review the different options if needed)
+. On the last screen click on Finish
+
+In a separated terminal or in the embedded terminal, run `./gradlew quarkusDev`. Enjoy!
+
+**Apache NetBeans**
+
+In NetBeans:
+
+[arabic]
+. Select `File -> Open Project`
+. Select the project root
+. Click on `Open Project`
+
+In a separated terminal or the embedded terminal, go to the project root and run `./gradlew quarkusDev`. Enjoy!
+
+**Visual Studio Code**
+
+Open the project directory in VS Code. If you have installed the Java Extension Pack (grouping a set of Java extensions), the project is loaded as a Gradle project.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

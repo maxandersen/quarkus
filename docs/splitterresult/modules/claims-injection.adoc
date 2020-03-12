@@ -1,0 +1,94 @@
+[id="claims-injection_{context}"]
+= Claims Injection
+
+In the previous `winners()` method we accessed the `birthday` claim through the `JsonWebToken` interface. {mp-jwt} also supports
+the direct injection of claim values from the JWT using CDI injection and the {mp-jwt} `@Claim` qualifier. Here is an alternative
+version of the `winners()` method that injects the `birthday` claim value as an `Optional<JsonString>`:
+
+.TokenSecuredResource#winners2 Method Addition
+[source,java]
+----
+package org.acme.security.jwt;
+
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Optional;
+
+import javax.annotation.security.PermitAll;
+import javax.annotation.security.RolesAllowed;
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
+import javax.json.JsonString;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.SecurityContext;
+
+import org.eclipse.microprofile.jwt.Claim;
+import org.eclipse.microprofile.jwt.Claims;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+/**
+ * Version 4 of the TokenSecuredResource
+ */
+@Path("/secured")
+@RequestScoped
+public class TokenSecuredResource {
+
+    @Inject
+    JsonWebToken jwt;
+    @Inject // <1>
+    @Claim(standard = Claims.birthdate) // <2>
+    Optional<JsonString> birthdate; // <3>
+
+    ...
+
+    @GET
+    @Path("winners2")
+    @Produces(MediaType.TEXT_PLAIN)
+    @RolesAllowed("Subscriber")
+    public String winners2() {
+        int remaining = 6;
+        ArrayList<Integer> numbers = new ArrayList<>();
+
+        // If the JWT contains a birthdate claim, use the day of the month as a pick
+        if (birthdate.isPresent()) { // <4>
+            String bdayString = birthdate.get().getString(); <5>
+            LocalDate bday = LocalDate.parse(bdayString);
+            numbers.add(bday.getDayOfMonth());
+            remaining --;
+        }
+        // Fill remaining picks with random numbers
+        while(remaining > 0) {
+            int pick = (int) Math.rint(64 * Math.random() + 1);
+            numbers.add(pick);
+            remaining --;
+        }
+        return numbers.toString();
+    }
+}
+----
+[arabic]
+<1> We use CDI `@Inject` along with...
+<2> an {mp-jwt} `@Claim(standard = Claims.birthdate)` qualifier to inject the `birthdate` claim directly as
+<3> an `Optional<JsonString>` value.
+<4> Now we check whether the injected `birthdate` field is present
+<5> and if it is, get its value.
+The remainder of the code is the same as before. Update your `TokenSecuredResource` to either add or replace the current
+`winners()` method, and then invoke the following command with _YOUR_TOKEN_ replaced:
+
+.curl command for /secured/winners2
+[source,shell]
+----
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/secured/winners2; echo
+----
+
+.Example Output for /secured/winners2
+[source,shell]
+----
+$ curl -H "Authorization: Bearer eyJraWQiOiJcL3ByaXZhdGVLZXkucGVtIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJqZG9lLXVzaW5nLWp3dC1yYmFjIiwiYXVkIjoidXNpbmctand0LXJiYWMiLCJ1cG4iOiJqZG9lQHF1YXJrdXMuaW8iLCJiaXJ0aGRhdGUiOiIyMDAxLTA3LTEzIiwiYXV0aF90aW1lIjoxNTUxNjY3MzEzLCJpc3MiOiJodHRwczpcL1wvcXVhcmt1cy5pb1wvdXNpbmctand0LXJiYWMiLCJyb2xlTWFwcGluZ3MiOnsiZ3JvdXAyIjoiR3JvdXAyTWFwcGVkUm9sZSIsImdyb3VwMSI6Ikdyb3VwMU1hcHBlZFJvbGUifSwiZ3JvdXBzIjpbIkVjaG9lciIsIlRlc3RlciIsIlN1YnNjcmliZXIiLCJncm91cDIiXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiamRvZSIsImV4cCI6MTU1MTY3MDkxMywiaWF0IjoxNTUxNjY3MzEzLCJqdGkiOiJhLTEyMyJ9.c2QJAK3a1VOYL6vOt40VSEAy9wXPBEjVbqApTTNG8V8UDkQZ6HiOR9-rKOFX3WmTtQVru3O9zDu2_T2_v8kTmCkT-ThxodqC4VxD_QVx1v6BaSJ9-MX1Q7nrkD0Mk1V6x0Cqd6jmHxtJy0Ep8IgeMw2Y5gL9a1NgWVeldXP6cdHrHcYKYGnZKmYp7VpqZBoONPIS_QmWXm-JerwVpwt0juEtZUQoGCJdp7-GZA31QyEN64gCMKfdhYNnLuWQaom3i0uF_LfXtlMHdRU0kzDnLrnGw99ynTAex7ah7zG10ZbanK-PI-nD6wcTbE9WqriwohHM9BFJoBmF81RRk5uMsw" http://localhost:8080/secured/winners2; echo
+[13, 38, 36, 38, 36, 22]
+----

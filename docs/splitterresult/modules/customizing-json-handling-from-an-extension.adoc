@@ -1,0 +1,20 @@
+[id="customizing-json-handling-from-an-extension_{context}"]
+= Customizing JSON handling from an extension
+
+Extensions often need to register serializers and/or deserializers for types the extension provides.
+
+For this, both JSON-B and Jackson extension provide a way to register serializer/deserializer from within an
+extension deployment module.
+
+Keep in mind that not everybody will need JSON, so you need to make it optional.
+
+If an extension intends to provide JSON related customization,
+it is strongly advised to provide customization for both JSON-B and Jackson.
+
+[id="customizing-json-b_{context}"]
+== Customizing JSON-B
+:context: customizing-json-b
+
+[id="customizing-jackson_{context}"]
+== Customizing Jackson
+:context: customizing-jackson

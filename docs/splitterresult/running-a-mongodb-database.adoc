@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="running-a-mongodb-database_{context}"]
+= Running a MongoDB Database
+:context: running-a-mongodb-database
+
+As by default, `MongoClient` is configured to access a local MongoDB database on port 27017 (the default MongoDB port), if you have a local running database on this port, there is nothing more to do before being able to test it!
+
+If you want to use Docker to run a MongoDB database, you can use the following command to launch one:
+
+[source,shell]
+----
+docker run -ti --rm -p 27017:27017 mongo:4.0
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

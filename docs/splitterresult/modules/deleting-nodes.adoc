@@ -1,0 +1,35 @@
+[id="deleting-nodes_{context}"]
+= Deleting nodes
+
+Finally, we want to get rid of fruits again and we add the `DELETE` method:
+
+.src/main/java/org/acme/neo4j/FruitResource.java
+[source,java]
+----
+@DELETE
+@Path("{id}")
+public CompletionStage<Response> delete(@PathParam("id") Long id) {
+
+    AsyncSession session = driver.asyncSession();
+    return session
+        .writeTransactionAsync(tx -> tx
+            .runAsync("MATCH (f:Fruit) WHERE id(f) = $id DELETE f", Values.parameters("id", id))
+            .thenCompose(fn -> fn.consumeAsync()) // <1>
+        )
+        .thenCompose(response -> session.closeAsync())
+        .thenApply(signal -> Response.noContent().build());
+}
+----
+[arabic]
+<1> There is no result for us, only a summary of the query executed.
+A request may look like this
+
+[source,shell]
+----
+curl -X DELETE localhost:8080/fruits/42
+----
+
+And that's already the most simple CRUD application with one type of nodes.
+Feel free to add relationships to the model.
+One idea would be to model recipes that contain fruits.
+The Cypher manual linked in the introduction will help you with modelling your queries.

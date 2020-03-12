@@ -1,0 +1,55 @@
+ifdef::context[:parent-context: {context}]
+[id="native-executables-and-private-members_{context}"]
+= Native Executables and Private Members
+:context: native-executables-and-private-members
+
+Quarkus is using GraalVM to build a native executable.
+One of the limitations of GraalVM is the usage of https://github.com/oracle/graal/blob/master/substratevm/LIMITATIONS.md#user-content-reflection[Reflection, window="_blank"].
+Reflective operations are supported but all relevant members must be registered for reflection explicitly.
+Those registrations result in a bigger native executable.
+
+And if Quarkus DI needs to access a private member it *has to use reflection*.
+That's why Quarkus users are encouraged __not to use private members__ in their beans.
+This involves injection fields, constructors and initializers, observer methods, producer methods and fields, disposers and interceptor methods.
+
+How to avoid using private members?
+You can use package-private modifiers:
+
+[source,java]
+----
+@ApplicationScoped
+public class CounterBean {
+
+    @Inject
+    CounterService counterService; <1>
+
+    void onMessage(@Observes Event msg) { <2>
+    }
+}
+----
+
+[arabic]
+<1> A package-private injection field.
+<2> A package-private observer method.
+
+Or constructor injection:
+
+[source,java]
+----
+@ApplicationScoped
+public class CounterBean {
+
+    private CounterService service;
+
+    CounterBean(CounterService service) { <1>
+      this.service = service;
+    }
+}
+----
+
+[arabic]
+<1> A package-private constructor injection. `@Inject` is optional in this particular case.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

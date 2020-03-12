@@ -1,0 +1,47 @@
+ifdef::context[:parent-context: {context}]
+[id="create-the-function_{context}"]
+= Create the function
+:context: create-the-function
+
+The `manage.sh` script is for managing your lambda using the AWS Lambda Java runtime.  This script is provided only for
+your convenience. Examine the output of the `manage.sh` script if you want to learn what aws commands are executed
+to create, delete, and update your lambdas.
+
+`manage.sh` supports four operation:  `create`, `delete`, `update`, and `invoke`.  You can create your function using the following command:
+
+[source,subs="attributes+"]
+----
+sh manage.sh create
+----
+
+or if you do not have `LAMBDA_ROLE_ARN` already defined in this shell:
+
+[source]
+----
+LAMBDA_ROLE_ARN="arn:aws:iam::1234567890:role/lambda-role" sh manage.sh create
+----
+
+[WARNING,textlabel="Warning",name="warning"]
+====
+Do not change the handler switch.  This must be hardcoded to `io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest`.  This
+handler bootstraps Quarkus and wraps your actual handler so that injection can be performed.
+====
+
+If there are any problems creating the function, you must delete it with the `delete` function before re-running
+the `create` command.
+
+[source,subs="attributes+"]
+----
+sh manage.sh delete
+----
+
+Commands may also be stacked:
+
+[source,subs="attributes+"]
+----
+sh manage.sh delete create
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

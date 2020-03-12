@@ -1,0 +1,229 @@
+ifdef::context[:parent-context: {context}]
+[id="interactive-queries_{context}"]
+= Interactive Queries
+:context: interactive-queries
+
+Subscribing to the `temperatures-aggregated` topic is a great way to react to any new temperature values.
+It's a bit wasteful though if you're just interested in the latest aggregated value for a given weather station.
+This is where Kafka Streams interactive queries shine:
+they let you directly query the underlying state store of the pipeline for the value associated to a given key.
+By exposing a simple REST endpoint which queries the state store,
+the latest aggregation result can be retrieved without having to subscribe to any Kafka topic.
+
+Let's begin by creating a new class `InteractiveQueries` in the file `aggregator/src/main/java/org/acme/kafka/streams/aggregator/streams/InteractiveQueries.java`:
+
+one more method to the `KafkaStreamsPipeline` class which obtains the current state for a given key:
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.streams;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+
+import org.acme.kafka.streams.aggregator.model.Aggregation;
+import org.acme.kafka.streams.aggregator.model.WeatherStationData;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+
+@ApplicationScoped
+public class InteractiveQueries {
+
+    @Inject
+    KafkaStreams streams;
+
+    public GetWeatherStationDataResult getWeatherStationData(int id) {
+        Aggregation result = getWeatherStationStore().get(id);
+
+        if (result != null) {
+            return GetWeatherStationDataResult.found(WeatherStationData.from(result)); // <1>
+        }
+        else {
+            return GetWeatherStationDataResult.notFound();                             // <2>
+        }
+    }
+
+    private ReadOnlyKeyValueStore<Integer, Aggregation> getWeatherStationStore() {
+        while (true) {
+            try {
+                return streams.store(TopologyProducer.WEATHER_STATIONS_STORE, QueryableStoreTypes.keyValueStore());
+            } catch (InvalidStateStoreException e) {
+                // ignore, store not ready yet
+            }
+        }
+    }
+}
+----
+
+[arabic]
+<1> A value for the given station id was found, so that value will be returned
+<2> No value was found, either because a non-existing station was queried or no measurement exists yet for the given station
+
+Also create the method's return type in the file `aggregator/src/main/java/org/acme/kafka/streams/aggregator/streams/GetWeatherStationDataResult.java`:
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.streams;
+
+import java.util.Optional;
+import java.util.OptionalInt;
+
+import org.acme.kafka.streams.aggregator.model.WeatherStationData;
+
+public class GetWeatherStationDataResult {
+
+    private static GetWeatherStationDataResult NOT_FOUND =
+            new GetWeatherStationDataResult(null);
+
+    private final WeatherStationData result;
+
+    private GetWeatherStationDataResult(WeatherStationData result) {
+        this.result = result;
+    }
+
+    public static GetWeatherStationDataResult found(WeatherStationData data) {
+        return new GetWeatherStationDataResult(data);
+    }
+
+    public static GetWeatherStationDataResult notFound() {
+        return NOT_FOUND;
+    }
+
+    public Optional<WeatherStationData> getResult() {
+        return Optional.ofNullable(result);
+    }
+}
+----
+
+Also create `aggregator/src/main/java/org/acme/kafka/streams/aggregator/model/WeatherStationData.java`,
+which represents the actual aggregation result for a weather station:
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.model;
+
+import io.quarkus.runtime.annotations.RegisterForReflection;
+
+@RegisterForReflection
+public class WeatherStationData {
+
+    public int stationId;
+    public String stationName;
+    public double min = Double.MAX_VALUE;
+    public double max = Double.MIN_VALUE;
+    public int count;
+    public double avg;
+
+    private WeatherStationData(int stationId, String stationName, double min, double max,
+            int count, double avg) {
+        this.stationId = stationId;
+        this.stationName = stationName;
+        this.min = min;
+        this.max = max;
+        this.count = count;
+        this.avg = avg;
+    }
+
+    public static WeatherStationData from(Aggregation aggregation) {
+        return new WeatherStationData(
+                aggregation.stationId,
+                aggregation.stationName,
+                aggregation.min,
+                aggregation.max,
+                aggregation.count,
+                aggregation.avg);
+    }
+}
+----
+
+We now can add a simple REST endpoint (`aggregator/src/main/java/org/acme/kafka/streams/aggregator/rest/WeatherStationEndpoint.java`),
+which invokes `getWeatherStationData()` and returns the data to the client:
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.rest;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+
+import org.acme.kafka.streams.aggregator.streams.GetWeatherStationDataResult;
+import org.acme.kafka.streams.aggregator.streams.KafkaStreamsPipeline;
+
+@ApplicationScoped
+@Path("/weather-stations")
+public class WeatherStationEndpoint {
+
+    @Inject
+    InteractiveQueries interactiveQueries;
+
+    @GET
+    @Path("/data/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getWeatherStationData(@PathParam("id") int id) {
+        GetWeatherStationDataResult result = interactiveQueries.getWeatherStationData(id);
+
+        if (result.getResult().isPresent()) {  // <1>
+            return Response.ok(result.getResult().get()).build();
+        }
+        else {
+            return Response.status(Status.NOT_FOUND.getStatusCode(),
+                    "No data found for weather station " + id).build();
+        }
+    }
+}
+----
+
+[arabic]
+<1> Depending on whether a value was obtained, either return that value or a 404 response
+
+With this code in place, it's time to rebuild the application and the `aggregator` service in Docker Compose:
+
+[source,subs="attributes+"]
+----
+./mvnw clean package -f aggregator/pom.xml
+docker-compose stop aggregator
+docker-compose up --build -d
+----
+
+This will rebuild the `aggregator` container and restart its service.
+Once that's done, you can invoke the service's REST API to obtain the temperature data for one of the existing stations.
+To do so, you can use `httpie` in the tooling container launched before:
+
+[source,subs="attributes+"]
+----
+http aggregator:8080/weather-stations/data/1
+
+HTTP/1.1 200 OK
+Connection: keep-alive
+Content-Length: 85
+Content-Type: application/json
+Date: Tue, 18 Jun 2019 19:29:16 GMT
+
+{
+    "avg": 12.9,
+    "count": 146,
+    "max": 41.0,
+    "min": -25.6,
+    "stationId": 1,
+    "stationName": "Hamburg"
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

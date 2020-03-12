@@ -1,0 +1,54 @@
+ifdef::context[:parent-context: {context}]
+[id="the-price-resource_{context}"]
+= The price resource
+:context: the-price-resource
+
+Finally, let's bind our stream to a JAX-RS resource.
+Creates the `src/main/java/org/acme/amqp/PriceResource.java` file with the following content:
+
+[source,java]
+----
+package org.acme.amqp;
+
+import io.smallrye.reactive.messaging.annotations.Channel;
+import org.reactivestreams.Publisher;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+/**
+ * A simple resource retrieving the "in-memory" "my-data-stream" and sending the items as server-sent events.
+ */
+@Path("/prices")
+public class PriceResource {
+
+    @Inject
+    @Channel("my-data-stream") Publisher<Double> prices;         // <1>
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+
+
+    @GET
+    @Path("/stream")
+    @Produces(MediaType.SERVER_SENT_EVENTS)                     // <2>
+    public Publisher<Double> stream() {                         // <3>
+        return prices;
+    }
+}
+----
+
+[arabic]
+<1> Injects the `my-data-stream` channel using the `@Channel` qualifier
+<2> Indicates that the content is sent using `Server Sent Events`
+<3> Returns the stream (_Reactive Stream_)
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,139 @@
+ifdef::context[:parent-context: {context}]
+[id="setting-up-and-configuring-hibernate-orm_{context}"]
+= Setting up and configuring Hibernate ORM
+:context: setting-up-and-configuring-hibernate-orm
+
+When using Hibernate ORM in Quarkus, you don't need to have a `persistence.xml` resource to configure it.
+
+Using such a classic configuration file is an option, but unnecessary unless you have specific advanced needs;
+so we'll see first how Hibernate ORM can be configured without a `persistence.xml` resource.
+
+In Quarkus, you just need to:
+
+* add your configuration settings in `{config-file}`
+* annotate your entities with `@Entity` and any other mapping annotation as usual
+
+Other configuration needs have been automated: Quarkus will make some opinionated choices and educated guesses.
+
+Add the following dependencies to your project:
+
+* the Hibernate ORM extension: `io.quarkus:quarkus-hibernate-orm`
+* your JDBC driver extension; the following options are available:
+- `quarkus-jdbc-derby` for link:https://db.apache.org/derby/[Apache Derby]
+- `quarkus-jdbc-h2` for link:https://www.h2database.com/html/main.html[H2]
+- `quarkus-jdbc-mariadb` for link:https://mariadb.com/[MariaDB]
+- `quarkus-jdbc-mssql` for link:https://www.microsoft.com/en-gb/sql-server/[Microsoft SQL Server]
+- `quarkus-jdbc-mysql` for link:https://www.mysql.com/[MySQL]
+- `quarkus-jdbc-postgresql` for link:https://www.postgresql.org/[PostgreSQL]
+
+.Example dependencies using Maven
+[source,xml]
+----
+<dependencies>
+    <!-- Hibernate ORM specific dependencies -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-hibernate-orm</artifactId>
+    </dependency>
+
+    <!-- JDBC driver dependencies -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-jdbc-postgresql</artifactId>
+    </dependency>
+</dependencies>
+----
+
+Annotate your persistent objects with `@Entity`,
+then add the relevant configuration properties in `{config-file}`.
+
+.Example <code>{config-file}</code>
+[source,properties]
+----
+# datasource configuration
+quarkus.datasource.url = jdbc:postgresql://localhost:5432/hibernate_db
+quarkus.datasource.driver = org.postgresql.Driver
+quarkus.datasource.username = hibernate
+quarkus.datasource.password = hibernate
+
+# drop and create the database at startup (use `update` to only update the schema)
+quarkus.hibernate-orm.database.generation=drop-and-create
+----
+
+Note that these configuration properties are not the same ones as in your typical Hibernate ORM configuration file: these drive Quarkus configuration properties,
+which often will map to Hibernate configuration properties but could have different names and don't necessarily map 1:1 to each other.
+
+Also, Quarkus will set many Hibernate configuration settings automatically, and will often use more modern defaults.
+
+Please see below section <<hibernate-configuration-properties, Hibernate ORM configuration properties>> for the list of properties you can set in `{config-file}`.
+
+An `EntityManagerFactory` will be created based on the Quarkus `datasource` configuration as long as the Hibernate ORM extension is listed among your project dependencies.
+
+The dialect will be selected based on the JDBC driver - unless you set one explicitly.
+
+You can then happily inject your `EntityManager`:
+
+.Example application bean using Hibernate
+[source,java]
+----
+@ApplicationScoped
+public class SantaClausService {
+    @Inject
+    EntityManager em; <1>
+
+    @Transactional <2>
+    public void createGift(String giftDescription) {
+        Gift gift = new Gift();
+        gift.setName(giftDescription);
+        em.persist(gift);
+    }
+}
+----
+
+[arabic]
+<1> Inject your entity manager and have fun
+<2> Mark your CDI bean method as `@Transactional` and the `EntityManager` will enlist and flush at commit.
+
+.Example Entity
+[source,java]
+----
+@Entity
+public class Gift {
+    private Long id;
+    private String name;
+
+    @Id @GeneratedValue(strategy = GenerationType.SEQUENCE, generator="giftSeq")
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+}
+----
+
+To load some SQL statements when Hibernate ORM starts, add an `import.sql` in the root of your resources directory.
+Such a script can contain any SQL DML statements; make sure to terminate each statement with a semicolon.
+This is useful to have a data set ready for your tests or demos.
+
+[WARNING,textlabel="Warning",name="warning"]
+====
+Make sure to wrap methods modifying your database (e.g. `entity.persist()`) within a transaction. Marking a
+CDI bean method `@Transactional` will do that for you and make that method a transaction boundary. We recommend doing
+so at your application entry point boundaries like your REST endpoint controllers.
+====
+
+include::modules/hibernate-configuration-properties.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,9 @@
+[id="generating-the-documentation_{context}"]
+= Generating the documentation
+
+Generating the documentation is easy:
+
+* Running `./mvnw clean install -DskipTests -DskipITs` will do.
+* You  can either do it globally or in a specific extension directory (e.g. `extensions/mailer`).
+
+The documentation is generated in the global `target/asciidoc/generated/config/` located at the root of the project.

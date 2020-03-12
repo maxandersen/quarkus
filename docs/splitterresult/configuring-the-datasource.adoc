@@ -1,0 +1,32 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-datasource_{context}"]
+= Configuring the datasource
+:context: configuring-the-datasource
+
+Once the dependencies are added to your pom.xml file, you'll need to configure Agroal.
+
+This is done in the `src/main/resources/application.properties` file.
+
+A viable configuration file would be:
+
+[source,properties]
+----
+quarkus.datasource.url=jdbc:h2:tcp://localhost/mem:default
+quarkus.datasource.driver=org.h2.Driver
+quarkus.datasource.username=username-default
+quarkus.datasource.min-size=3
+quarkus.datasource.max-size=13
+----
+
+There are other configuration options, detailed below.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+For more information about the Agroal extension configuration please refer to the <<configuration-reference, Configuration Reference>>.
+====
+
+include::modules/jdbc-url-configurations.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

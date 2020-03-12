@@ -1,0 +1,24 @@
+ifdef::context[:parent-context: {context}]
+[id="building-uber-jars_{context}"]
+= Building Uber-Jars
+:context: building-uber-jars
+
+Quarkus Gradle plugin supports the generation of Uber-Jars by specifying an `--uber-jar` argument as follows:
+
+[source,shell]
+----
+./gradlew quarkusBuild --uber-jar
+----
+
+When building an Uber-Jar you can specify entries that you want to exclude from the generated jar by using the `--ignored-entry` argument:
+
+[source,shell]
+----
+./gradlew quarkusBuild --uber-jar --ignored-entry=META-INF/file1.txt
+----
+
+The entries are relative to the root of the generated Uber-Jar. You can specify multiple entries by adding extra `--ignored-entry` arguments.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

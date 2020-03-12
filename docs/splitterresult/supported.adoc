@@ -1,0 +1,29 @@
+ifdef::context[:parent-context: {context}]
+[id="supported_{context}"]
+= Supported Features
+:context: supported
+
+* Programming model
+** Managed beans implemented by a Java class
+*** `@PostConstruct` and `@PreDestroy` lifecycle callbacks
+** Producer methods and fields, disposers
+** Qualifiers
+** Alternatives
+** Stereotypes
+* Dependency injection and lookup
+** Field, constructor and initializer/setter injection
+** Type-safe resolution
+** Programmatic lookup via `javax.enterprise.inject.Instance`
+** Client proxies
+** Injection point metadata
+* Scopes and contexts
+** `@Dependent`, `@ApplicationScoped`, `@Singleton`, `@RequestScoped` and `@SessionScoped`
+** Custom scopes and contexts
+* Interceptors
+** Business method interceptors: `@AroundInvoke`
+** Interceptors for lifecycle event callbacks: `@PostConstruct`, `@PreDestroy`, `@AroundConstruct`
+* Events and observer methods, including asynchronous events and transactional observer methods
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

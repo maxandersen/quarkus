@@ -1,0 +1,35 @@
+[id="programmatic-approach_{context}"]
+= Programmatic approach
+
+The application can programmatically start a transaction before accessing the methods of STM objects:
+
+[source,java]
+----
+AtomicAction aa = new AtomicAction(); <1>
+
+aa.begin(); <2>
+{
+    try {
+        flightService.makeBooking("BA123 ...");
+        taxiService.makeBooking("East Coast Taxis ..."); <3>
+        <4>
+        aa.commit();
+        <5>
+    } catch (Exception e) {
+        aa.abort(); <6>
+    }
+}
+----
+[arabic]
+<1> An object for manually controlling transaction boundaries (AtomicAction and many other useful
+classes are included in the extension).
+Refer https://narayana.io//docs/api/com/arjuna/ats/arjuna/AtomicAction.html[to the javadoc] for more detail.
+<2> Programmatically begin a transaction.
+<3> Notice that object updates can be composed which means that updates to multiple objects can be committed together as a single action.
+[Note that it is also possible to begin nested transactions so that you can perform speculative work which may then be abandoned
+without abandoning other work performed by the outer transaction].
+<4> Since the transaction has not yet been committed the changes made by the flight and taxi services are not visible outside of the transaction.
+<5> Since the commit was successful the changes made by the flight and taxi services are now visible to other threads.
+Note that other transactions that relied on the old state may or may not now incur conflicts when they commit (the STM library
+provides a number of features for managing conflicting behaviour and these are covered in the Narayana STM manual).
+<6> Programmatically decide to abort the transaction which means that the changes made by the flight and taxi services are discarded.

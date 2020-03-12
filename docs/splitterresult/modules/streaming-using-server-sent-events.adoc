@@ -1,0 +1,119 @@
+[id="streaming-using-server-sent-events_{context}"]
+= Streaming using Server-Sent Events
+
+Quarkus web resources that need to send content as https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events[server-sent events] must have a method:
+
+* declaring the `text/event-stream` response content type
+* returning a https://www.reactive-streams.org/[Reactive Streams] `Publisher` or Mutiny `Multi`  (requires the `quarkus-resteasy-mutiny` extension)
+
+In practice, a streaming greeting service would look like:
+
+[source,java]
+----
+@Path("/hello")
+public class StreamingResource {
+
+    @GET
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @Path("/{name}")
+    public Multi<String> greeting(@PathParam String name) {
+        // TODO: create a Reactive Streams publisher or a Mutiny Multi
+        return publisher;
+    }
+}
+----
+
+Now we just need to return our `Publisher` or `Multi`:
+
+[source,java]
+----
+package org.acme.vertx;
+
+import io.smallrye.mutiny.Multi;
+import io.vertx.mutiny.core.Vertx;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import java.util.Date;
+
+@Path("/stream")
+public class StreamingResource {
+
+    @Inject
+    Vertx vertx;
+
+    @GET
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @Path("/{name}")
+    public Multi<String> greeting(@PathParam String name) {
+        return vertx.periodicStream(2000).toMulti()
+                .map(l -> String.format("Hello %s! (%s)%n", name, new Date()));
+    }
+}
+----
+
+The server side is ready.
+In order to see the result in the browser, we need a web page.
+
+.META-INF/resources/streaming.html
+[source,html]
+----
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>SSE with Vert.x - Quarkus</title>
+    <script type="application/javascript" src="streaming.js"></script>
+</head>
+<body>
+<div id="container"></div>
+</body>
+</html>
+----
+
+Our web page just has an empty `<div>` container.
+The magic, as always, lies in the Javascript code:
+
+.META-INF/resources/streaming.js
+[source,javascript]
+----
+if (!!window.EventSource) {
+    var eventSource = new EventSource("/stream/Quarkus");
+    eventSource.onmessage = function (event) {
+        var container = document.getElementById("container");
+        var paragraph = document.createElement("p");
+        paragraph.innerHTML = event.data;
+        container.appendChild(paragraph);
+    };
+} else {
+    window.alert("EventSource not available on this browser.")
+}
+----
+
+[IMPORTANT,textlabel="Important",name="important"]
+====
+Most browsers support SSE but some don't.
+More about this in  Mozilla's https://developer.mozilla.org/en-US/docs/Web/API/EventSource#Browser_compatibility[SSE browser-compatibility list].
+====
+
+Navigate to http://localhost:8080/streaming.html.
+A new greeting should show-up every 2 seconds.
+
+[source,text]
+----
+Hello Quarkus! (Wed Feb 12 17:13:55 CET 2020)
+
+Hello Quarkus! (Wed Feb 12 17:13:57 CET 2020)
+
+Hello Quarkus! (Wed Feb 12 17:13:59 CET 2020)
+
+Hello Quarkus! (Wed Feb 12 17:14:01 CET 2020)
+
+Hello Quarkus! (Wed Feb 12 17:14:03 CET 2020)
+
+...
+----

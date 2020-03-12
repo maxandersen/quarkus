@@ -1,0 +1,88 @@
+ifdef::context[:parent-context: {context}]
+[id="accessing-vert-x_{context}"]
+= Accessing Vert.x
+:context: accessing-vert-x
+
+Once the extension has been added, you can access the _managed_ Vert.x instance using `@Inject`:
+
+[source,java]
+----
+@Inject Vertx vertx;
+----
+
+If you are familiar with Vert.x, you know that Vert.x provides different API models.
+For instance _bare_ Vert.x uses callbacks, the Mutiny variants uses `Uni` and `Multi`, the RX Java 2 version uses `Single`, `Maybe`, `Completable`, `Observable` and `Flowable`...
+
+Quarkus provides 4 Vert.x APIs:
+
+[table,tablepcwidth="100",rowcount="5",header-option="",colcount="3"]
+|===
+| _bare_ | `@Inject io.vertx.core.Vertx vertx` | _bare_ Vert.x instance, the API uses callbacks.
+| https://smallrye.io/smallrye-mutiny/[Mutiny] | `@Inject io.vertx.mutiny.core.Vertx vertx` | The Mutiny API for Vert.x.
+| RX Java 2 | `@Inject io.vertx.reactivex.core.Vertx vertx` | RX Java 2 Vert.x, the API uses RX Java 2 types (deprecated).
+| _Axle_ | `@Inject io.vertx.axle.core.Vertx vertx` | Axle Vert.x, the API uses `CompletionStage` and `Reactive Streams` (deprecated).
+|===
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You may inject any of the 4 flavors of `Vertx` as well as the `EventBus` in your Quarkus application beans: `bare`, `Mutiny`, `Axle`, `RxJava2`.
+They are just shims and rely on a single _managed_ Vert.x instance.
+====
+
+You will pick one or the other depending on your use cases.
+
+- `bare`: for advanced usage or if you have existing Vert.x code you want to reuse in your Quarkus application
+- `mutiny`: Mutiny is an event-driven reactive programming API. It uses 2 types: `Uni` and `Multi`. This is the recommended API.
+- `Axle`: works well with Quarkus and MicroProfile APIs (`CompletionStage` for single results and `Publisher` for streams) - deprecated, it is recommended to switch to Mutiny
+- `Rx Java 2`: when you need support for a wide range of data transformation operators on your streams - deprecated, it is recommended to switch to Mutiny
+
+The following snippets illustrate the difference between these 4 APIs:
+
+[source,java]
+----
+// Bare Vert.x:
+vertx.fileSystem().readFile("lorem-ipsum.txt", ar -> {
+    if (ar.succeeded()) {
+        System.out.println("Content:" + ar.result().toString("UTF-8"));
+    } else {
+        System.out.println("Cannot read the file: " + ar.cause().getMessage());
+    }
+});
+
+// Mutiny Vert.x:
+vertx.fileSystem().readFile("lorem-ipsum.txt")
+    .onItem().apply(buffer -> buffer.toString("UTF-8"))
+    .subscribe(
+            content -> System.out.println("Content: " + content),
+            err -> System.out.println("Cannot read the file: " + err.getMessage())
+    );
+
+// Rx Java 2 Vert.x
+vertx.fileSystem().rxReadFile("lorem-ipsum.txt")
+    .map(buffer -> buffer.toString("UTF-8"))
+    .subscribe(
+            content -> System.out.println("Content: " + content),
+            err -> System.out.println("Cannot read the file: " + err.getMessage())
+    );
+
+// Axle API:
+vertx.fileSystem().readFile("lorem-ipsum.txt")
+    .thenApply(buffer -> buffer.toString("UTF-8"))
+    .whenComplete((content, err) -> {
+        if (err != null) {
+            System.out.println("Cannot read the file: " + err.getMessage());
+        } else {
+            System.out.println("Content: " + content);
+        }
+    });
+----
+
+.Mutiny
+[TIP,textlabel="Tip",name="tip"]
+====
+If you're not familiar with Mutiny, we recommend to read the link:getting-started-reactive#mutiny[Getting Started with Reactive guide] first.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,50 @@
+ifdef::context[:parent-context: {context}]
+[id="mock-support_{context}"]
+= Mock Support
+:context: mock-support
+
+Quarkus supports the use of mock objects using the CDI `@Alternative` mechanism.
+To use this simply override the bean you wish to mock with a class in the `src/test/java` directory, and put the `@Alternative` and `@Priority(1)` annotations on the bean.
+Alternatively, a convenient `io.quarkus.test.Mock` stereotype annotation could be used.
+This built-in stereotype declares `@Alternative`, `@Priority(1)` and `@Dependent`.
+For example if I have the following service:
+
+[source,java]
+----
+@ApplicationScoped
+public class ExternalService {
+
+    public String service() {
+        return "external";
+    }
+
+}
+----
+
+I could mock it with the following class in `src/test/java`:
+
+[source,java]
+----
+@Mock
+@ApplicationScoped <1>
+public class MockExternalService extends ExternalService {
+
+    @Override
+    public String service() {
+        return "mock";
+    }
+}
+----
+
+[arabic]
+<1> Overrides the `@Dependent` scope declared on the `@Mock` stereotype.
+
+It is important that the alternative be present in the `src/test/java` directory rather than `src/main/java`, as otherwise
+it will take effect all the time, not just when testing.
+
+Note that at present this approach does not work with native image testing, as this would required the test alternatives
+to be baked into the native image.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,55 @@
+[id="additional-notes-on-configproperties_{context}"]
+= Additional notes on @ConfigProperties
+
+When using a regular class annotated with `@ConfigProperties` the class doesn't necessarily have to declare getters and setters.
+Having simple public non-final fields is valid as well.
+
+Furthermore the configuration classes support nested object configuration. Suppose there was a need to have an extra layer
+of greeting configuration named `hidden` that would contain a few fields. This could be achieved like so:
+
+[source,java]
+----
+@ConfigProperties(prefix = "greeting")
+public class GreetingConfiguration {
+
+    public String message;
+    public String suffix = "!";
+    public Optional<String> name;
+    public HiddenConfig hidden; <1>
+
+    public static class HiddenConfig {
+        public Integer prizeAmount;
+        public List<String> recipients;
+    }
+}
+----
+[arabic]
+<1> The name of the field (not the class name) will determine the name of the properties that are bound to the object.
+Setting the properties would occur in the normal manner, for example in `application.properties` one could have:
+
+[source,properties]
+----
+greeting.message = hello
+greeting.name = quarkus
+greeting.hidden.prizeAmount=10
+greeting.hidden.recipients=Jane,John
+----
+
+Furthermore, classes annotated with `@ConfigProperties` can be annotated with Bean Validation annotations similar to the following example:
+
+[source,java]
+----
+@ConfigProperties(prefix = "greeting")
+public class GreetingConfiguration {
+
+    @Size(min = 20)
+    public String message;
+    public String suffix = "!";
+
+}
+----
+
+If the validation fails with the given configuration, the application will fail to start and indicate the corresponding validation errors in the log.
+
+In the case of an interface being annotated with `@ConfigProperties`, the interface is allowed to extend other interfaces and methods from
+the entire interface hierarchy are used to bind properties.

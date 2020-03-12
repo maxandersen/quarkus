@@ -1,0 +1,12 @@
+[id="others_{context}"]
+= Others &#8230;&#8203;
+
+This section is provided as high level guidance, but can't presume to be comprehensive as some flags are controlled
+ dynamically by the extensions, the platform you're building on, configuration details, your code and possibly
+ a combination of any of these.
+
+Generally speaking the ones listed here are those most likely to affect performance metrics, but in the right
+circumstances one could observe non negligible impact from the other flags too.
+
+If you're to investigate some differences in detail make sure to check what Quarkus is invoking exactly: when the build
+plugin is producing a native image, the full command lines are logged.

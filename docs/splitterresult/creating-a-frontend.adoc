@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-a-frontend_{context}"]
+= Creating a frontend
+:context: creating-a-frontend
+
+Now let's add a simple web page to interact with our `LibraryResource`.
+Quarkus automatically serves static resources located under the `META-INF/resources` directory.
+In the `src/main/resources/META-INF/resources` directory, overwrite the existing `index.html` file with the content from this
+{quickstarts-blob-url}/hibernate-search-elasticsearch-quickstart/src/main/resources/META-INF/resources/index.html[index.html] file.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,18 @@
+[id="caching-of-entities_{context}"]
+= Caching of entities
+
+To enable second-level cache, mark the entities that you want cached with `@javax.persistence.Cacheable`:
+
+[source,java]
+----
+@Entity
+@Cacheable
+public class Country {
+    int dialInCode;
+    // ...
+}
+----
+
+When an entity is annotated with `@Cacheable`, all its field values are cached except for collections and relations to other entities.
+
+This means the entity can be loaded without querying the database, but be careful as it implies the loaded entity might not reflect recent changes in the database.

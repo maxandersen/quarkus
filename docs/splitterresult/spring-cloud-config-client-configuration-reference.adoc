@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="spring-cloud-config-client-configuration-reference_{context}"]
+= Spring Cloud Config Client Reference
+:context: spring-cloud-config-client-configuration-reference
+
+link:{generated-dir}/config/quarkus-spring-cloud-config.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

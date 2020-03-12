@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="extension-maven-dependencies_{context}"]
+= Extension maven dependencies
+:context: extension-maven-dependencies
+
+The sample project includes the RESTEasy, Undertow, and Vert.x Web extensions.  If you are only using one of those
+APIs (i.e. jax-rs only), respectively remove the maven dependency `quarkus-resteasy`, `quarkus-undertow`, and/or
+`quarkus-vertx-web`.
+
+You must include the `quarkus-azure-functions-http` extension as this is a generic bridge between the Azure Functions
+runtime and the HTTP framework you are writing your microservices in.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,28 @@
+[id="what-is-supported_{context}"]
+= What is supported
+
+The following sections described the most important supported features of Spring Data JPA.
+
+[id="automatic-repository-implementation-generation_{context}"]
+== Automatic repository implementation generation
+:context: automatic-repository-implementation-generation
+
+[id="fine-tuning-of-repository-definition_{context}"]
+== Fine tuning of repository definition
+:context: fine-tuning-of-repository-definition
+
+[id="customizing-individual-repositories-using-repository-fragments_{context}"]
+== Customizing individual repositories using repository fragments
+:context: customizing-individual-repositories-using-repository-fragments
+
+[id="derived-query-methods_{context}"]
+== Derived query methods
+:context: derived-query-methods
+
+[id="user-defined-queries_{context}"]
+== User defined queries
+:context: user-defined-queries
+
+[id="more-examples_{context}"]
+== More examples
+:context: more-examples

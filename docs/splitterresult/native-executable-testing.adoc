@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="native-executable-testing_{context}"]
+= Native Executable Testing
+:context: native-executable-testing
+
+It is also possible to test native executables using `@NativeImageTest`. This supports all the features mentioned in this
+guide except injecting into tests (and the native executable runs in a separate non-JVM process this is not really possible).
+
+This is covered in the link:building-native-image[Native Executable Guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

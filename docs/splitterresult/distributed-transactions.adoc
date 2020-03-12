@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="distributed-transactions_{context}"]
+= Distributed transactions
+:context: distributed-transactions
+
+Sharing a transaction between multiple services is possible but is currently
+an advanced use case only and the Narayana documentation should be consulted
+if this behaviour is required. In particular, STM does not yet support the features
+described in the link:context-propagation[Context Propagation guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

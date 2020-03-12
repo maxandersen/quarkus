@@ -1,0 +1,71 @@
+ifdef::context[:parent-context: {context}]
+[id="json-mapping-and-validation_{context}"]
+= JSON mapping and validation
+:context: json-mapping-and-validation
+
+Back to the `BookResource` class.
+Add the following method:
+
+[source,java]
+----
+@Path("/manual-validation")
+@POST
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public Result tryMeManualValidation(Book book) {
+    Set<ConstraintViolation<Book>> violations = validator.validate(book);
+    if (violations.isEmpty()) {
+        return new Result("Book is valid! It was validated by manual validation.");
+    } else {
+        return new Result(violations);
+    }
+}
+----
+
+Yes it does not compile, `Result` is missing, but we will add it very soon.
+
+The method parameter (`book`) is created from the JSON payload automatically.
+
+The method uses the `Validator` to check the payload.
+It returns a set of violations.
+If this set is empty, it means the object is valid.
+In case of failures, the messages are concatenated and sent back to the browser.
+
+Let's now create the `Result` class as an inner class:
+
+[source,java]
+----
+public static class Result {
+
+    Result(String message) {
+        this.success = true;
+        this.message = message;
+    }
+
+    Result(Set<? extends ConstraintViolation<?>> violations) {
+        this.success = false;
+        this.message = violations.stream()
+             .map(cv -> cv.getMessage())
+             .collect(Collectors.joining(", "));
+    }
+
+    private String message;
+    private boolean success;
+
+    public String getMessage() {
+        return message;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+}
+----
+
+The class is very simple and only contains 2 fields and the associated getters and setters.
+Because we indicate that we produce JSON, the mapping to JSON is made automatically.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

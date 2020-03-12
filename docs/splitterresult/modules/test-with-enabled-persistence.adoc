@@ -1,0 +1,39 @@
+[id="test-with-enabled-persistence_{context}"]
+= Test with enabled persistence
+
+After configuring persistence on the project level, you can test and verify that the process instance
+state is preserved across application restarts.
+
+* start Infinispan server
+* build and run your project
+* execute non adult use case
+
+[source,bash]
+----
+curl -X POST http://localhost:8080/persons \
+    -H 'content-type: application/json' \
+    -H 'accept: application/json' \
+    -d '{"person": {"name":"Jenny Quark", "age": 15}}'
+----
+
+You can also verify that there is active instance
+
+[source,bash]
+----
+curl -X GET http://localhost:8080/persons \
+    -H 'content-type: application/json' \
+    -H 'accept: application/json'
+----
+
+Restart your application while keeping Infinispan server up and running.
+
+Check if you can see active instance which should have exactly the same id
+
+[source,bash]
+----
+curl -X GET http://localhost:8080/persons \
+    -H 'content-type: application/json' \
+    -H 'accept: application/json'
+----
+
+To learn more about persistence in Kogito visit https://github.com/kiegroup/kogito-runtimes/wiki/Persistence[this page]

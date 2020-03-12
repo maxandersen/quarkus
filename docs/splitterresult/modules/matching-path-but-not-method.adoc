@@ -1,0 +1,11 @@
+[id="matching-path-but-not-method_{context}"]
+= Matching path but not method
+
+If a request would match one or more permission sets based on the path, but does not match any due to method requirements
+then the request is rejected.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+Given the above permission set, `GET /public/foo` would match both the path and method and thus be allowed,
+whereas `POST /public/foo` would match the path but not the method and would thus be rejected.
+====

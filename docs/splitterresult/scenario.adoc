@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="scenario_{context}"]
+= Scenario
+:context: scenario
+
+Let's imagine you want to expose in your Quarkus application a REST API that allows users to retrieve the weather forecast for the next three days.
+The problem is that you have to rely on an external meteorological service which only accepts requests for one day at a time and takes forever to answer.
+Since the weather forecast is updated once every twelve hours, caching the service responses would definitely improve your API performances.
+
+We'll do that using a single Quarkus annotation.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,83 @@
+[id="annotation-based-serialization_{context}"]
+= Annotation based Serialization
+
+This can be done automatically by adding protostream annotations to your user classes.
+In addition a single Initializer annotated interface is required which controls how
+the supporting classes are generated.
+
+Here is an example of how the preceding classes should be changed:
+
+.Author.java
+[source,java]
+----
+    @ProtoFactory
+    public Author(String name, String surname) {
+        this.name = Objects.requireNonNull(name);
+        this.surname = Objects.requireNonNull(surname);
+    }
+
+    @ProtoField(number = 1)
+    public String getName() {
+        return name;
+    }
+
+    @ProtoField(number = 2)
+    public String getSurname() {
+        return surname;
+    }
+----
+
+.Book.java
+[source,java]
+----
+    @ProtoFactory
+    public Book(String title, String description, int publicationYear, Set<Author> authors) {
+        this.title = Objects.requireNonNull(title);
+        this.description = Objects.requireNonNull(description);
+        this.publicationYear = publicationYear;
+        this.authors = Objects.requireNonNull(authors);
+    }
+
+    @ProtoField(number = 1)
+    public String getTitle() {
+        return title;
+    }
+
+    @ProtoField(number = 2)
+    public String getDescription() {
+        return description;
+    }
+
+    @ProtoField(number = 3, defaultValue = "-1")
+    public int getPublicationYear() {
+        return publicationYear;
+    }
+
+    @ProtoField(number = 4)
+    public Set<Author> getAuthors() {
+        return authors;
+    }
+----
+
+If your classes have only mutable fields, then the `ProtoFactory` annotation
+is not required, assuming your class has a no arg constructor.
+
+Then all that is required is a very simple `SerializationContextInitializer` interface with an annotation
+on it to specify configuration settings
+
+.BookContextInitializer.java
+[source,java]
+----
+@AutoProtoSchemaBuilder(includeClasses = { Book.class, Author.class }, schemaPackageName = "book_sample")
+interface BookContextInitializer extends SerializationContextInitializer {
+}
+----
+
+So in this case we will automatically generate the marshaller and schemas for the included classes and
+place them in the schema package automatically. The package does not have to be provided, but if you
+utilize querying, you must know the generated package.
+
+[NOTE,textlabel="Note",name="note"]
+====
+In Quarkus the `schemaFileName` and `schemaFilePath` attributes should NOT be set on the `AutoProtoSchemaBuilder` annotation, setting either will cause native runtime to error.
+====

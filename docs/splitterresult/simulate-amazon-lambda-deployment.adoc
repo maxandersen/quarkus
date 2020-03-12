@@ -1,0 +1,32 @@
+ifdef::context[:parent-context: {context}]
+[id="simulate-amazon-lambda-deployment_{context}"]
+= Simulate Amazon Lambda Deployment
+:context: simulate-amazon-lambda-deployment
+
+The AWS SAM CLI allows you to run your lambda's locally on your laptop in a simulated Lambda environment.  This requires docker to be installed (see their install docs).
+After you have built your maven project, execute this command
+
+[source,subs="attributes+"]
+----
+sam local start-api --template sam.jvm.yaml
+----
+
+This will start a docker container that mimics Amazon's Lambda's deployment environment.  Once the environment
+is started you can invoke the example lambda in your browser by going to
+
+http://127.0.0.1:3000/hello
+
+In the console you'll see startup messages from the lambda.  This particular deployment starts a JVM and loads your
+lambda as pure Java.
+
+If you want to deploy a native executable of your lambda, use a different yaml template that is provided in your
+generated project:
+
+[source,subs="attributes+"]
+----
+sam local start-api --template sam.native.yaml
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

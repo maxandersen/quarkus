@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="additional-features_{context}"]
+= Additional Features
+:context: additional-features
+
+The Infinispan Client has additional features that were not mentioned here. This means this
+feature was not tested in a Quarkus environment and they may or may not work. Please let us
+know if you need these added!
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

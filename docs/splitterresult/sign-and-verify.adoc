@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="sign-and-verify_{context}"]
+= Sign and Verify
+:context: sign-and-verify
+
+Let's add 2 new methods to our `TransitResource`:
+
+[source,java,subs="attributes+"]
+----
+@POST
+@Path("/sign")
+public String sign(String input) {
+    return transitSecretEngine.sign("my-sign-key", input);
+}
+
+public static class VerifyRequest {
+    public String signature;
+    public String input;
+}
+
+@POST
+@Path("/verify")
+@Consumes(APPLICATION_JSON)
+public Response verify(VerifyRequest request) {
+    transitSecretEngine.verifySignature("my-sign-key", request.signature, request.input);
+    return Response.accepted().build();
+}
+----
+
+And start signing some data:
+
+[source,shell,subs="attributes+"]
+----
+curl -X POST --data 'some secret data' --header "Content-Type: text/plain"  http://localhost:8080/transit/sign
+# ==> vault:v1:MEUCIQDl+nE4y4E878bkugGG6FG1/RsttaQnoWfZHppeuk4TnQIgTGWTtMhVPCzN8VH/EEr2qp5h34lI1bnEP6L1F+QQoPI=
+----
+
+And finally, let's make sure the signature is matching our input data:
+
+[source,shell,subs="attributes+"]
+----
+curl -v -X POST --data '{"input":"some secret data","signature":"vault:v1:MEUCIQDl+nE4y4E878bkugGG6FG1/RsttaQnoWfZHppeuk4TnQIgTGWTtMhVPCzN8VH/EEr2qp5h34lI1bnEP6L1F+QQoPI="}' --header "Content-Type: application/json" http://localhost:8080/transit/verify
+# ==> ... < HTTP/1.1 202 Accepted
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

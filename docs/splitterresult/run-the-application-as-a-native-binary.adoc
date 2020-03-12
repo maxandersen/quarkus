@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="run-the-application-as-a-native-binary_{context}"]
+= Run the application as a native binary
+:context: run-the-application-as-a-native-binary
+
+You can of course create a native executable following the instructions of the link:building-native-image[this] guide.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

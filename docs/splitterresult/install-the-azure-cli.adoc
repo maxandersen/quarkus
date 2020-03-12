@@ -1,0 +1,19 @@
+ifdef::context[:parent-context: {context}]
+[id="install-the-azure-cli_{context}"]
+= Install the Azure CLI
+:context: install-the-azure-cli
+
+To ease the user experience throughout this guide, it is better to have the Azure CLI installed and authenticated.
+
+Visit the https://docs.microsoft.com/cli/azure/install-azure-cli?view=azure-cli-latest?WT.mc_id=opensource-quarkus-brborges[Azure CLI] installation page for instructions specific to your operating system.
+
+Once installed, ensure you are authenticated:
+
+[source,shell]
+----
+$ az login
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

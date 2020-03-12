@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="more-spring-guides_{context}"]
+= More Spring guides
+:context: more-spring-guides
+
+Quarkus has more Spring compatibility features. See the following guides for more details:
+
+* link:spring-di[Quarkus - Extension for Spring DI]
+* link:spring-web[Quarkus - Extension for Spring Web]
+* link:spring-data-jpa[Quarkus - Extension for Spring Data JPA]
+* link:spring-spring-config-client[Quarkus - Reading properties from Spring Cloud Config Server]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,51 @@
+ifdef::context[:parent-context: {context}]
+[id="testing-email-sending_{context}"]
+= Testing email sending
+:context: testing-email-sending
+
+Because it is very inconvenient to send emails during development and testing, you can set the `quarkus.mailer.mock` boolean
+configuration to `true` to not actually send emails but print them on stdout and collect them in a `MockMailbox` bean instead.
+This is the default if you are running Quarkus in `DEV` or `TEST` mode.
+
+You can then write tests to verify that your emails were sent, for example, by a REST endpoint:
+
+[source,java]
+----
+@QuarkusTest
+class MailTest {
+
+    private static final String TO = "foo@quarkus.io";
+
+    @Inject
+    MockMailbox mailbox;
+
+    @BeforeEach
+    void init() {
+        mailbox.clear();
+    }
+
+    @Test
+    void testTextMail() throws MessagingException, IOException {
+        // call a REST endpoint that sends email
+        given()
+        .when()
+        .get("/send-email")
+        .then()
+           .statusCode(202)
+           .body(is("OK"));
+
+        // verify that it was sent
+        List<Mail> sent = mailbox.getMessagesSentTo(TO);
+        assertThat(sent).hasSize(1);
+        Mail actual = sent.get(0);
+        assertThat(actual.getText()).contains("Wake up!");
+        assertThat(actual.getSubject()).isEqualTo("Alarm!");
+
+        assertThat(mailbox.getTotalMessagesSent()).isEqualTo(6);
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

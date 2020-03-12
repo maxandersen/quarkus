@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="future-work_{context}"]
+= Future Work
+:context: future-work
+
+* Propose more password mappers.
+* Provide an opinionated configuration.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

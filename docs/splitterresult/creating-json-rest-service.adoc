@@ -1,0 +1,212 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-json-rest-service_{context}"]
+= Creating JSON REST service
+:context: creating-json-rest-service
+
+In this example, we will create an application to manage a list of fruits. The example application will demonstrate the two programming models supported by the extension.
+
+First, let's create the `Fruit` bean as follows:
+
+[source,java]
+----
+package org.acme.dynamodb;
+
+import java.util.Map;
+import java.util.Objects;
+
+import io.quarkus.runtime.annotations.RegisterForReflection;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+
+@RegisterForReflection
+public class Fruit {
+
+    private String name;
+    private String description;
+
+    public Fruit() {
+    }
+
+    public static Fruit from(Map<String, AttributeValue> item) {
+        Fruit fruit = new Fruit();
+        if (item != null && !item.isEmpty()) {
+            fruit.setName(item.get(AbstractService.FRUIT_NAME_COL).s());
+            fruit.setDescription(item.get(AbstractService.FRUIT_DESC_COL).s());
+        }
+        return fruit;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (!(obj instanceof Fruit)) {
+            return false;
+        }
+
+        Fruit other = (Fruit) obj;
+
+        return Objects.equals(other.name, this.name);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(this.name);
+    }
+}
+----
+
+Nothing fancy. One important thing to note is that having a default constructor is required by the JSON serialization layer. The static `from` method creates a bean based on the `Map`
+object provided by the DynamoDB client response.
+
+Now create a `org.acme.dynamodb.AbstractService` that will consist of helper methods that prepare DynamoDB request objects for reading and adding items to the table.
+
+[source,java]
+----
+package org.acme.dynamodb;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+
+public abstract class AbstractService {
+
+    public final static String FRUIT_NAME_COL = "fruitName";
+    public final static String FRUIT_DESC_COL = "fruitDescription";
+
+    public String getTableName() {
+        return "QuarkusFruits";
+    }
+
+    protected ScanRequest scanRequest() {
+        return ScanRequest.builder().tableName(getTableName())
+                .attributesToGet(FRUIT_NAME_COL, FRUIT_DESC_COL).build();
+    }
+
+    protected PutItemRequest putRequest(Fruit fruit) {
+        Map<String, AttributeValue> item = new HashMap<>();
+        item.put(FRUIT_NAME_COL, AttributeValue.builder().s(fruit.getName()).build());
+        item.put(FRUIT_DESC_COL, AttributeValue.builder().s(fruit.getDescription()).build());
+
+        return PutItemRequest.builder()
+                .tableName(getTableName())
+                .item(item)
+                .build();
+    }
+
+    protected GetItemRequest getRequest(String name) {
+        Map<String, AttributeValue> key = new HashMap<>();
+        key.put(FRUIT_NAME_COL, AttributeValue.builder().s(name).build());
+
+        return GetItemRequest.builder()
+                .tableName(getTableName())
+                .key(key)
+                .attributesToGet(FRUIT_NAME_COL, FRUIT_DESC_COL)
+                .build();
+    }
+}
+----
+
+Then, create a `org.acme.dynamodb.FruitSyncService` that will be the business layer of our application and stores/loads the fruits from DynamoDB using the synchronous client.
+
+[source,java]
+----
+package org.acme.dynamodb;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+
+import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+
+@ApplicationScoped
+public class FruitSyncService extends AbstractService {
+
+    @Inject
+    DynamoDbClient dynamoDB;
+
+    public List<Fruit> findAll() {
+        return dynamoDB.scanPaginator(scanRequest()).items().stream()
+                .map(Fruit::from)
+                .collect(Collectors.toList());
+    }
+
+    public List<Fruit> add(Fruit fruit) {
+        dynamoDB.putItem(putRequest(fruit));
+        return findAll();
+    }
+
+    public Fruit get(String name) {
+        return Fruit.from(dynamoDB.getItem(getRequest(name)).item());
+    }
+}
+----
+
+Now, edit the `org.acme.dynamodb.FruitResource` class as follows:
+
+[source,java]
+----
+package org.acme.dynamodb;
+
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/fruits")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class FruitResource {
+
+    @Inject
+    FruitSyncService service;
+
+    @GET
+    public List<Fruit> getAll() {
+        return service.findAll();
+    }
+
+    @GET
+    @Path("{name}")
+    public Fruit getSingle(@PathParam("name") String name) {
+        return service.get(name);
+    }
+
+    @POST
+    public List<Fruit> add(Fruit fruit) {
+        service.add(fruit);
+        return getAll();
+    }
+}
+----
+
+The implementation is pretty straightforward and you just need to define your endpoints using the JAX-RS annotations and use the `FruitSyncService` to list/add new fruits.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

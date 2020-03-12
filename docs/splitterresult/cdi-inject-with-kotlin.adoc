@@ -1,0 +1,59 @@
+ifdef::context[:parent-context: {context}]
+[id="cdi-inject-with-kotlin_{context}"]
+= CDI @Inject with Kotlin
+:context: cdi-inject-with-kotlin
+
+Kotlin reflection annotation processing differs from Java.  You may experience an error when using CDI @Inject such as:
+"kotlin.UninitializedPropertyAccessException: lateinit property xxx has not been initialized"
+
+In the example below, this can be easily solved by adapting the annotation, adding @field: Default, to handle the lack of a @Target on the Kotlin reflection annotation definition.
+
+Alternatively, prefer the use of constructor injection which works without modification of the Java examples.
+
+[source,kotlin]
+----
+
+import javax.inject.Inject
+import javax.enterprise.inject.Default
+import javax.enterprise.context.ApplicationScoped
+
+import javax.ws.rs.GET
+import javax.ws.rs.Path
+import javax.ws.rs.PathParam
+import javax.ws.rs.Produces
+import javax.ws.rs.core.MediaType
+
+
+
+@ApplicationScoped
+class GreetingService {
+
+    fun greeting(name: String): String {
+        return "hello $name"
+    }
+
+}
+
+@Path("/")
+class GreetingResource {
+
+    @Inject
+    @field: Default // <1>
+    lateinit var service: GreetingService
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("/greeting/{name}")
+    fun greeting(@PathParam("name") name: String): String {
+        return service.greeting(name)
+    }
+
+}
+----
+
+[arabic]
+<1> Kotlin requires a @field: xxx qualifier as it has no @Target on the annotation definition. Add @field: xxx in this example. @Default is used as the qualifier, explicitly specifying the use of the default bean.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

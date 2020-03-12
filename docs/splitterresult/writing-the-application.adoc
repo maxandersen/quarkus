@@ -1,0 +1,78 @@
+ifdef::context[:parent-context: {context}]
+[id="writing-the-application_{context}"]
+= Writing the application
+:context: writing-the-application
+
+Let's start by implementing the `/api/users/me` endpoint. As you can see from the source code below it is just a regular JAX-RS resource:
+
+[source,java]
+----
+package org.acme.security.openid.connect;
+
+import javax.annotation.security.RolesAllowed;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.jboss.resteasy.annotations.cache.NoCache;
+import io.quarkus.security.identity.SecurityIdentity;
+
+@Path("/api/users")
+public class UsersResource {
+
+    @Inject
+    SecurityIdentity securityIdentity;
+
+    @GET
+    @Path("/me")
+    @RolesAllowed("user")
+    @Produces(MediaType.APPLICATION_JSON)
+    @NoCache
+    public User me() {
+        return new User(securityIdentity);
+    }
+
+    public static class User {
+
+        private final String userName;
+
+        User(SecurityIdentity securityIdentity) {
+            this.userName = securityIdentity.getPrincipal().getName();
+        }
+
+        public String getUserName() {
+            return userName;
+        }
+    }
+}
+----
+
+The source code for the `/api/admin` endpoint is also very simple. The main difference here is that we are using a `@RolesAllowed` annotation to make sure that only users granted with the `admin` role can access the endpoint:
+
+[source,java]
+----
+package org.acme.security.openid.connect;
+
+import javax.annotation.security.RolesAllowed;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/api/admin")
+public class AdminResource {
+
+    @GET
+    @RolesAllowed("admin")
+    @Produces(MediaType.TEXT_PLAIN)
+    public String admin() {
+        return "granted";
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

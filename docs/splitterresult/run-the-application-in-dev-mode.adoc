@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="run-the-application-in-dev-mode_{context}"]
+= Run the application in Dev Mode
+:context: run-the-application-in-dev-mode
+
+Run the application with: `./mvnw quarkus:dev`.
+After a few seconds, open another terminal and run `curl localhost:8080/tasks` to verify that we have at least one task created.
+
+As usual, the application can be packaged using `./mvnw clean package` and executed using the `-runner.jar` file.
+You can also generate the native executable with `./mvnw clean package -Pnative`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

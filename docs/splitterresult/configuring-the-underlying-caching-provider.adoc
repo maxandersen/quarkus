@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-underlying-caching-provider_{context}"]
+= Configuring the underlying caching provider
+:context: configuring-the-underlying-caching-provider
+
+This extension uses https://github.com/ben-manes/caffeine[Caffeine] as its underlying caching provider.
+Caffeine is a high performance, near optimal caching library.
+
+include::modules/caffeine-configuration-properties.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

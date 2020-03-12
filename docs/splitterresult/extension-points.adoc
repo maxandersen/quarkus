@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="extension-points_{context}"]
+= Extension Points
+:context: extension-points
+
+TODO
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

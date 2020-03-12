@@ -1,0 +1,52 @@
+ifdef::context[:parent-context: {context}]
+[id="deploy-to-aws-lambda-custom-native-runtime_{context}"]
+= Deploy to AWS Lambda Custom (native) Runtime
+:context: deploy-to-aws-lambda-custom-native-runtime
+
+If you want a lower memory footprint and faster initialization times for your lambda, you can compile your Java
+code to a native executable.  Just make sure to rebuild your project with the `-Pnative` switch.
+
+[source,subs="attributes+"]
+----
+mvn clean install -Pnative
+----
+
+If you are building on a non-linux system, you will need to also pass in a property instructing quarkus to use a docker build as Amazon
+Lambda requires linux binaries.  You can do this by passing this property to your maven build:
+`-Dnative-image.docker-build=true`.  This requires you to have docker installed locally, however.
+
+[source,subs="attributes+"]
+----
+./mvnw clean install -Pnative -Dnative-image.docker-build=true
+----
+
+Either of these commands will compile and create a native executable image.  It also generates a zip file `target/function.zip`.
+This zip file contains your native executable image renamed to `bootstrap`.  This is a requirement of Amazon Lambda
+Custom Runtime.
+
+The instructions here are exactly as above with one change:  you'll need to add `native` as the first parameter to the
+`manage.sh` script:
+
+[source,subs="attributes+"]
+----
+sh manage.sh native create
+----
+
+As above, commands can be stacked.  The only requirement is that `native` be the first parameter should you wish
+to work with native image builds.  The script will take care of the rest of the details necessary to manage your native
+image function deployments.
+
+Examine the output of the `manage.sh` script if you want to learn what aws commands are executed
+to create, delete, and update your lambdas.
+
+One thing to note about the create command for native is that the `aws lambda create-function`
+call must set a specific environment variable:
+
+[source,subs="attributes+"]
+----
+--environment 'Variables={DISABLE_SIGNAL_HANDLERS=true}'
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

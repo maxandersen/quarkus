@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-the-infinispan-embedded-extension_{context}"]
+= Adding the Infinispan Embedded Extension
+:context: adding-the-infinispan-embedded-extension
+
+After you set up your Quarkus project, run the following command from the base directory:
+
+[source]
+----
+./mvnw quarkus:add-extension -Dextensions="infinispan-embedded"
+----
+
+The command adds the following dependency to your `pom.xml`:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-infinispan-embedded</artifactId>
+</dependency>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

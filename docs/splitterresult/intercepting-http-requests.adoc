@@ -1,0 +1,33 @@
+ifdef::context[:parent-context: {context}]
+[id="intercepting-http-requests_{context}"]
+= Intercepting HTTP requests
+:context: intercepting-http-requests
+
+You can also register filters that would intercept incoming HTTP requests.
+Note that these filters are also applied for servlets, JAX-RS resources, and reactive routes.
+
+For example, the following code snippet registers a filter adding an HTTP header:
+
+[source,java]
+----
+package org.acme.reactive.routes;
+
+import io.vertx.ext.web.RoutingContext;
+
+public class MyFilters {
+
+    @RouteFilter(100) <1>
+    void myFilter(RoutingContext rc) {
+       rc.response().putHeader("X-Header", "intercepting the request");
+       rc.next(); <2>
+    }
+}
+----
+
+[arabic]
+<1> The `RouteFilter#value()` defines the priority used to sort the filters - filters with higher priority are called first.
+<2> The filter is likely required to call the `next()` method to continue the chain.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

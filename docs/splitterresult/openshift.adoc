@@ -1,0 +1,66 @@
+ifdef::context[:parent-context: {context}]
+[id="openshift_{context}"]
+= OpenShift
+:context: openshift
+
+To enable the generation of OpenShift resources, you need to include OpenShift in the target platforms:
+
+[source]
+----
+quarkus.kubernetes.deployment-target=openshift
+----
+
+If you need to generate resources for both platforms (vanilla Kubernetes and OpenShift), then you need to include both (comma separated).
+
+[source]
+----
+quarkus.kubernetes.deployment-target=kubernetes, openshift
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+Quarkus also provides the link:openshift[OpenShift] extension. This extension is basically wrapper around the Kubernetes extension and
+relieves OpenShift users of the necessity of setting the `deployment-target` property to `openshift`
+====
+
+The OpenShift resources can be customized in a similar approach with Kubernetes.
+
+.OpenShift
+[table,tablepcwidth="100",rowcount="31",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| quarkus.openshift.name | String |  | ${quarkus.container-image.name}
+| quarkus.openshift.version | String |  | ${quarkus.container-image.tag}
+| quarkus.openshift.part-of | String |  | 
+| quarkus.openshift.init-containers | Map<String, Container> |  | 
+| quarkus.openshift.labels | Map |  | 
+| quarkus.openshift.annotations | Map |  | 
+| quarkus.openshift.env-vars | Map<String, Env> |  | 
+| quarkus.openshift.working-dir | String |  | 
+| quarkus.openshift.command | String[] |  | 
+| quarkus.openshift.arguments | String[] |  | 
+| quarkus.openshift.replicas | int |  | 1
+| quarkus.openshift.service-account | String |  | 
+| quarkus.openshift.host | String |  | 
+| quarkus.openshift.ports | Map<String, Port> |  | 
+| quarkus.openshift.service-type | ServiceType |  | ClusterIP
+| quarkus.openshift.pvc-volumes | Map<String, PersistentVolumeClaimVolume> |  | 
+| quarkus.openshift.secret-volumes | Map<String, SecretVolume> |  | 
+| quarkus.openshift.config-map-volumes | Map<String, ConfigMapVolume> |  | 
+| quarkus.openshift.git-repo-volumes | Map<String, GitRepoVolume> |  | 
+| quarkus.openshift.aws-elastic-block-store-volumes | Map<String, AwsElasticBlockStoreVolume> |  | 
+| quarkus.openshift.azure-disk-volumes | Map<String, AzureDiskVolume> |  | 
+| quarkus.openshift.azure-file-volumes | Map<String, AzureFileVolume> |  | 
+| quarkus.openshift.mounts | Map<String, Mount> |  | 
+| quarkus.openshift.image-pull-policy | ImagePullPolicy |  | IfNotPresent
+| quarkus.openshift.image-pull-secrets | String[] |  | 
+| quarkus.openshift.liveness-probe | Probe |  | ( see Probe )
+| quarkus.openshift.readiness-probe | Probe |  | ( see Probe )
+| quarkus.openshift.sidecars | Map<String, Container> |  | 
+| quarkus.openshift.expose | boolean |  | false
+| quarkus.openshift.headless | boolean |  | false
+|===
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

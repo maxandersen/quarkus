@@ -1,0 +1,27 @@
+ifdef::context[:parent-context: {context}]
+[id="checkout-and-build-substratevm_{context}"]
+= Checkout and build SubstrateVM
+:context: checkout-and-build-substratevm
+
+You can now check-out and build Substrate:
+
+[source,shell]
+----
+git clone https://github.com/oracle/graal.git
+cd graal/substratevm
+mx build
+----
+
+Once built, you can quickly run the tools in place
+
+[source,shell]
+----
+echo "public class HelloWorld { public static void main(String[] args) { System.out.println(\"Hello World\"); } }" > HelloWorld.java
+javac HelloWorld.java
+mx native-image HelloWorld
+./helloworld
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

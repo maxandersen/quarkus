@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="modify-the-controller-to-secure-the-hello-method_{context}"]
+= Modify the controller to secure the <code>hello</code> method
+:context: modify-the-controller-to-secure-the-hello-method
+
+In order to restrict access to the `hello` method to users with certain roles, the `@Secured` annotation will be utilized.
+The updated controller will be:
+
+[source,java]
+----
+package org.acme.spring.security;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
+
+@RestController
+@RequestMapping("/greeting")
+public class GreetingController {
+
+    @Secured("admin")
+    @GetMapping
+    public String hello() {
+        return "hello";
+    }
+}
+----
+
+The easiest way to setup users and roles for our example is to use the `security-properties-file` extension. This extension essentially allows users and roles to be defined in the main Quarkus configuration file - `application.properties`.
+For more information about this extension check link:security-properties[the associated guide].
+An example configuration would be the following:
+
+[source,properties]
+----
+quarkus.security.users.embedded.enabled=true
+quarkus.security.users.embedded.plain-text=true
+quarkus.security.users.embedded.users.scott=jb0ss
+quarkus.security.users.embedded.roles.scott=admin,user
+quarkus.security.users.embedded.users.stuart=test
+quarkus.security.users.embedded.roles.stuart=user
+----
+
+Note that the test also needs to be updated. It could look like:
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

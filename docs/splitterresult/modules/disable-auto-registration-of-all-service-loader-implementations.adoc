@@ -1,0 +1,7 @@
+[id="disable-auto-registration-of-all-service-loader-implementations_{context}"]
+= Disable auto-registration of all Service Loader implementations
+
+Quarkus extensions can automatically pick the right services they need, while GraalVM's native-image defaults to include
+all services it's able to find on the classpath.
+
+We prefer listing services explicitly as it produces better optimised binaries. Disable it as well by setting `-H:-UseServiceLoaderFeature`.

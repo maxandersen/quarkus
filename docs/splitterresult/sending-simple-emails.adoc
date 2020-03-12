@@ -1,0 +1,96 @@
+ifdef::context[:parent-context: {context}]
+[id="sending-simple-emails_{context}"]
+= Sending simple emails
+:context: sending-simple-emails
+
+In a JAX-RS resource, or in a bean, you can inject the mailer as follows:
+
+[source,java]
+----
+@Inject
+Mailer mailer;
+
+@Inject
+ReactiveMailer reactiveMailer;
+----
+
+There are 2 APIs:
+
+* `io.quarkus.mailer.Mailer` provides the imperative (blocking and synchronous) API;
+* `io.quarkus.mailer.reactive.ReactiveMailer` provides the reactive (non-blocking and asynchronous) API
+
+[NOTE,textlabel="Note",name="note"]
+====
+The two APIs are equivalent feature-wise. Actually the `Mailer` implementation is built on top of the `ReactiveMailer` implementation.
+====
+
+.Deprecation
+[NOTE,textlabel="Note",name="note"]
+====
+`io.quarkus.mailer.ReactiveMailer` is deprecated in favor of `io.quarkus.mailer.reactive.ReactiveMailer`.
+====
+
+.Mutiny
+[TIP,textlabel="Tip",name="tip"]
+====
+The reactive mailer uses Mutiny reactive types, if you're not familiar with them, read the link:getting-started-reactive#mutiny[Getting Started with Reactive guide] first.
+====
+
+To send a simple email, proceed as follows:
+
+[source,java]
+----
+// Imperative API:
+mailer.send(Mail.withText("to@acme.org", "A simple email from quarkus", "This is my body."));
+// Reactive API:
+Uni<Void> stage = reactiveMailer.send(Mail.withText("to@acme.org", "A reactive email from quarkus", "This is my body."));
+----
+
+For example, you can use the `Mailer` in a JAX-RS endpoint as follows:
+
+[source,java]
+----
+@GET
+@Path("/simple")
+public Response sendASimpleEmail() {
+    mailer.send(Mail.withText("to@acme.org", "A simple email from quarkus", "This is my body"));
+    return Response.accepted().build();
+}
+
+@GET
+@Path("/async")
+public CompletionStage<Response> sendASimpleEmailAsync() {
+    return reactiveMailer.send(
+            Mail.withText("to@acme.org", "A reactive email from quarkus", "This is my body"))
+            .subscribeAsCompletionStage()
+            .thenApply(x -> Response.accepted().build());
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+With the `quarkus-resteasy-mutiny` extension, you can return an instance of `Uni` directly.
+====
+
+With such a JAX-RS resource, you can check that everything is working with:
+
+[source,bash]
+----
+curl http://localhost:8080/simple
+curl http://localhost:8080/async
+----
+
+You can create new `io.quarkus.mailer.Mail` instances from the constructor or from the `Mail.withText` and
+`Mail.withHtml` helper methods. The `Mail` instance lets you add recipients (to, cc, or bcc), set the subject,
+headers, sender (from) address...
+
+You can also send several `Mail` objects in one call:
+
+[source,java]
+----
+mailer.send(mail1, mail2, mail3);
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

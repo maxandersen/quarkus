@@ -1,0 +1,36 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-the-server_{context}"]
+= Creating the server
+:context: creating-the-server
+
+For demo purposes, let's create a simple Echo endpoint that will act as the server part.
+
+Create the directory `src/main/java/org/acme/rest/client/multipart/server` and include a `EchoService.java` file with the following content:
+
+[source,java]
+----
+package org.acme.rest.client.multipart.server;
+
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/echo")
+public class EchoService {
+
+    @POST
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.TEXT_PLAIN)
+    public String echo(String requestBody) throws Exception {
+        return requestBody;
+    }
+}
+----
+
+This will just return the request body and it's useful for testing purposes.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,142 @@
+ifdef::context[:parent-context: {context}]
+[id="kubernetes_{context}"]
+= Kubernetes
+:context: kubernetes
+
+Quarkus offers the ability to automatically generate Kubernetes resources based on sane defaults and user supplied configuration. The implementation that takes care
+of generating the actual Kubernetes resources is provided by https://github.com/dekorateio/dekorate/[dekorate]. Currently it supports the generation of resources for
+vanilla Kubernetes and OpenShift. Furthermore, Quarkus can deploy the application to a target Kubernetes cluster by applying the generated manifests to the target cluster's API Server.
+Finally, when either the `quarkus-container-image-jib` or `quarkus-container-container-image-docker` extensions are present (see the link:container-image[container image guide] for more details),
+Quarkus has the ability to create a container image and push it to a registry *before* deploying the application to the Kubernetes cluster.
+
+When we executed the previous command, the following dependencies were added to the `pom.xml`
+
+[source,xml]
+----
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-kubernetes</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-container-image-jib</artifactId>
+    </dependency>
+----
+
+By adding these dependencies, we enable the generation of Kubernetes manifests each time we perform a build while also enabling the build of a container-image.
+For example, following the execution of `./mvnw package` you will notice amongst the other files that are created, two files named
+`kubernetes.json` and `kubernetes.yml` in the `target/kubernetes/` directory.
+
+If you look at either file you will see that it contains both a Kubernetes `Deployment` and a `Service`.
+
+The full source of the `kubernetes.json` file looks something like this:
+
+[source,json]
+----
+{
+  {
+    "apiVersion" : "apps/v1",
+    "kind" : "Deployment",
+    "metadata" : {
+      "annotations": {
+       "app.quarkus.io/vcs-url" : "<some url>",
+       "app.quarkus.io/commit-id" : "<some git SHA>",
+      },
+      "labels" : {
+        "app.kubernetes.io/name" : "test-quarkus-app",
+        "app.kubernetes.io/version" : "1.0-SNAPSHOT",
+      },
+      "name" : "test-quarkus-app"
+    },
+    "spec" : {
+      "replicas" : 1,
+      "selector" : {
+        "matchLabels" : {
+          "app.kubernetes.io/name" : "test-quarkus-app",
+          "app.kubernetes.io/version" : "1.0-SNAPSHOT",
+        }
+      },
+      "template" : {
+        "metadata" : {
+          "labels" : {
+            "app.kubernetes.io/name" : "test-quarkus-app",
+            "app.kubernetes.io/version" : "1.0-SNAPSHOT"
+          }
+        },
+        "spec" : {
+          "containers" : [ {
+            "env" : [ {
+              "name" : "KUBERNETES_NAMESPACE",
+              "valueFrom" : {
+                "fieldRef" : {
+                  "fieldPath" : "metadata.namespace"
+                }
+              }
+            } ],
+            "image" : "yourDockerUsername/test-quarkus-app:1.0-SNAPSHOT",
+            "imagePullPolicy" : "IfNotPresent",
+            "name" : "test-quarkus-app"
+          } ]
+        }
+      }
+    }
+  },
+  {
+  "apiVersion" : "v1",
+  "kind" : "Service",
+    "metadata" : {
+      "annotations": {
+       "app.quarkus.io/vcs-url" : "<some url>",
+       "app.quarkus.io/commit-id" : "<some git SHA>",
+      },
+      "labels" : {
+        "app.kubernetes.io/name" : "test-quarkus-app",
+        "app.kubernetes.io/version" : "1.0-SNAPSHOT",
+      },
+      "name" : "test-quarkus-app"
+    },
+  "spec" : {
+    "ports" : [ {
+      "name" : "http",
+      "port" : 8080,
+      "targetPort" : 8080
+    } ],
+    "selector" : {
+      "app.kubernetes.io/name" : "test-quarkus-app",
+      "app.kubernetes.io/version" : "1.0-SNAPSHOT"
+    },
+    "type" : "ClusterIP"
+  }
+ }
+}
+----
+
+An important thing to note about the `Deployment` is that is uses `yourDockerUsername/test-quarkus-app:1.0-SNAPSHOT` as the container-image of the `Pod`.
+The name of the image is controlled by the `Jib` extension and can be customized using the usual `application.properties`.
+
+For example with a configuration like:
+
+[source]
+----
+quarkus.container-image.group=quarkus #optional, default to the system user name
+quarkus.container-image.name=demo-app #optional, defaults to the application name
+quarkus.container-image.tag=1.0       #optional, defaults to the application version
+----
+
+The image that will be used in the generated manifests will be `quarkus/demo-app:1.0`
+
+include::modules/defining-a-docker-registry.adoc[leveloffset=+1]
+
+include::modules/labels-and-annotations.adoc[leveloffset=+1]
+
+include::modules/changing-the-number-of-replicas.adoc[leveloffset=+1]
+
+include::modules/add-readiness-and-liveness-probes.adoc[leveloffset=+1]
+
+include::modules/customizing-the-readiness-probe.adoc[leveloffset=+1]
+
+include::modules/using-the-kubernetes-client.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

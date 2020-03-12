@@ -1,0 +1,34 @@
+ifdef::context[:parent-context: {context}]
+[id="qpid-jms-amqp_{context}"]
+= Qpid JMS - AMQP
+:context: qpid-jms-amqp
+
+In the detailed steps below we will use the https://qpid.apache.org/components/jms/[Apache Qpid JMS]
+client via the https://github.com/amqphub/quarkus-qpid-jms/[Quarkus Qpid JMS extension]. Qpid JMS
+uses the AMQP 1.0 ISO standard as its wire protocol, allowing it to be used with a variety of
+AMQP 1.0 servers and services such as ActiveMQ Artemis, ActiveMQ 5, Qpid Broker-J, Qpid Dispatch router,
+Azure Service Bus, and more.
+
+include::modules/solution.adoc[leveloffset=+1]
+
+include::modules/creating-the-maven-project.adoc[leveloffset=+1]
+
+include::modules/starting-the-broker.adoc[leveloffset=+1]
+
+include::modules/the-price-producer.adoc[leveloffset=+1]
+
+include::modules/the-price-consumer.adoc[leveloffset=+1]
+
+include::modules/the-price-resource.adoc[leveloffset=+1]
+
+include::modules/the-html-page.adoc[leveloffset=+1]
+
+include::modules/configure-the-qpid-jms-properties.adoc[leveloffset=+1]
+
+include::modules/get-it-running.adoc[leveloffset=+1]
+
+include::modules/running-native.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

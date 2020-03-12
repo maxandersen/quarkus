@@ -1,0 +1,33 @@
+[id="generating-configuration-for-your-application_{context}"]
+= Generating configuration for your application
+
+It is also possible to generate an example `application.properties` with all known configuration properties, to make
+it easy to see what Quarkus configuration options are available. To do this, run:
+
+[source,shell]
+----
+./mvnw quarkus:generate-config
+----
+
+This will create a `src/main/resources/application.properties.example` file that contains all the config options
+exposed via the extensions you currently have installed. These options are commented out, and have their default value
+when applicable. For example this HTTP port config entry will appear as:
+
+[source,properties]
+----
+#
+# The HTTP port
+#
+#quarkus.http.port=8080
+----
+
+Rather than generating an example config file, you can also add these to you actual config file by setting the `-Dfile`
+parameter:
+
+[source,shell]
+----
+./mvnw quarkus:generate-config -Dfile=application.properties
+----
+
+If a config option is already present (commented or not) it will not be added, so it is safe to run this after
+adding an additional extension to see what additional options have been added.

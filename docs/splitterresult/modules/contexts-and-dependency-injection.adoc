@@ -1,0 +1,6 @@
+[id="contexts-and-dependency-injection_{context}"]
+= Contexts and Dependency Injection
+
+[id="extension-points_{context}"]
+== Extension Points
+:context: extension-points

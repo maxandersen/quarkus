@@ -1,0 +1,54 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-resiliency-fallbacks_{context}"]
+= Adding Resiliency: Fallbacks
+:context: adding-resiliency-fallbacks
+
+Let's make our recommendations feature even better by providing a fallback (and presumably faster) way of getting related
+coffees.
+
+Add a fallback method to `CoffeeResource` and a `@Fallback` annotation to `CoffeeResource#recommendations()` method
+as follows:
+
+[source,java]
+----
+import java.util.Collections;
+import org.eclipse.microprofile.faulttolerance.Fallback;
+...
+public class CoffeeResource {
+    ...
+    @Fallback(fallbackMethod = "fallbackRecommendations")
+    public List<Coffee> recommendations(@PathParam int id) {
+        ...
+    }
+
+    public List<Coffee> fallbackRecommendations(int id) {
+        LOGGER.info("Falling back to RecommendationResource#fallbackRecommendations()");
+        // safe bet, return something that everybody likes
+        return Collections.singletonList(coffeeRepository.getCoffeeById(1));
+    }
+    ...
+}
+----
+
+Hit refresh several times on `http://localhost:8080/coffee/2/recommendations`.
+The `TimeoutException` should not appear anymore. Instead, in case of a timeout, the page will
+display a single recommendation that we hardcoded in our fallback method `fallbackRecommendations()`, rather than
+two recommendations returned by the original method.
+
+Check the server output to see that fallback is really happening:
+
+[source]
+----
+2020-01-09 13:21:34,250 INFO  [org.acm.fau.CoffeeResource] (executor-thread-1) CoffeeResource#recommendations() invocation #1 returning successfully
+2020-01-09 13:21:36,354 ERROR [org.acm.fau.CoffeeResource] (executor-thread-1) CoffeeResource#recommendations() invocation #2 timed out after 250 ms
+2020-01-09 13:21:36,355 INFO  [org.acm.fau.CoffeeResource] (executor-thread-1) Falling back to RecommendationResource#fallbackRecommendations()
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+The fallback method is required to have the same parameters as the original method.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

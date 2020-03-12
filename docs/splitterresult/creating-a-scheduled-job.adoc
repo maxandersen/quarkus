@@ -1,0 +1,40 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-a-scheduled-job_{context}"]
+= Creating a scheduled job
+:context: creating-a-scheduled-job
+
+In the `org.acme.quartz` package, create the `TaskBean` class, with the following content:
+
+[source,java]
+----
+package org.acme.quartz;
+
+import javax.enterprise.context.ApplicationScoped;
+
+import javax.transaction.Transactional;
+
+import io.quarkus.scheduler.Scheduled;
+
+@ApplicationScoped <1>
+public class TaskBean {
+
+    @Transactional
+    @Scheduled(every = "10s") <2>
+    void schedule() {
+        Task task = new Task(); <3>
+        task.persist(); <4>
+    }
+}
+----
+
+[arabic]
+. Declare the bean in the _application_ scope
+. Use the `@Scheduled` annotation to instruct Quarkus to run this method every 10 seconds.
+. Create a new `Task` with the current start time.
+. Persist the task in database using https://quarkus.io/guides/hibernate-orm-panache[Panache].
+
+include::modules/scheduling-jobs-programmatically.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="using-the-flyway-object_{context}"]
+= Using the Flyway object
+:context: using-the-flyway-object
+
+In case you are interested in using the `Flyway` object directly, you can inject it as follows:
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you enabled the `quarkus.flyway.migrate-at-start` property, by the time you use the Flyway instance,
+Quarkus will already have run the migrate operation
+====
+
+[source,java]
+----
+@ApplicationScoped
+public class MigrationService {
+    // You can Inject the object if you want to use it manually
+    @Inject
+    Flyway flyway; <1>
+
+    @Inject
+    @FlywayDataSource("inventory") <2>
+    Flyway flywayForInventory;
+
+    @Inject
+    @Named("flyway_users") <3>
+    Flyway flywayForUsers;
+
+    public void checkMigration() {
+        // Use the flyway instance manually
+        flyway.clean(); <4>
+        flyway.migrate();
+        // This will print 1.0.0
+        System.out.println(flyway.info().current().getVersion().toString());
+    }
+}
+----
+
+[arabic]
+<1> Inject the Flyway object if you want to use it directly
+<2> Inject Flyway for named datasources using the Quarkus `FlywayDataSource` qualifier
+<3> Inject Flyway for named datasources
+<4> Use the Flyway instance directly
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,102 @@
+ifdef::context[:parent-context: {context}]
+[id="rendering-periodic-reports_{context}"]
+= Rendering Periodic Reports
+:context: rendering-periodic-reports
+
+Templating engine could be also very useful when rendering periodic reports.
+You'll need to add the `quarkus-scheduler` and `quarkus-qute` extensions first.
+In your `pom.xml` file, add:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-qute</artifactId>
+</dependency>
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-scheduler</artifactId>
+</dependency>
+----
+
+Let's suppose the have a `SampleService` bean whose `get()` method returns a list of samples.
+
+.Sample.java
+[source,java]
+----
+public class Sample {
+    public boolean valid;
+    public String name;
+    public String data;
+}
+----
+
+The template is simple:
+
+.report.html
+[source,html]
+----
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Report {now}</title>
+</head>
+<body>
+    <h1>Report {now}</h1>
+    {#for sample in samples} <1>
+      <h2>{sample.name ?: 'Unknown'}</h2> <2>
+      <p>
+      {#if sample.valid}
+        {sample.data}
+      {#else}
+        <strong>Invalid sample found</strong>.
+      {/if}
+      </p>
+    {/for}
+</body>
+</html>
+----
+
+[arabic]
+<1> The loop section makes it possible to iterate over iterables, maps and streams.
+<2> This value expression is using the https://en.wikipedia.org/wiki/Elvis_operator[elvis operator] - if the name is null the default value is used.
+
+.ReportGenerator.java
+[source,java]
+----
+package org.acme.quarkus.sample;
+
+import javax.inject.Inject;
+
+import io.quarkus.qute.Template;
+import io.quarkus.qute.api.ResourcePath;
+import io.quarkus.scheduler.Scheduled;
+
+public class ReportGenerator {
+
+    @Inject
+    SampleService service;
+
+    @ResourcePath("reports/v1/report_01") <1>
+    Template report;
+
+    @Scheduled(cron="0 30 * * * ?") <2>
+    void generate() {
+        String result = report
+            .data("samples", service.get())
+            .data("now", java.time.LocalDateTime.now())
+            .render(); <3>
+        // Write the result somewhere...
+    }
+}
+----
+
+[arabic]
+<1> In this case, we use the `@ResourcePath` qualifier to specify the template path: `templates/reports/v1/report_01.html`.
+<2> Use the `@Scheduled` annotation to instruct Quarkus to execute this method on the half hour. For more information see the link:scheduler[Scheduler] guide.
+<3> The `TemplateInstance.render()` method triggers rendering. Note that this method blocks the current thread.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

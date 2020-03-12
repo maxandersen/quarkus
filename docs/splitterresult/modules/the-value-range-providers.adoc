@@ -1,0 +1,9 @@
+[id="the-value-range-providers_{context}"]
+= The value range providers
+
+That `timeslotList` field is a value range provider.
+It holds the `Timeslot` instances which OptaPlanner can pick from to assign to the `timeslot` field of `Lesson` instances.
+The `timeslotList` field has an `@ValueRangeProvider` annotation to connect those two,
+by matching the `id` with the `valueRangeProviderRefs` of the `@PlanningVariable` in the `Lesson`.
+
+Following the same logic, the `roomList` field also has an `@ValueRangeProvider` annotation.

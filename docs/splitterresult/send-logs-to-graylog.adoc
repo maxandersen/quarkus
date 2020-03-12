@@ -1,0 +1,68 @@
+ifdef::context[:parent-context: {context}]
+[id="send-logs-to-graylog_{context}"]
+= Send logs to Graylog
+:context: send-logs-to-graylog
+
+To send logs to Graylog, you first need to launch the components that compose the Graylog stack:
+
+- MongoDB
+- Elasticsearch
+- Graylog
+
+You can do this via the following docker-compose file that you can launch via `docker-compose run -d`:
+
+[source,yaml,subs="attributes"]
+----
+version: '3.2'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:{es-version}
+    ports:
+      - "9200:9200"
+    environment:
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    networks:
+      - graylog
+
+  mongo:
+    image: mongo:4.0
+    networks:
+      - graylog
+
+  graylog:
+    image: graylog/graylog:3.1
+    ports:
+      - "9000:9000"
+      - "12201:12201/udp"
+      - "1514:1514"
+    environment:
+      GRAYLOG_HTTP_EXTERNAL_URI: "http://127.0.0.1:9000/"
+    networks:
+      - graylog
+    depends_on:
+      - elasticsearch
+      - mongo
+
+networks:
+  graylog:
+    driver: bridge
+----
+
+Then, you need to create a UDP input in Graylog.
+You can do it from the Graylog web console (System -> Input -> Select GELF UDP) available at http://localhost:9000 or via the API.
+
+This curl example will create a new Input of type GELF UDP, it uses the default login from Graylog (admin/admin).
+
+[source,shell]
+----
+curl -H "Content-Type: application/json" -H "Authorization: Basic YWRtaW46YWRtaW4=" -H "X-Requested-By: curl" -X POST -v -d \
+'{"title":"udp input","configuration":{"recv_buffer_size":262144,"bind_address":"0.0.0.0","port":12201,"decompress_size_limit":8388608},"type":"org.graylog2.inputs.gelf.udp.GELFUDPInput","global":true}' \
+http://localhost:9000/api/system/inputs
+----
+
+Launch your application, you should see your logs arriving inside Graylog.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

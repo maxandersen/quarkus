@@ -1,0 +1,113 @@
+[id="maven-setup_{context}"]
+= Maven setup
+
+Your extension project should be setup as a multi-module project with two submodules:
+
+[arabic]
+. A deployment time submodule that handles the build time processing and bytecode recording.
+. A runtime submodule that contains the runtime behavior that will provide the extension behavior in the native executable or runtime JVM.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You may want to use the `create-extension` mojo of `io.quarkus:quarkus-maven-plugin` to create these Maven modules - see the next section.
+====
+
+Your runtime artifact should depend on `io.quarkus:quarkus-core`, and possibly the runtime artifacts of other Quarkus
+modules if you want to use functionality provided by them.
+You will also need to include the `io.quarkus:quarkus-bootstrap-maven-plugin` to generate the Quarkus extension descriptor included into the runtime artifact, if you are using the Quarkus parent pom it will automatically inherit the correct configuration.
+Futhermore, you'll need to configure the `maven-compiler-plugin` to detect the `quarkus-extension-processor` annotation processor.
+
+[NOTE,textlabel="Note",name="note"]
+====
+By convention the deployment time artifact has the `-deployment` suffix, and the runtime artifact
+has no suffix (and is what the end user adds to their project).
+====
+
+[source,xml,nowrap-option=""]
+----
+
+<dependencies>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-core</artifactId>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-bootstrap-maven-plugin</artifactId>
+            <!-- Executions configuration can be inherited from quarkus-build-parent -->
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>extension-descriptor</goal>
+                    </goals>
+                    <configuration>
+                         <deployment>${project.groupId}:${project.artifactId}-deployment:${project.version}</deployment>
+                   </configuration>
+               </execution>
+           </executions>
+        </plugin>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+                <annotationProcessorPaths>
+                    <path>
+                        <groupId>io.quarkus</groupId>
+                        <artifactId>quarkus-extension-processor</artifactId>
+                    </path>
+                </annotationProcessorPaths>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+The above `maven-compiler-plugin` configuration requires version 3.5+.
+====
+
+[WARNING,textlabel="Warning",name="warning"]
+====
+Under no circumstances can the runtime module depend on a deployment artifact. This would result
+in pulling all the deployment time code into runtime scope, which defeats the purpose of having the split.
+====
+
+Your deployment time module should depend on `io.quarkus:quarkus-core-deployment`, your runtime artifact,
+and possibly the deployment artifacts of other Quarkus modules if you want to use functionality provided by them.
+You will also need to configure the `maven-compiler-plugin` to detect the `quarkus-extension-processor` annotation processor.
+
+[source,xml,nowrap-option=""]
+----
+<dependencies>
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-core-deployment</artifactId>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+                <annotationProcessorPaths>
+                    <path>
+                        <groupId>io.quarkus</groupId>
+                        <artifactId>quarkus-extension-processor</artifactId>
+                    </path>
+                </annotationProcessorPaths>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+----
+
+[id="create-new-extension-modules-using-maven_{context}"]
+== Create new extension modules using Maven
+:context: create-new-extension-modules-using-maven

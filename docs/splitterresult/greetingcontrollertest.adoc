@@ -1,0 +1,35 @@
+ifdef::context[:parent-context: {context}]
+[id="greetingcontrollertest_{context}"]
+= GreetingControllerTest
+:context: greetingcontrollertest
+
+Note that a test for the controller has been created as well:
+
+[source,java]
+----
+package org.acme.spring.security;
+
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
+
+@QuarkusTest
+public class GreetingControllerTest {
+
+    @Test
+    public void testHelloEndpoint() {
+        given()
+          .when().get("/greeting")
+          .then()
+             .statusCode(200)
+             .body(is("hello"));
+    }
+
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

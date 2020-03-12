@@ -1,0 +1,35 @@
+ifdef::context[:parent-context: {context}]
+[id="deploying-the-application-in-kubernetes_{context}"]
+= Deploying the application in Kubernetes
+:context: deploying-the-application-in-kubernetes
+
+First, you need to _push_ the Docker image (created in the link:building-native-image[previous] guide) to the image registry of your Kubernetes cluster.
+Depending on your cluster, there are several ways.
+For `minikube`, execute:
+
+[source,shell]
+----
+# For minishift use "eval $(minishift docker-env)" instead
+eval $(minikube docker-env)
+
+docker build -f src/main/docker/Dockerfile.native -t quarkus-quickstart/quickstart .
+----
+
+Once the image has been pushed to the Kubernetes image registry, instantiate the application as follows:
+
+[source,shell]
+----
+kubectl run quarkus-quickstart --image=quarkus-quickstart/quickstart:latest --port=8080 --image-pull-policy=IfNotPresent
+kubectl expose deployment quarkus-quickstart --type=NodePort
+----
+
+The application is now exposed as an internal service. If you are using `minikube`, you can access it using:
+
+[source,shell]
+----
+curl $(minikube service quarkus-quickstart --url)/hello
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,29 @@
+[id="extension-metrics_{context}"]
+= Extension Metrics
+
+An extension can decide to provide metrics through the `quarkus-smallrye-metrics` extension.
+A typical use case for this would be that an extension scans the application code for relevant components (like entities, messaging endpoints, etc.)
+and creates a set of metrics for each of these components. A unified mechanism for metric registration is provided via the `MetricBuildItem` class
+provided by the `quarkus-smallrye-metrics-spi` module.
+
+There are several distinct situations that can occur and each requires slightly different handling:
+
+[arabic]
+. The underlying library used by your extension is using the MicroProfile Metrics API directly.
+. The underlying library uses its own way for collecting metrics and makes them available at runtime using its own API.
+. The underlying library does not provide metrics (or there is no library at all) and you need to insert some code in the extension's codebase that will collect the metrics.
+
+What is common for all cases is that the extension should have a build-time config property that enables metrics exposure for the extension,
+it should be named `quarkus.<extension>.metrics.enabled` and be `false` by default.
+
+[id="case-1-the-library-uses-mp-metrics_{context}"]
+== Case 1: The library uses MP Metrics
+:context: case-1-the-library-uses-mp-metrics
+
+[id="case-2-the-library-provides-its-own-metric-api_{context}"]
+== Case 2: The library provides its own metric API
+:context: case-2-the-library-provides-its-own-metric-api
+
+[id="case-3-it-is-necessary-to-collect-metrics-within-the-extension-code_{context}"]
+== Case 3: It is necessary to collect metrics within the extension code
+:context: case-3-it-is-necessary-to-collect-metrics-within-the-extension-code

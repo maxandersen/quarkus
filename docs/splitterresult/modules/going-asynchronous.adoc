@@ -1,0 +1,95 @@
+[id="going-asynchronous_{context}"]
+= Going asynchronous
+
+Thanks to the AWS SDK v2.x used by the Quarkus extension, you can use the asynchronous programming model out of the box.
+
+Create a `org.acme.dynamodb.FruitAsyncService` that will be similar to our `FruitSyncService` but using an asynchronous programming model.
+
+[source,java]
+----
+package org.acme.dynamodb;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+
+import io.smallrye.mutiny.Uni;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
+
+@ApplicationScoped
+public class FruitAsyncService extends AbstractService {
+
+    @Inject
+    DynamoDbAsyncClient dynamoDB;
+
+    public Uni<List<Fruit>> findAll() {
+        return Uni.createFrom().completionStage(() -> dynamoDB.scan(scanRequest()))
+                .onItem().apply(res -> res.items().stream().map(Fruit::from).collect(Collectors.toList()));
+    }
+
+    public Uni<List<Fruit>> add(Fruit fruit) {
+        return Uni.createFrom().completionStage(() -> dynamoDB.putItem(putRequest(fruit)))
+                .onItem().ignore().andSwitchTo(this::findAll);
+    }
+
+    public Uni<Fruit> get(String name) {
+        return Uni.createFrom().completionStage(() -> dynamoDB.getItem(getRequest(name)))
+                .onItem().apply(resp -> Fruit.from(resp.item()));
+    }
+}
+----
+
+In the previous code, we create `Uni` instances from the `CompletionStage` objects returned by the asynchronous DynamoDB client, and then transform the emitted item.
+
+Then, create an asynchronous REST resource that consumes this async service:
+
+[source,java]
+----
+package org.acme.dynamodb;
+
+import io.smallrye.mutiny.Uni;
+
+import javax.inject.Inject;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import java.util.List;
+
+@Path("/async-fruits")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class FruitAsyncResource {
+
+    @Inject
+    FruitAsyncService service;
+
+    @GET
+    public Uni<List<Fruit>> getAll() {
+        return service.findAll();
+    }
+
+    @GET
+    @Path("{name}")
+    public Uni<Fruit> getSingle(@PathParam("name") String name) {
+        return service.get(name);
+    }
+
+    @POST
+    public Uni<List<Fruit>> add(Fruit fruit) {
+        return service.add(fruit)
+                .onItem().ignore().andSwitchTo(this::getAll);
+    }
+}
+----
+
+And add Netty HTTP client dependency to the `pom.xml`:
+
+[source,xml]
+----
+<dependency>
+    <groupId>software.amazon.awssdk</groupId>
+    <artifactId>netty-nio-client</artifactId>
+</dependency>
+----

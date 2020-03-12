@@ -1,0 +1,21 @@
+[id="logging-categories_{context}"]
+= Logging categories
+
+Logging is done on a per-category basis.  Each category can be independently configured.
+A configuration which applies to a category will also apply to all sub-categories of that category,
+unless there is a more specific matching sub-category configuration.
+For every category the same settings that are configured on ( console / file / syslog ) apply.
+These can also be overridden by attaching a one or more named handlers to a category. See example in <<category-named-handlers-example>>
+
+[table,tablepcwidth="100",rowcount="4",header-option="",colcount="3",cols="<m,<m,<2"]
+|===
+| quarkus.log.category."<category-name>".level | INFO footnote:[Some extensions may define customized default log levels for certain categories, in order to reduce log noise by default.  Setting the log level in configuration will override any extension-defined log levels.] | The level to use to configure the category named `<category-name>`.  The quotes are necessary.
+| quarkus.log.category."<category-name>".useParentHandlers | true | Specify whether or not this logger should send its output to its parent logger.
+| quarkus.log.category."<category-name>".handlers=[<handler>] | empty footnote:[By default the configured category gets the same handlers attached as the one on the root logger.] | The names of the handlers that you want to attach to a specific category.
+|===
+
+[NOTE,textlabel="Note",name="note"]
+====
+The quotes shown in the property name are required as categories normally contain '.' which must
+be escaped. An example is shown in <<category-example>>.
+====

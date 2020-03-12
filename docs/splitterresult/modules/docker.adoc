@@ -1,0 +1,14 @@
+[id="docker_{context}"]
+= Docker
+
+The extension `quarkus-container-image-docker` is using the docker binary and the generated Dockerfiles under `src/main/docker` in order to perform docker builds.
+
+To use this image extension, you just need to add the following dependency into your project.
+
+[source,xml]
+----
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-container-image-docker</artifactId>
+    </dependency>
+----

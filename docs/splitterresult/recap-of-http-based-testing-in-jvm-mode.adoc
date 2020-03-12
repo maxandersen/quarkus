@@ -1,0 +1,96 @@
+ifdef::context[:parent-context: {context}]
+[id="recap-of-http-based-testing-in-jvm-mode_{context}"]
+= Recap of HTTP based Testing in JVM mode
+:context: recap-of-http-based-testing-in-jvm-mode
+
+If you have started from the Getting Started example you should already have a completed test, including the correct
+`pom.xml` setup.
+
+In the `pom.xml` file you should see 2 test dependencies:
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-junit5</artifactId>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>io.rest-assured</groupId>
+    <artifactId>rest-assured</artifactId>
+    <scope>test</scope>
+</dependency>
+----
+
+`quarkus-junit5` is required for testing, as it provides the `@QuarkusTest` annotation that controls the testing framework.
+`rest-assured` is not required but is a convenient way to test HTTP endpoints, we also provide integration that automatically
+sets the correct URL so no configuration is required.
+
+Because we are using JUnit 5, the version of the https://maven.apache.org/surefire/maven-surefire-plugin/[Surefire Maven Plugin]
+must be set, as the default version does not support Junit 5:
+
+[source,xml,subs="attributes+"]
+----
+<plugin>
+    <artifactId>maven-surefire-plugin</artifactId>
+    <version>${surefire-plugin.version}</version>
+    <configuration>
+       <systemProperties>
+          <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+       </systemProperties>
+    </configuration>
+</plugin>
+----
+
+We also set the `java.util.logging` system property to make sure tests will use the correct logmanager.
+
+The project should also contain a simple test:
+
+[source,java]
+----
+package org.acme.getting.started.testing;
+
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
+
+import java.util.UUID;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
+
+@QuarkusTest
+public class GreetingResourceTest {
+
+    @Test
+    public void testHelloEndpoint() {
+        given()
+          .when().get("/hello")
+          .then()
+             .statusCode(200)
+             .body(is("hello"));
+    }
+
+    @Test
+    public void testGreetingEndpoint() {
+        String uuid = UUID.randomUUID().toString();
+        given()
+          .pathParam("name", uuid)
+          .when().get("/hello/greeting/{name}")
+          .then()
+            .statusCode(200)
+            .body(is("hello " + uuid));
+    }
+
+}
+----
+
+This test uses HTTP to directly test our REST endpoint. When the test is run the application will be started before
+the test is run.
+
+include::modules/controlling-the-test-port.adoc[leveloffset=+1]
+
+include::modules/injecting-a-uri.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

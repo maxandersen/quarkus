@@ -1,0 +1,5 @@
+[id="favor-build-time-work-over-runtime-work_{context}"]
+= Favor build time work over runtime work
+
+As much as possible favor doing work at build time (deployment part of the extension) as opposed to let the framework do work at startup time (runtime).
+The more is done there, the smaller Quarkus applications using that extension will be and the faster they will load.

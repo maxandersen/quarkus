@@ -1,0 +1,40 @@
+ifdef::context[:parent-context: {context}]
+[id="updating-the-application-configuration-file_{context}"]
+= Updating the application configuration file
+:context: updating-the-application-configuration-file
+
+Edit the `application.properties` file and add the below configuration:
+
+[source,shell]
+----
+# Quartz configuration
+quarkus.quartz.clustered=true <1>
+quarkus.quartz.store-type=db <2>
+
+# Datasource configuration.
+quarkus.datasource.url=jdbc:postgresql://localhost/quarkus_test
+quarkus.datasource.driver=org.postgresql.Driver
+quarkus.datasource.username=quarkus_test
+quarkus.datasource.password=quarkus_test
+
+# Hibernate configuration
+quarkus.hibernate-orm.database.generation=none
+quarkus.hibernate-orm.log.sql=true
+quarkus.hibernate-orm.sql-load-script=no-file
+
+# flyway configuration
+quarkus.flyway.connect-retries=10
+quarkus.flyway.table=flyway_quarkus_history
+quarkus.flyway.migrate-at-start=true
+quarkus.flyway.baseline-on-migrate=true
+quarkus.flyway.baseline-version=1.0
+quarkus.flyway.baseline-description=Quartz
+----
+
+[arabic]
+. Indicate that the scheduler will be run in clustered mode
+. Use the database store to persist job related information so that they can be shared between nodes
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

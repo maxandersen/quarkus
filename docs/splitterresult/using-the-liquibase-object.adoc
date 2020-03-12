@@ -1,0 +1,54 @@
+ifdef::context[:parent-context: {context}]
+[id="using-the-liquibase-object_{context}"]
+= Using the Liquibase object
+:context: using-the-liquibase-object
+
+In case you are interested in using the `Liquibase` object directly, you can inject it as follows:
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you enabled the `quarkus.liquibase.migrate-at-start` property, by the time you use the Liquibase instance,
+Quarkus will already have run the migrate operation.
+====
+
+[source,java]
+----
+import org.quarkus.liquibase.LiquibaseFactory;
+
+@ApplicationScoped
+public class MigrationService {
+    // You can Inject the object if you want to use it manually
+    @Inject
+    LiquibaseFactory liquibaseFactory; <1>
+
+    @Inject
+    @LiquibaseDataSource("inventory") <2>
+    LiquibaseFactory liquibaseFactoryForInventory;
+
+    @Inject
+    @Named("liquibase_users") <3>
+    LiquibaseFactory liquibaseFactoryForUsers;
+
+    public void checkMigration() {
+        // Use the liquibase instance manually
+        try (Liquibase liquibase = liquibaseFactory.createLiquibase()) {
+            liquibase.dropAll(); <4>
+            liquibase.validate();
+            liquibase.update(liquibaseFactory.createContexts(), liquibaseFactory.createLabels());
+            // Get the list of liquibase change set statuses
+            List<ChangeSetStatus> status = liquibase.getChangeSetStatuses(liquibaseFactory.createContexts(), liquibaseFactory.createLabels()); <5>
+        }
+    }
+}
+----
+
+[arabic]
+<1> Inject the LiquibaseFactory object
+<2> Inject Liquibase for named datasources using the Quarkus `LiquibaseDataSource` qualifier
+<3> Inject Liquibase for named datasources
+<4> Use the Liquibase instance directly
+<5> List of applied or not applied liquibase ChangeSets
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

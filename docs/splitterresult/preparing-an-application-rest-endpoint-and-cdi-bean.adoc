@@ -1,0 +1,145 @@
+ifdef::context[:parent-context: {context}]
+[id="preparing-an-application-rest-endpoint-and-cdi-bean_{context}"]
+= Preparing an Application: REST Endpoint and CDI Bean
+:context: preparing-an-application-rest-endpoint-and-cdi-bean
+
+In this section we create a skeleton of our application, so that we have something that we can extend and to which
+we can add fault tolerance features later on.
+
+First, create a simple entity representing a coffee sample in our store:
+
+[source,java]
+----
+package org.acme.microprofile.faulttolerance;
+
+public class Coffee {
+
+    public Integer id;
+    public String name;
+    public String countryOfOrigin;
+    public Integer price;
+
+    public Coffee() {
+    }
+
+    public Coffee(Integer id, String name, String countryOfOrigin, Integer price) {
+        this.id = id;
+        this.name = name;
+        this.countryOfOrigin = countryOfOrigin;
+        this.price = price;
+    }
+}
+----
+
+Let's continue with a simple CDI bean, that would work as a repository of our coffee samples.
+
+[source,java]
+----
+package org.acme.microprofile.faulttolerance;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import javax.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class CoffeeRepositoryService {
+
+    private Map<Integer, Coffee> coffeeList = new HashMap<>();
+
+    public CoffeeRepositoryService() {
+        coffeeList.put(1, new Coffee(1, "Fernandez Espresso", "Colombia", 23));
+        coffeeList.put(2, new Coffee(2, "La Scala Whole Beans", "Bolivia", 18));
+        coffeeList.put(3, new Coffee(3, "Dak Lak Filter", "Vietnam", 25));
+    }
+
+    public List<Coffee> getAllCoffees() {
+        return new ArrayList<>(coffeeList.values());
+    }
+
+    public Coffee getCoffeeById(Integer id) {
+        return coffeeList.get(id);
+    }
+
+    public List<Coffee> getRecommendations(Integer id) {
+        if (id == null) {
+            return Collections.emptyList();
+        }
+        return coffeeList.values().stream()
+                .filter(coffee -> !id.equals(coffee.id))
+                .limit(2)
+                .collect(Collectors.toList());
+    }
+}
+----
+
+Finally, edit the `org.acme.microprofile.faulttolerance.CoffeeResource` class as follows:
+
+[source,java]
+----
+package org.acme.microprofile.faulttolerance;
+
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.jboss.logging.Logger;
+
+@Path("/coffee")
+@Produces(MediaType.APPLICATION_JSON)
+public class CoffeeResource {
+
+    private static final Logger LOGGER = Logger.getLogger(CoffeeResource.class);
+
+    @Inject
+    private CoffeeRepositoryService coffeeRepository;
+
+    private AtomicLong counter = new AtomicLong(0);
+
+    @GET
+    public List<Coffee> coffees() {
+        final Long invocationNumber = counter.getAndIncrement();
+
+        maybeFail(String.format("CoffeeResource#coffees() invocation #%d failed", invocationNumber));
+
+        LOGGER.infof("CoffeeResource#coffees() invocation #%d returning successfully", invocationNumber);
+        return coffeeRepository.getAllCoffees();
+    }
+
+    private void maybeFail(String failureLogMessage) {
+        if (new Random().nextBoolean()) {
+            LOGGER.error(failureLogMessage);
+            throw new RuntimeException("Resource failure.");
+        }
+    }
+}
+----
+
+At this point, we expose a single REST method that will show a list of coffee samples in a JSON format. Note
+that we introduced some fault making code in our `CoffeeResource#maybeFail()` method, which is going to cause failures
+in the `CoffeeResource#coffees()` endpoint method in about 50 % of requests.
+
+Why not check that our application works? Run the Quarkus development server with:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+and open `http://localhost:8080/coffee` in your browser. Make couple of requests (remember, some of them we expect
+to fail). At least some of the requests should show us the list of our coffee samples in JSON, the rest will fail
+with a `RuntimeException` thrown in `CoffeeResource#maybeFail()`.
+
+Congratulations, you've just made a working (although somewhat unreliable) Quarkus application!
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

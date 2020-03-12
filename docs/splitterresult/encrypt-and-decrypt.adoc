@@ -1,0 +1,79 @@
+ifdef::context[:parent-context: {context}]
+[id="encrypt-and-decrypt_{context}"]
+= Encrypt and Decrypt
+:context: encrypt-and-decrypt
+
+First, let's create a simple Quarkus application with vault and jsonb capabilities:
+
+[source,shell,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=vault-transit-quickstart \
+    -DclassName="org.acme.quickstart.GreetingResource" \
+    -Dpath="/hello" \
+    -Dextensions="vault,resteasy-jsonb"
+cd vault-transit-quickstart
+----
+
+Now, configure access to Vault from the `{config-file}`:
+
+[source,properties]
+----
+# vault url
+quarkus.vault.url=http://localhost:8200
+
+# vault authentication
+quarkus.vault.authentication.userpass.username=bob
+quarkus.vault.authentication.userpass.password=sinclair
+----
+
+Note that you did not need to specify the existence of a particular encryption key in the configuration. You only
+do so in special cases such as specifying the key type for upsert, or changing the signature algorithm, ... Check the complete configuration for more
+information.
+
+We can then add a new endpoint that will allow us to encrypt and decrypt data:
+
+[source,java,subs="attributes+"]
+----
+@Path("/transit")
+@Produces(TEXT_PLAIN)
+@Consumes(TEXT_PLAIN)
+public class TransitResource {
+
+    @Inject
+    public VaultTransitSecretEngine transitSecretEngine;
+
+    @POST
+    @Path("/encrypt")
+    public String encrypt(String clearData) {
+        return transitSecretEngine.encrypt("my-encryption-key", clearData);
+    }
+
+    @POST
+    @Path("/decrypt")
+    public String decrypt(String cipherText) {
+        return transitSecretEngine.decrypt("my-encryption-key", cipherText).asString();
+    }
+}
+----
+
+After compiling and starting the Quarkus application, let's encrypt some data:
+
+[source,shell,subs="attributes+"]
+----
+curl -X POST --data 'some secret data' --header "Content-Type: text/plain"  http://localhost:8080/transit/encrypt
+# ==> vault:v1:fN4P7WNjIegpb3lD/pSuhXvyONhGrI21gcKNcedk+5jpjguOw6JkqXYXlkY=
+----
+
+And decrypt back this cipher text:
+
+[source,shell,subs="attributes+"]
+----
+curl -X POST --data 'vault:v1:fN4P7WNjIegpb3lD/pSuhXvyONhGrI21gcKNcedk+5jpjguOw6JkqXYXlkY=' --header "Content-Type: text/plain"  http://localhost:8080/transit/decrypt
+# ==> some secret data
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

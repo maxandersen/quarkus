@@ -1,0 +1,6 @@
+[id="disable-isolates_{context}"]
+= Disable Isolates
+
+Isolates are a neat feature of GraalVM, but Quarkus isn't using them at this stage.
+
+Disable via `-H:-SpawnIsolates`.

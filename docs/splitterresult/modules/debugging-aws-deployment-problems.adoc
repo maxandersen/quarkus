@@ -1,0 +1,32 @@
+[id="debugging-aws-deployment-problems_{context}"]
+= Debugging AWS Deployment Problems
+
+If `sam deploy`, run the `describe-stack-events` command
+to get information about your deployment and what happened.
+
+[source,subs="attributes+"]
+----
+aws cloudformation describe-stack-events --stack-name <YOUR_STACK_NAME>
+----
+
+One common issue that you may run across is that your S3 bucket has to be in the same region as Amazon Lambda.
+Look for this error from `describe-stack-events` output:
+
+[source,subs="attributes+"]
+----
+Error occurred while GetObject. S3 Error Code: AuthorizationHeaderMalformed. S3 Error Message:
+The authorization header is malformed; the region 'us-east-1' is wrong; expecting 'us-east-2'
+(Service: AWSLambdaInternal; Status Code: 400; Error Code: InvalidParameterValueException;
+Request ID: aefcf978-ad2a-4b53-9ffe-cea3fcd0f868)
+----
+
+The above error is stating that my S3 bucket should be in `us-east-2`, not `us-east-1`.
+To fix this error you'll need to create an S3 bucket in that region and redo steps 1 and 2 from above.
+
+Another annoying this is that if there is an error in deployment, you also have to completely delete
+it before trying to deploy again:
+
+[source,subs="attributes+"]
+----
+aws cloudformation delete-stack --stack-name <YOUR_STACK_NAME>
+----

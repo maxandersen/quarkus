@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="conversion-table_{context}"]
+= Conversion Table
+:context: conversion-table
+
+The following table shows how Spring Security annotations can be converted to JAX-RS annotations.
+
+[table,tablepcwidth="100",rowcount="2",header-option="",colcount="3"]
+|===
+| @Secured("admin") | @RolesAllowed("admin") | 
+|===
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

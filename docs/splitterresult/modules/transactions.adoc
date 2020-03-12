@@ -1,0 +1,14 @@
+[id="transactions_{context}"]
+= Transactions
+
+Configure Infinispan caches for transactional operations with a specific
+`TransactionManagerLookup`, as follows:
+
+[source,xml]
+----
+<local-cache name="quarkus-transaction">
+   <transaction transaction-manager-lookup="org.infinispan.transaction.lookup.JBossStandaloneJTAManagerLookup"/>
+</local-cache>
+----
+
+For more information, see the Quarkus link:transaction[Transaction Guide].

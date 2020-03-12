@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="multiple-mongodb-clients_{context}"]
+= Multiple MongoDB Clients
+:context: multiple-mongodb-clients
+
+MongoDB allows you to configure multiple clients.
+Using several clients works the same way as having a single client.
+
+[source,properties]
+----
+quarkus.mongodb.connection-string = mongodb://login:pass@mongo1:27017/database
+
+quarkus.mongodb.users.connection-string = mongodb://mongo2:27017/userdb
+quarkus.mongodb.inventory.connection-string = mongodb://mongo3:27017/invdb,mongo4:27017/invdb
+----
+
+Notice there's an extra bit in the key (the `users` and `inventory` segments).
+The syntax is as follows: `quarkus.mongodb.[optional name.][mongo connection property]`.
+If the name is omitted, it configures the default client.
+
+include::modules/named-mongo-client-injection.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

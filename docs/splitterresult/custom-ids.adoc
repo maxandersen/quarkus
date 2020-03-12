@@ -1,0 +1,43 @@
+ifdef::context[:parent-context: {context}]
+[id="custom-ids_{context}"]
+= Custom IDs
+:context: custom-ids
+
+IDs are often a touchy subject, and not everyone's up for letting them handled by the framework, once again we
+have you covered.
+
+You can specify your own ID strategy by extending `PanacheEntityBase` instead of `PanacheEntity`. Then
+you just declare whatever ID you want as a public field:
+
+[source,java]
+----
+@Entity
+public class Person extends PanacheEntityBase {
+
+    @Id
+    @SequenceGenerator(
+            name = "personSequence",
+            sequenceName = "person_id_seq",
+            allocationSize = 1,
+            initialValue = 4)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "personSequence")
+    public Integer id;
+
+    //...
+}
+----
+
+If you're using repositories, then you will want to extend `PanacheRepositoryBase` instead of `PanacheRepository`
+and specify your ID type as an extra type parameter:
+
+[source,java]
+----
+@ApplicationScoped
+public class PersonRepository implements PanacheRepositoryBase<Person,Integer> {
+    //...
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,52 @@
+ifdef::context[:parent-context: {context}]
+[id="setting-up-and-configuring-hibernate-orm-with-panache_{context}"]
+= Setting up and configuring Hibernate ORM with Panache
+:context: setting-up-and-configuring-hibernate-orm-with-panache
+
+To get started:
+
+* add your settings in `{config-file}`
+* annotate your entities with `@Entity`
+* make your entities extend `PanacheEntity` (optional if you are using the repository pattern)
+
+Follow the link:hibernate-orm#setting-up-and-configuring-hibernate-orm[Hibernate set-up guide for all configuration].
+
+In your `pom.xml`, add the following dependencies:
+
+* the Panache JPA extension
+* your JDBC driver extension (`quarkus-jdbc-postgresql`, `quarkus-jdbc-h2`, `quarkus-jdbc-mariadb`, ...)
+
+[source,xml]
+----
+<dependencies>
+    <!-- Hibernate ORM specific dependencies -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-hibernate-orm-panache</artifactId>
+    </dependency>
+
+    <!-- JDBC driver dependencies -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-jdbc-postgresql</artifactId>
+    </dependency>
+</dependencies>
+----
+
+Then add the relevant configuration properties in `{config-file}`.
+
+[source,properties]
+----
+# configure your datasource
+quarkus.datasource.url = jdbc:postgresql://localhost:5432/mydatabase
+quarkus.datasource.driver = org.postgresql.Driver
+quarkus.datasource.username = sarah
+quarkus.datasource.password = connor
+
+# drop and create the database at startup (use `update` to only update the schema)
+quarkus.hibernate-orm.database.generation = drop-and-create
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

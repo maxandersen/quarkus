@@ -1,0 +1,107 @@
+[id="using-vert-x-clients_{context}"]
+= Using Vert.x clients
+
+The previous example uses a _service_ provided by Quarkus.
+Also, you can use Vert.x clients directly.
+There is a Mutiny version of the Vert.x APIs.
+This API is divided into several artifacts you can import independently:
+
+[table,tablepcwidth="100",rowcount="11",header-option="",colcount="2"]
+|===
+| `io.smallrye.reactive:smallrye-mutiny-vertx-core` | Mutiny API for Vert.x Core
+| `io.smallrye.reactive:smallrye-mutiny-vertx-mail-client` | Mutiny API for the Vert.x Mail Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-web-client` | Mutiny API for the Vert.x Web Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-mongo-client` | Mutiny API for the Vert.x Mongo Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-redis-client` | Mutiny API for the Vert.x Redis Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-cassandra-client` | Mutiny API for the Vert.x Cassandra Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-consul-client` | Mutiny API for the Vert.x Consul Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-kafka-client` | Mutiny API for the Vert.x Kafka Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-amqp-client` | Mutiny API for the Vert.x AMQP Client
+| `io.smallrye.reactive:smallrye-mutiny-vertx-rabbitmq-client` | Mutiny API for the Vert.x RabbitMQ Client
+|===
+
+You can also check the available APIs on http://smallrye.io/smallrye-reactive-utils/apidocs/.
+
+Let's take an example.
+Add the following dependency to your application:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.smallrye.reactive</groupId>
+    <artifactId>smallrye-mutiny-vertx-web-client</artifactId>
+</dependency>
+----
+
+It provides the Mutiny API of the Vert.x Web Client.
+Then, you can use the web client as follows:
+
+[source,java]
+----
+package org.acme.vertx;
+
+import io.smallrye.mutiny.Uni;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.client.WebClientOptions;
+import io.vertx.mutiny.core.Vertx;
+import io.vertx.mutiny.ext.web.client.WebClient;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.annotation.PostConstruct;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/fruit-data")
+public class ResourceUsingWebClient {
+
+    @Inject
+    Vertx vertx;
+
+    private WebClient client;
+
+    @PostConstruct
+    void initialize() {
+        this.client = WebClient.create(vertx,
+                new WebClientOptions().setDefaultHost("fruityvice.com").setDefaultPort(443).setSsl(true)
+                        .setTrustAll(true));
+    }
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/{name}")
+    public Uni<JsonObject> getFruitData(@PathParam("name") String name) {
+        return client.get("/api/fruit/" + name)
+                .send()
+                .map(resp -> {
+                    if (resp.statusCode() == 200) {
+                        return resp.bodyAsJsonObject();
+                    } else {
+                        return new JsonObject()
+                                .put("code", resp.statusCode())
+                                .put("message", resp.bodyAsString());
+                    }
+                });
+    }
+
+}
+----
+
+There are 2 important points:
+
+[arabic]
+. The injected Vert.x instance has the `io.vertx.mutiny.core.Vertx` type which is the Mutiny variant of Vert.x;
+. The Web Client is created from `io.vertx.mutiny.ext.web.client.WebClient`.
+
+The Mutiny version of the Vert.x APIs also offers:
+
+* `andAwait` methods such as `sendAndAwait`. `andAwait` indicates that the caller thread is blocked until the result is available.
+Be aware not to block the event loop / IO thread that way.
+* `andForget` methods such as `writeAndForget`. `andForget` is available for method returning a `Uni`.
+`andForget` indicates that you don't need the resulting `Uni` indicating the success or failure of the operation.
+However, remember that if you don't subscribe, the operation would not be triggered.
+`andForget` manages this for you and manage the subscription.
+* `toMulti` methods allowing to transform a Vert.x `ReadStream` into a `Multi`
+* `toBlockingIterable` / `toBlockingStream` methods allowing to transform a Vert.x `ReadStream` into a blocking iterable or blocking `java.util.Stream`

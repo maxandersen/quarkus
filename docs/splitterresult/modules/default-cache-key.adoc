@@ -1,0 +1,32 @@
+[id="default-cache-key_{context}"]
+= Default cache key
+
+[source,java]
+----
+package org.acme.cache;
+
+import javax.enterprise.context.Dependent;
+
+import io.quarkus.cache.CacheInvalidate;
+import io.quarkus.cache.CacheInvalidateAll;
+import io.quarkus.cache.CacheResult;
+
+@Dependent
+public class CachedService {
+
+    @CacheResult(cacheName = "foo")
+    public String load() { <1>
+        // Call expensive service here.
+    }
+
+    @CacheInvalidate(cacheName = "foo")
+    public void invalidate() { <1>
+    }
+
+    @CacheInvalidateAll(cacheName = "foo")
+    public void invalidateAll() {
+    }
+}
+----
+[arabic]
+<1> A unique default cache key derived from the cache name is generated and used.

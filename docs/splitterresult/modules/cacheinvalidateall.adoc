@@ -1,0 +1,4 @@
+[id="cacheinvalidateall_{context}"]
+= @CacheInvalidateAll
+
+When a method annotated with `@CacheInvalidateAll` is invoked, Quarkus will remove all entries from the cache.

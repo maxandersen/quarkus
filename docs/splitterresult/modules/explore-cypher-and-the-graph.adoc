@@ -1,0 +1,5 @@
+[id="explore-cypher-and-the-graph_{context}"]
+= Explore Cypher and the Graph
+
+There are tons of options to model your domain within a Graph.
+The https://neo4j.com/docs/[Neo4j docs], the sandboxes and more are a good starting point.

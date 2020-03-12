@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="versioning_{context}"]
+= Versioning
+:context: versioning
+
+We are in an incubation phase, so we don't have a 1.0.0 release yet.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

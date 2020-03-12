@@ -1,0 +1,8 @@
+[id="automatic-build-time-enhancement_{context}"]
+= Automatic build time enhancement
+
+Hibernate ORM can use build time enhanced entities; normally this is not mandatory but it's useful and will have your
+applications perform better.
+
+Typically you would need to adapt your build scripts to include the Hibernate Enhancement plugins; in Quarkus this is
+not necessary as the enhancement step is integrated in the build and analysis of the Quarkus application.

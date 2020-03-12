@@ -1,0 +1,51 @@
+ifdef::context[:parent-context: {context}]
+[id="package-and-run-the-application_{context}"]
+= Package and run the application
+:context: package-and-run-the-application
+
+As usual, the application can be packaged using `./mvnw clean package` and executed using the `-runner.jar` file:
+.Runner jar Example
+
+[source,shell]
+----
+Scotts-iMacPro:security-jwt-quickstart starksm$ ./mvnw clean package
+[INFO] Scanning for projects...
+...
+[INFO] [io.quarkus.creator.phase.runnerjar.RunnerJarPhase] Building jar: /Users/starksm/Dev/JBoss/Protean/starksm64-quarkus-quickstarts/security-jwt-quickstart/target/security-jwt-quickstart-runner.jar
+
+Scotts-iMacPro:security-jwt-quickstart starksm$ java -jar target/security-jwt-quickstart-runner.jar
+2019-03-28 14:27:48,839 INFO  [io.quarkus] (main) Quarkus 0.12.0 started in 0.796s. Listening on: http://[::]:8080
+2019-03-28 14:27:48,841 INFO  [io.quarkus] (main) Installed features: [cdi, resteasy, resteasy-jsonb, security, smallrye-jwt]
+----
+
+You can also generate the native executable with `./mvnw clean package -Pnative`.
+.Native Executable Example
+
+[source,shell]
+----
+Scotts-iMacPro:security-jwt-quickstart starksm$ ./mvnw clean package -Pnative
+[INFO] Scanning for projects...
+...
+[security-jwt-quickstart-runner:25602]     universe:     493.17 ms
+[security-jwt-quickstart-runner:25602]      (parse):     660.41 ms
+[security-jwt-quickstart-runner:25602]     (inline):   1,431.10 ms
+[security-jwt-quickstart-runner:25602]    (compile):   7,301.78 ms
+[security-jwt-quickstart-runner:25602]      compile:  10,542.16 ms
+[security-jwt-quickstart-runner:25602]        image:   2,797.62 ms
+[security-jwt-quickstart-runner:25602]        write:     988.24 ms
+[security-jwt-quickstart-runner:25602]      [total]:  43,778.16 ms
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  51.500 s
+[INFO] Finished at: 2019-03-28T14:30:56-07:00
+[INFO] ------------------------------------------------------------------------
+
+Scotts-iMacPro:security-jwt-quickstart starksm$ ./target/security-jwt-quickstart-runner
+2019-03-28 14:31:37,315 INFO  [io.quarkus] (main) Quarkus 0.12.0 started in 0.006s. Listening on: http://[::]:8080
+2019-03-28 14:31:37,316 INFO  [io.quarkus] (main) Installed features: [cdi, resteasy, resteasy-jsonb, security, smallrye-jwt]
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

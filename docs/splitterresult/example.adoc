@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="example_{context}"]
+= Example
+:context: example
+
+.All errors and warnings occurring in any of the packages will be sent to Sentry with DSN <code><a href="https://abcd@sentry.io/1234" class="bare">https://abcd@sentry.io/1234</a></code>
+[source,properties]
+----
+quarkus.log.sentry=true
+quarkus.log.sentry.dsn=https://abcd@sentry.io/1234
+quarkus.log.sentry.in-app-packages=*
+----
+
+.All errors occurring in the package <code>org.example</code> will be sent to Sentry with DSN <code><a href="https://abcd@sentry.io/1234" class="bare">https://abcd@sentry.io/1234</a></code>
+[source,properties]
+----
+quarkus.log.sentry=true
+quarkus.log.sentry.dsn=https://abcd@sentry.io/1234
+quarkus.log.sentry.level=ERROR
+quarkus.log.sentry.in-app-packages=org.example
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

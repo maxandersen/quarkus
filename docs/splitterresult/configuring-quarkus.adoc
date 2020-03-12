@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-quarkus_{context}"]
+= Configuring Quarkus
+:context: configuring-quarkus
+
+Quarkus itself is configured via the same mechanism as your application. Quarkus reserves the `quarkus.` namespace
+for its own configuration. For example to configure the HTTP server port you can set `quarkus.http.port` in
+`application.properties`.
+
+[IMPORTANT,textlabel="Important",name="important"]
+====
+As mentioned above, properties prefixed with `quarkus.` are effectively reserved for configuring Quarkus itself and
+therefore `quarkus.`should **never** be used as prefix for application specific properties.In the previous examples using `quarkus.message` instead of `greeting.message` would result in unexpected behavior.
+====
+
+include::modules/list-of-all-configuration-properties.adoc[leveloffset=+1]
+
+include::modules/generating-configuration-for-your-application.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

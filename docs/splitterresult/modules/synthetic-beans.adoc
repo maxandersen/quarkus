@@ -1,0 +1,49 @@
+[id="synthetic-beans_{context}"]
+= Synthetic Beans
+
+Sometimes it is very useful to register a synthetic bean, i.e. a bean that doesn't need to have a corresponding java class.
+In CDI, this could be achieved using `AfterBeanDiscovery.addBean()` methods.
+In Quarkus, we produce a `BeanRegistrarBuildItem` and leverage the `io.quarkus.arc.processor.BeanConfigurator` API to build a synthetic bean definition.
+
+[source,java]
+----
+@BuildStep
+BeanRegistrarBuildItem syntheticBean() {
+     return new BeanRegistrarBuildItem(new BeanRegistrar() {
+
+            @Override
+            public void register(RegistrationContext registrationContext) {
+                 registrationContext.configure(String.class).types(String.class).qualifiers(new MyQualifierLiteral()).creator(mc -> mc.returnValue(mc.load("foo"))).done();
+            }
+        }));
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+The output of a `BeanConfigurator` is recorded as bytecode. Therefore there are some limitations in how a synthetic bean instance is created. See also `BeanConfigurator.creator()` methods.
+====
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You can easily filter all class-based beans via the convenient `BeanStream` returned from the `RegistrationContext.beans()` method.
+====
+
+If an extension needs to produce other build items during the "bean registration" phase it should use the `BeanRegistrationPhaseBuildItem` instead.
+The reason is that injected objects are only valid during a `@BuildStep` method invocation.
+
+[source,java]
+----
+@BuildStep
+void syntheticBean(BeanRegistrationPhaseBuildItem beanRegistrationPhase,
+            BuildProducer<MyBuildItem> myBuildItem,
+            BuildProducer<BeanConfiguratorBuildItem> beanConfigurators) {
+   beanConfigurators.produce(new BeanConfiguratorBuildItem(beanRegistrationPhase.getContext().configure(String.class).types(String.class).qualifiers(new MyQualifierLiteral()).creator(mc -> mc.returnValue(mc.load("foo")))));
+   myBuildItem.produce(new MyBuildItem());
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+See `BeanRegistrationPhaseBuildItem` javadoc for more information.
+====

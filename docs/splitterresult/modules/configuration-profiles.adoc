@@ -1,0 +1,40 @@
+[id="configuration-profiles_{context}"]
+= Configuration Profiles
+
+Quarkus supports the notion of configuration profiles. These allow you to have multiple configuration in the same file and
+select between them via a profile name.
+
+The syntax for this is `%{profile}.config.key=value`. For example if I have the following:
+
+[source,properties]
+----
+quarkus.http.port=9090
+%dev.quarkus.http.port=8181
+----
+
+The Quarkus HTTP port will be 9090, unless the `dev` profile is active, in which case it will be 8181.
+
+By default Quarkus has three profiles, although it is possible to use as many as you like. The default profiles are:
+
+* *dev* - Activated when in development mode (i.e. `quarkus:dev`)
+* *test* - Activated when running tests
+* *prod* - The default profile when not running in development or test mode
+
+There are two ways to set a custom profile, either via the `quarkus.profile` system property or the `QUARKUS_PROFILE`
+environment variable. If both are set the system property takes precedence. Note that it is not necessary to
+define the names of these profiles anywhere, all that is necessary is to create a config property with the profile
+name, and then set the current profile to that name. For example if I want a `staging` profile with a different HTTP port
+I can add the following to `application.properties`:
+
+[source,properties]
+----
+quarkus.http.port=9090
+%staging.quarkus.http.port=9999
+----
+
+And then set the `QUARKUS_PROFILE` environment variable to `staging` to activate my profile.
+
+[NOTE,textlabel="Note",name="note"]
+====
+The proper way to check the active profile programmatically is to use the `getActiveProfile` method of `io.quarkus.runtime.configuration.ProfileManager`.Using `@ConfigProperty("quarkus.profile")` will *not* work properly.
+====

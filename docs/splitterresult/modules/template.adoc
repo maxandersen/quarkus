@@ -1,0 +1,63 @@
+[id="template_{context}"]
+= Template Extension Methods
+
+Extension methods can be used to extend the data classes with new functionality.
+For example, it is possible to add "computed properties" and "virtual methods".
+A value resolver is automatically generated for a method annotated with `@TemplateExtension`.
+If declared on a class a value resolver is generated for every non-private method declared on the class.
+Methods that do not meet the following requirements are ignored.
+
+A template extension method:
+
+* must be static,
+* must not return `void`,
+* must accept at least one parameter.
+
+The class of the first parameter is always used to match the base object.
+The method name is used to match the property name by default.
+However, it is possible to specify the matching name with `TemplateExtension#matchName()`.
+
+[NOTE,textlabel="Note",name="note"]
+====
+A special constant - `ANY` - may be used to specify that the extension method matches any name. In that case, the method must declare at least two parameters and the second parameter must be a string.
+====
+
+.Extension Method Example
+[source,java]
+----
+package org.acme;
+
+class Item {
+
+    public final BigDecimal price;
+
+    public Item(BigDecimal price) {
+        this.price = price;
+    }
+}
+
+@TemplateExtension
+class MyExtensions {
+
+    static BigDecimal discountedPrice(Item item) { <1>
+        return item.getPrice().multiply(new BigDecimal("0.9"));
+    }
+}
+----
+[arabic]
+<1> This method matches an expression with base object of the type `Item.class` and the `discountedPrice` property name.
+This template extension method makes it possible to render the following template:
+
+[source,html]
+----
+{item.discountedPrice} <1>
+----
+[arabic]
+<1> `item` is resolved to an instance of `org.acme.Item`.
+[id="method-parameters_{context}"]
+== Method Parameters
+:context: method-parameters
+
+[id="built-in-template-extension-methods_{context}"]
+== Built-in Template Extension methods
+:context: built-in-template-extension-methods

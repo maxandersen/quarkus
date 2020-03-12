@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="execute-your-rest-lambda-on-aws_{context}"]
+= Execute your REST Lambda on AWS
+:context: execute-your-rest-lambda-on-aws
+
+To get the root URL for your service, type the following command and see the following output:
+
+[source,subs="attributes+"]
+----
+aws cloudformation describe-stacks --stack-name <YOUR_STACK_NAME>
+----
+
+It should give you something like the following output:
+
+[source,subs="attributes+"]
+----
+{
+    "Stacks": [
+        {
+            "StackId": "arn:aws:cloudformation:us-east-1:502833056128:stack/QuarkusNativeRestExample2/b35b0200-f685-11e9-aaa0-0e8cd4caae34",
+            "DriftInformation": {
+                "StackDriftStatus": "NOT_CHECKED"
+            },
+            "Description": "AWS Serverless Quarkus HTTP - io.demo::rest-example",
+            "Tags": [],
+            "Outputs": [
+                {
+                    "Description": "URL for application",
+                    "ExportName": "RestExampleNativeApi",
+                    "OutputKey": "RestExampleNativeApi",
+                    "OutputValue": "https://234234234.execute-api.us-east-1.amazonaws.com/Prod/"
+                }
+            ],
+----
+
+The `OutputValue` attribute is the root URL for your lambda. Copy it to your browser and add `hello` at the end.
+
+[NOTE,textlabel="Note",name="note"]
+====
+Responses for binary types will be automatically encoded with base64.  This is different than the behavior using
+`quarkus:dev` which will return the raw bytes.  Amazon's API has additional restrictions requiring the base64 encoding.
+In general, client code will automatically handle this encoding but in certain custom situations, you should be aware
+you may need to manually manage that encoding.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

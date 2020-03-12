@@ -1,0 +1,37 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-kafka-connector_{context}"]
+= Configuring the Kafka connector
+:context: configuring-the-kafka-connector
+
+We need to configure the Kafka connector. This is done in the `application.properties` file.
+The keys are structured as follows:
+
+`mp.messaging.[outgoing|incoming].{channel-name}.property=value`
+
+The `channel-name` segment must match the value set in the `@Incoming` and `@Outgoing` annotation:
+
+* `generated-price` -> sink in which we write the prices
+* `prices` -> source in which we read the prices
+
+[source]
+----
+# Configure the Kafka sink (we write to it)
+mp.messaging.outgoing.generated-price.connector=smallrye-kafka
+mp.messaging.outgoing.generated-price.topic=prices
+mp.messaging.outgoing.generated-price.value.serializer=org.apache.kafka.common.serialization.IntegerSerializer
+
+# Configure the Kafka source (we read from it)
+mp.messaging.incoming.prices.connector=smallrye-kafka
+mp.messaging.incoming.prices.value.deserializer=org.apache.kafka.common.serialization.IntegerDeserializer
+----
+
+More details about this configuration is available on the https://kafka.apache.org/documentation/#producerconfigs[Producer configuration] and https://kafka.apache.org/documentation/#consumerconfigs[Consumer configuration] section from the Kafka documentation.
+
+[NOTE,textlabel="Note",name="note"]
+====
+What about `my-data-stream`? This is an in-memory stream, not connected to a message broker.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,6 @@
+[id="jib-options_{context}"]
+= JIB Options
+
+In addition to the generic container image options, the `container-image-jib` also provides the following options:
+
+link:{generated-dir}/config/quarkus-container-image-jib.adoc[]

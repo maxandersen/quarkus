@@ -1,0 +1,30 @@
+[id="parent-first-dependencies_{context}"]
+= Parent First Dependencies
+
+There are some classes that should not be loaded in an isolated manner, but that should always be loaded by the system
+ClassLoader (or whatever ClassLoader is responsible for bootstrapping Quarkus). Most extensions do not need to worry about
+this, however there are a few cases where this is necessary:
+
+- Some logging related classes, as logging must be loaded by the system ClassLoader
+- Quarkus bootstrap itself
+
+If this is required it can be configured in the `quarkus-bootstrap-maven-plugin`. Note that if you
+mark a dependency as parent first then all of its dependencies must also be parent first,
+or a `LinkageError` can occur.
+
+[source,xml]
+----
+<plugin>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-bootstrap-maven-plugin</artifactId>
+    <configuration>
+        <parentFirstArtifacts>
+            <parentFirstArtifact>io.quarkus:quarkus-bootstrap-core</parentFirstArtifact>
+            <parentFirstArtifact>io.quarkus:quarkus-development-mode-spi</parentFirstArtifact>
+            <parentFirstArtifact>org.jboss.logmanager:jboss-logmanager-embedded</parentFirstArtifact>
+            <parentFirstArtifact>org.jboss.logging:jboss-logging</parentFirstArtifact>
+            <parentFirstArtifact>org.ow2.asm:asm</parentFirstArtifact>
+        </parentFirstArtifacts>
+    </configuration>
+</plugin>
+----

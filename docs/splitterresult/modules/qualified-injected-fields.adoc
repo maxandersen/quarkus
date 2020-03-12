@@ -1,0 +1,24 @@
+[id="qualified-injected-fields_{context}"]
+= Qualified Injected Fields
+
+In CDI, if you declare a field injection point you need to use `@Inject` and optionally a set of qualifiers:
+
+[source,java]
+----
+  @Inject
+  @ConfigProperty(name = "cool")
+  String coolProperty;
+----
+
+In Quarkus, you can skip the `@Inject` annotation completely if an injected field declares at least one qualifier:
+
+[source,java]
+----
+  @ConfigProperty(name = "cool")
+  String coolProperty;
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+With the notable exception of one special case discussed below, `@Inject` is still required for constructor and method injection.
+====

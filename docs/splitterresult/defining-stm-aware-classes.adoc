@@ -1,0 +1,53 @@
+ifdef::context[:parent-context: {context}]
+[id="defining-stm-aware-classes_{context}"]
+= Defining STM-aware classes
+:context: defining-stm-aware-classes
+
+In order for the STM subsytem to have knowledge about which classes are to be managed within the context
+of transactional memory it is necessary to provide a minimal level of instrumentation. This occurs by
+categorising STM-aware and STM-unaware classes through an interface boundary; specifically all STM-aware objects
+must be instances of classes which inherit from interfaces that themselves have been annotated to identify them
+as STM-aware. Any other objects (and their classes) which do not follow this rule will not be managed by the
+STM subsystem and hence any of their state changes will not be rolled back, for example.
+
+The specific annotation that STM-aware application interfaces must use is `org.jboss.stm.annotations.Transactional`.
+For example:
+
+[source,java]
+----
+@Transactional
+public interface FlightService {
+    int getNumberOfBookings();
+    void makeBooking(String details);
+}
+----
+
+Classes which implement this interface are able to use additional annotations from Narayana to tell the STM
+subsystem about things such as whether a method will modify the state of the object, or what state variables
+within the class should be managed transactionally, e.g., some instance variables may not need to be rolled back
+if a transaction aborts. As mentioned earlier, if those annotations are not present then defaults are chosen to
+guarantee safety, such as assuming all methods will modify state.
+
+[source,java]
+----
+public class FlightServiceImpl implements FlightService {
+    @ReadLock
+    public int getNumberOfBookings() { ... }
+    public void makeBooking(String details) {...}
+
+    @NotState
+    private int timesCalled;
+}
+----
+
+For example, by using the `@ReadLock` annotation on the `getNumberOfBookings` method, we are able to tell the
+STM subsystem that no state modifications will occur in this object when it is used in the transactional
+memory. Also, the `@NotState` annotation tells the system to ignore `timesCalled` when transactions commit or
+abort, so this value only changes due to application code.
+
+Please refer to the Narayana guide for details of how to exert finer grained control over the transactional
+behaviour of objects that implement interfaces marked with the `@Transactional` annotation.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

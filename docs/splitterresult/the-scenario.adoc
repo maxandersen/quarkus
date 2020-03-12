@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="the-scenario_{context}"]
+= The Scenario
+:context: the-scenario
+
+The application built in this guide simulates a simple backend for a gourmet coffee e-shop. It implements a REST
+endpoint providing information about coffee samples we have on store.
+
+Let's imagine, although it's not implemented as such, that some of the methods in our endpoint require communication
+to external services like a database or an external microservice, which introduces a factor of unreliability.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

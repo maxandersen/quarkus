@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="packaging-the-application_{context}"]
+= Packaging the application
+:context: packaging-the-application
+
+As usual, the application can be packaged using `./mvnw clean package` and executed using the `-runner.jar` file. You can also build the native executable using `./mvnw package -Pnative`, or `./gradlew buildNative`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

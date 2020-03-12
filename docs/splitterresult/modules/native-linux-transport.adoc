@@ -1,0 +1,32 @@
+[id="native-linux-transport_{context}"]
+= Native Linux Transport
+
+On Linux you can enable the following socket options:
+
+* SO_REUSEPORT
+
+[listing]
+----
+quarkus.http.so-reuse-port=true
+----
+
+* TCP_QUICKACK
+
+[listing]
+----
+quarkus.http.tcp-quick-ack=true
+----
+
+* TCP_CORK
+
+[listing]
+----
+quarkus.http.tcp-cork=true
+----
+
+* TCP_FASTOPEN
+
+[listing]
+----
+quarkus.http.tcp-fast-open=true
+----

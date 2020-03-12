@@ -1,0 +1,25 @@
+[id="create-jwtclaimsbuilder-and-set-the-claims_{context}"]
+= Create JwtClaimsBuilder and set the claims
+
+The first step is to initialize a `JwtClaimsBuilder` using one of the options below and add some claims to it:
+
+[source,java]
+----
+import java.util.Collections;
+import io.smallrye.jwt.build.Jwt;
+import io.smallrye.jwt.build.JwtClaimsBuilder;
+...
+// Create an empty builder and add some claims
+JwtClaimsBuilder builder1 = Jwt.claims();
+builder1.claim("customClaim", "custom-value").issuer("https://issuer.org");
+
+// Builder created from the existing claims
+JwtClaimsBuilder builder2 = Jwt.claims("/tokenClaims.json");
+
+// Builder created from a map of claims
+JwtClaimsBuilder builder3 = Jwt.claims(Collections.singletonMap("customClaim", "custom-value"));
+----
+
+The API is fluent so the builder initialization can be done as part of the fluent API sequence. The builder will also set `iat` (issued at) to the current time, `exp` (expires at) to 5 minutes away from the current time and `jti` (unique token identifier) claims if they have not already been set, so one can skip setting them when possible.
+
+The next step is to decide how to secure the claims.

@@ -1,0 +1,38 @@
+[id="configuration_{context}"]
+= Configuration
+
+Configuration in Quarkus is based on SmallRye Config, an implementation of the MicroProfile Config specification.
+All of the standard features of MP-Config are supported; in addition, there are several extensions which are made available
+by the SmallRye Config project as well as by Quarkus itself.
+
+The value of these properties is configured in a `application.properties` file that follows the MicroProfile config format.
+
+Configuration of Quarkus extensions is injection-based, using annotations.
+
+[id="configuration-keys_{context}"]
+== Configuration Keys
+:context: configuration-keys
+
+[id="configuration-value-types_{context}"]
+== Configuration Value types
+:context: configuration-value-types
+
+[id="configuration-default-values_{context}"]
+== Configuration Default Values
+:context: configuration-default-values
+
+[id="configuration-groups_{context}"]
+== Configuration Groups
+:context: configuration-groups
+
+[id="configuration-maps_{context}"]
+== Configuration Maps
+:context: configuration-maps
+
+[id="configuration-roots_{context}" id="configuration-roots"]
+== Configuration Roots
+:context: configuration-roots
+
+[id="configuration-example_{context}"]
+== Configuration Example
+:context: configuration-example

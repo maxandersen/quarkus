@@ -1,0 +1,38 @@
+ifdef::context[:parent-context: {context}]
+[id="listening-to-a-unix-domain-socket_{context}"]
+= Listening to a Unix Domain Socket
+:context: listening-to-a-unix-domain-socket
+
+Listening on a unix domain socket allows us to dispense with the overhead of TCP
+if the connection to the quarkus service is established from the same host. This can happen
+if access to the service goes through a proxy which is often the case
+if you're setting up a service mesh with a proxy like Envoy.
+
+[IMPORTANT,textlabel="Important",name="important"]
+====
+This will only work on platforms that support <<native-transport>>.
+====
+
+To setup please enable the appropriate <<native-transport>> and set the following
+environment property:
+
+[listing]
+----
+quarkus.http.domain-socket=/var/run/io.quarkus.app.socket
+quarkus.http.domain-socket-enabled=true
+----
+
+By itself this will not disable the tcp socket which by default will open on
+`0.0.0.0:8080`. It can be explicitly disabled:
+
+[listing]
+----
+quarkus.http.host-enabled=false
+----
+
+These properties can be set through Java's `-D` command line parameter or
+on `application.properties`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

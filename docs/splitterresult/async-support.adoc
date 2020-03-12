@@ -1,0 +1,171 @@
+ifdef::context[:parent-context: {context}]
+[id="async-support_{context}"]
+= Async Support
+:context: async-support
+
+The rest client supports asynchronous rest calls.
+Async support comes in 2 flavors: you can return a `CompletionStage` or a `Uni` (requires the `quarkus-resteasy-mutiny` extension).
+Let's see it in action by adding a `getByNameAsync` method in our `CountriesService` REST interface. The code should look like:
+
+[source,java]
+----
+package org.acme.rest.client;
+
+import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import java.util.concurrent.CompletionStage;
+import java.util.Set;
+
+@Path("/v2")
+@RegisterRestClient
+public interface CountriesService {
+
+    @GET
+    @Path("/name/{name}")
+    @Produces("application/json")
+    Set<Country> getByName(@PathParam String name);
+
+    @GET
+    @Path("/name/{name}")
+    @Produces("application/json")
+    CompletionStage<Set<Country>> getByNameAsync(@PathParam String name);
+}
+----
+
+Open the `src/main/java/org/acme/rest/client/CountriesResource.java` file and update it with the following content:
+
+[source,java]
+----
+package org.acme.rest.client;
+
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import java.util.concurrent.CompletionStage;
+import java.util.Set;
+
+@Path("/country")
+public class CountriesResource {
+
+    @Inject
+    @RestClient
+    CountriesService countriesService;
+
+
+    @GET
+    @Path("/name/{name}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Set<Country> name(@PathParam String name) {
+        return countriesService.getByName(name);
+    }
+
+    @GET
+    @Path("/name-async/{name}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public CompletionStage<Set<Country>> nameAsync(@PathParam String name) {
+        return countriesService.getByNameAsync(name);
+    }
+}
+----
+
+To test asynchronous methods, add the test method below in `CountriesResourceTest`:
+
+[source,java]
+----
+@Test
+public void testCountryNameAsyncEndpoint() {
+    given()
+    .when().get("/country/name-async/greece")
+    .then()
+        .statusCode(200)
+        .body("$.size()", is(1),
+             "[0].alpha2Code", is("GR"),
+             "[0].capital", is("Athens"),
+             "[0].currencies.size()", is(1),
+             "[0].currencies[0].name", is("Euro")
+        );
+    }
+----
+
+The `Uni` version is very similar:
+
+[source,java]
+----
+package org.acme.rest.client;
+
+import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import java.util.concurrent.CompletionStage;
+import java.util.Set;
+
+@Path("/v2")
+@RegisterRestClient
+public interface CountriesService {
+
+    // ...
+
+    @GET
+    @Path("/name/{name}")
+    @Produces("application/json")
+    Uni<Set<Country>> getByNameAsUni(@PathParam String name);
+}
+----
+
+The `CountriesResource` becomes:
+
+[source,java]
+----
+package org.acme.rest.client;
+
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import java.util.concurrent.CompletionStage;
+import java.util.Set;
+
+@Path("/country")
+public class CountriesResource {
+
+    @Inject
+    @RestClient
+    CountriesService countriesService;
+
+
+    // ...
+
+    @GET
+    @Path("/name-uni/{name}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Uni<Set<Country>> nameAsync(@PathParam String name) {
+        return countriesService.getByNameAsUni(name);
+    }
+}
+----
+
+.Mutiny
+[TIP,textlabel="Tip",name="tip"]
+====
+The previous snippet uses Mutiny reactive types, if you're not familiar with them, read the link:getting-started-reactive#mutiny[Getting Started with Reactive guide] first.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

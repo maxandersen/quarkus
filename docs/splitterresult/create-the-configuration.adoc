@@ -1,0 +1,44 @@
+ifdef::context[:parent-context: {context}]
+[id="create-the-configuration_{context}"]
+= Create the configuration
+:context: create-the-configuration
+
+In order to determine the base URL to which REST calls will be made, the REST Client uses configuration from `application.properties`.
+The name of the property needs to follow a certain convention which is best displayed in the following code:
+
+[source,shell]
+----
+# Your configuration properties
+org.acme.rest.client.CountriesService/mp-rest/url=https://restcountries.eu/rest # // <1>
+org.acme.rest.client.CountriesService/mp-rest/scope=javax.inject.Singleton # // <2>
+----
+
+[arabic]
+<1> Having this configuration means that all requests performed using `org.acme.rest.client.CountriesService` will use `https://restcountries.eu/rest` as the base URL.
+Using the configuration above, calling the `getByName` method of `CountriesService` with a value of `France` would result in an HTTP GET request being made to `https://restcountries.eu/rest/v2/name/France`.
+<2> Having this configuration means that the default scope of `org.acme.rest.client.CountriesService` will be `@Singleton`. Supported scope values are `@Singleton`, `@Dependent`, `@ApplicationScoped` and `@RequestScoped`. The default scope is `@Dependent`.
+The default scope can also be defined on the interface.
+
+Note that `org.acme.rest.client.CountriesService` _must_ match the fully qualified name of the `CountriesService` interface we created in the previous section.
+
+To facilitate the configuration, you can use the `@RegisterRestClient` `configKey` property that allows to use another configuration root than the fully qualified name of your interface.
+
+[source,java]
+----
+
+@RegisterRestClient(configKey="country-api")
+public interface CountriesService {
+    [...]
+}
+----
+
+[source,properties]
+----
+# Your configuration properties
+country-api/mp-rest/url=https://restcountries.eu/rest #
+country-api/mp-rest/scope=javax.inject.Singleton # /
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

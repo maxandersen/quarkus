@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="packaging-the-application-and-run-several-instances_{context}"]
+= Packaging the application and run several instances
+:context: packaging-the-application-and-run-several-instances
+
+The application can be packaged using `./mvnw clean package`. Once the build is successful, run the below command:
+
+[source,shell]
+----
+docker-compose up --scale tasks=2 --scale nginx=1 <1>
+----
+
+[arabic]
+. Start two instances of the application and a load balancer
+
+After a few seconds, in another terminal, run `curl localhost:8080/tasks` to verify that tasks were only created at different instants and in an interval of 10 seconds.
+
+You can also generate the native executable with `./mvnw clean package -Pnative`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

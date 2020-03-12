@@ -1,0 +1,36 @@
+ifdef::context[:parent-context: {context}]
+[id="setting-up-the-model_{context}"]
+= Setting up the model
+:context: setting-up-the-model
+
+In this guide we will be demonstrating how to consume part of the REST API supplied by the link:https://restcountries.eu[restcountries.eu] service.
+Our first order of business is to setup the model we will be using, in the form of a `Country` POJO.
+
+Create a `src/main/java/org/acme/rest/client/Country.java` file and set the following content:
+
+[source,java]
+----
+package org.acme.rest.client;
+
+import java.util.List;
+
+public class Country {
+
+    public String name;
+    public String alpha2Code;
+    public String capital;
+    public List<Currency> currencies;
+
+    public static class Currency {
+        public String code;
+        public String name;
+        public String symbol;
+    }
+}
+----
+
+The model above is only a subset of the fields provided by the service, but it suffices for the purposes of this guide.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

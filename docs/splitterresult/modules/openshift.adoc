@@ -1,0 +1,20 @@
+[id="openshift_{context}"]
+= Openshift
+
+Quarkus offers the ability to automatically generate Openshift resources based on sane default and user supplied configuration.
+The Openshift extension is actually a wrapper extension that brings together the link:kubernetes[kubernetes] and link:container-image-s2i[container-image-s2i]
+extensions with sensible defaults so that it's easier for the user to get started with Quarkus on Openshift.
+
+When we added the `openshift` extension to the command line invocation above, the following dependency was added to the `pom.xml`
+
+[source,xml]
+----
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-openshift</artifactId>
+    </dependency>
+----
+
+By adding this dependency, we now have the ability to configure the Openshift resource generation and application using the usual `application.properties` approach that Quarkus provides.
+The configuration items that are available can be found in: `io.quarkus.kubernetes.deployment.OpenshiftConfig` class.
+Furthermore, the items provided by `io.quarkus.deployment.ApplicationConfig` affect the Openshift resources.

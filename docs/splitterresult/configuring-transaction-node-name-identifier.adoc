@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-transaction-node-name-identifier_{context}"]
+= Configuring transaction node name identifier
+:context: configuring-transaction-node-name-identifier
+
+Narayana, as the underlying transaction manager, has a concept of a unique node identifier.
+This is important if you consider using XA transactions that involve multiple resources.
+
+The node name identifier plays a crucial part in the identification of a transaction.
+The node name identifier is forged into the transaction id when the transaction is created.
+Based on the node name identifier, the transaction manager is capable of recognizing the XA transaction
+counterparts created in database or JMS broker. The identifier makes possible for the transaction manager
+to roll back the transaction counterparts during recovery.
+
+The node name identifier needs to be unique per transaction manager deployment.
+And the node identifier needs to be stable over the transaction manager restarts.
+
+The node name identifier may be configured via the property `quarkus.transaction-manager.node-name`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="loggingConfigurationReference_{context}"]
+= Logging configuration reference
+:context: loggingConfigurationReference
+
+link:{generated-dir}/config/quarkus-log-logging-log-config.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

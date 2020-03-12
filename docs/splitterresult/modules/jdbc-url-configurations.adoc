@@ -1,0 +1,29 @@
+[id="jdbc-url-configurations_{context}"]
+= JDBC URL configurations
+
+Each of the supported databases contains different JDBC URL configuration options.
+Going into each of those options is beyond the scope of this document, but it gives an overview of each database URL and link to the official documentation.
+
+[id="h2_{context}"]
+== H2
+:context: h2
+
+[id="postgresql_{context}"]
+== PostgreSQL
+:context: postgresql
+
+[id="mariadb_{context}"]
+== MariaDB
+:context: mariadb
+
+[id="mysql_{context}"]
+== MySQL
+:context: mysql
+
+[id="microsoft-sql-server_{context}"]
+== Microsoft SQL Server
+:context: microsoft-sql-server
+
+[id="derby_{context}"]
+== Derby
+:context: derby

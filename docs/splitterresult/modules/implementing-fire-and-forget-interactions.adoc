@@ -1,0 +1,14 @@
+[id="implementing-fire-and-forget-interactions_{context}"]
+= Implementing fire and forget interactions
+
+You don't have to reply to received messages.
+Typically for a _fire and forget_ interaction, the messages are consumed and the sender does not need to know about it.
+To implement this, your consumer method just returns `void`
+
+[source,java]
+----
+@ConsumeEvent("greeting")
+public void consume(String event) {
+    // Do something with the event
+}
+----

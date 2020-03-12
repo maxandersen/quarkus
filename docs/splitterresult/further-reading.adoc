@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="further-reading_{context}"]
+= Further reading
+:context: further-reading
+
+* link:https://download.eclipse.org/microprofile/microprofile-rest-client-1.2.1/microprofile-rest-client-1.2.1.html[MicroProfile Rest Client specification]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

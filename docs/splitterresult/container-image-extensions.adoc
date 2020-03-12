@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="container-image-extensions_{context}"]
+= Container Image extensions
+:context: container-image-extensions
+
+include::modules/jib.adoc[leveloffset=+1]
+
+include::modules/docker.adoc[leveloffset=+1]
+
+include::modules/s2i.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

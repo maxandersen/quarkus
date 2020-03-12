@@ -1,0 +1,98 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-the-project_{context}"]
+= Creating the Project
+:context: creating-the-project
+
+First, we need a new project.
+Create a new project with the following command:
+
+[source,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=security-keycloak-authorization-quickstart \
+    -Dextensions="oidc, keycloak-authorization, resteasy-jsonb"
+cd security-keycloak-authorization-quickstart
+----
+
+This command generates a Maven project, importing the `keycloak-authorization` extension which is an implementation of a Keycloak Adapter for Quarkus applications and provides all the necessary capabilities to integrate with a Keycloak Server and perform bearer token authorization.
+
+Let's start by implementing the `/api/users/me` endpoint.
+As you can see from the source code below it is just a regular JAX-RS resource:
+
+[source,java]
+----
+package org.acme.security.keycloak.authorization;;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.jboss.resteasy.annotations.cache.NoCache;
+
+import io.quarkus.security.identity.SecurityIdentity;
+
+@Path("/api/users")
+public class UsersResource {
+
+    @Inject
+    SecurityIdentity identity;
+
+    @GET
+    @Path("/me")
+    @Produces(MediaType.APPLICATION_JSON)
+    @NoCache
+    public User me() {
+        return new User(identity);
+    }
+
+    public static class User {
+
+        private final String userName;
+
+        User(SecurityIdentity identity) {
+            this.userName = identity.getPrincipal().getName();
+        }
+
+        public String getUserName() {
+            return userName;
+        }
+    }
+}
+----
+
+The source code for the `/api/admin` endpoint is also very simple:
+
+[source,java]
+----
+package org.acme.security.keycloak.authorization;;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import io.quarkus.security.Authenticated;
+
+@Path("/api/admin")
+@Authenticated
+public class AdminResource {
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String admin() {
+        return "granted";
+    }
+}
+----
+
+Note that we did not define any annotation such as `@RoleAllowed` to explicitly enforce access to a resource.
+The extension will be responsible to map the URIs of the protected resources you have in Keycloak and evaluate the permissions accordingly, granting or denying access depending on the permissions that will be granted by Keycloak.
+
+include::modules/configuring-the-application.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

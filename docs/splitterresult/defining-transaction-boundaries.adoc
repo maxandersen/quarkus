@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="defining-transaction-boundaries_{context}"]
+= Defining transaction boundaries
+:context: defining-transaction-boundaries
+
+Once an object is placed within an STM container the application developer can manage the scope of transactions
+within which it is used. There are some annotations which can be applied to the STM-aware class to have the
+container automatically create a transaction whenever a specific method is invoked.
+
+include::modules/declarative-approach.adoc[leveloffset=+1]
+
+include::modules/programmatic-approach.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

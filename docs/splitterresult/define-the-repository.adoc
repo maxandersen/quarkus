@@ -1,0 +1,29 @@
+ifdef::context[:parent-context: {context}]
+[id="define-the-repository_{context}"]
+= Define the repository
+:context: define-the-repository
+
+It is now time to define the repository that will be used to access `Fruit`.
+In a typical Spring Data fashion create a repository like so:
+
+[source,java]
+----
+package org.acme.spring.data.jpa;
+
+import org.springframework.data.repository.CrudRepository;
+
+import java.util.List;
+
+public interface FruitRepository extends CrudRepository<Fruit, Long> {
+
+    List<Fruit> findByColor(String color);
+}
+----
+
+The `FruitRepository` above extends Spring Data's `org.springframework.data.repository.CrudRepository` which means that all of the latter's methods are
+available to `FruitRepository`.
+Additionally `findByColor` is defined whose purpose is to return all Fruit entities that match the specified color.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

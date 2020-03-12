@@ -1,0 +1,9 @@
+[id="testing-an-existing-native-executable_{context}"]
+= Testing an existing native executable
+
+It is also possible to re-run the tests against a native executable that has already been built. To do this run
+`./mvnw test-compile failsafe:integration-test`. This will discover the existing native image and run the tests against it using
+failsafe.
+
+If the process cannot find the native image for some reason, or you want to test a native image that is no longer in the
+target directory you can specify the executable with the `-Dnative.image.path=` system property.

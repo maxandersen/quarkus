@@ -1,0 +1,11 @@
+[id="automatic-integration_{context}"]
+= Automatic integration
+
+Transaction Manager integration:: You don't need to set this up, Quarkus automatically injects the reference to the Narayana Transaction Manager.
+The dependency is included automatically as a transitive dependency of the Hibernate ORM extension.
+All configuration is optional; for more details see link:transaction[Using Transactions in Quarkus].
+Connection pool:: Don't need to choose one either. Quarkus automatically includes the Agroal connection pool;
+just configure your datasource as in the above examples and it will setup Hibernate ORM to use Agroal.
+More details about this connection pool can be found in link:datasource[Quarkus - Datasources].
+Second Level Cache:: as explained above in section <<caching,Caching>>, you don't need to pick an implementation.
+A suitable implementation based on technologies from link:https://infinispan.org/[Infinispan] and link:https://github.com/ben-manes/caffeine[Caffeine] is included as a transitive dependency of the Hibernate ORM extension, and automatically integrated during the build.

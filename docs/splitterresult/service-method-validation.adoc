@@ -1,0 +1,54 @@
+ifdef::context[:parent-context: {context}]
+[id="service-method-validation_{context}"]
+= Service method validation
+:context: service-method-validation
+
+It might not always be handy to have the validation rules declared at the end point level as it could duplicate some business validation.
+
+The best option is then to annotate a method of your business service with your constraints (or in our particular case with `@Valid`):
+
+[source,java]
+----
+package org.acme.validation;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.validation.Valid;
+
+@ApplicationScoped
+public class BookService {
+
+    public void validateBook(@Valid Book book) {
+        // your business logic here
+    }
+}
+----
+
+Calling the service in your rest end point triggers the `Book` validation automatically:
+
+[source,java]
+----
+@Inject BookService bookService;
+
+@Path("/service-method-validation")
+@POST
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public Result tryMeServiceMethodValidation(Book book) {
+    try {
+        bookService.validateBook(book);
+        return new Result("Book is valid! It was validated by service method validation.");
+    } catch (ConstraintViolationException e) {
+        return new Result(e.getConstraintViolations());
+    }
+}
+----
+
+Note that, if you want to push the validation errors to the frontend, you have to catch the exception and push the information yourselves
+as they will not be automatically pushed to the JSON output.
+
+Keep in mind that you usually don't want to expose to the public the internals of your services
+- and especially not the validated value contained in the violation object.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,29 @@
+ifdef::context[:parent-context: {context}]
+[id="testing-with-the-sam-cli_{context}"]
+= Testing with the SAM CLI
+:context: testing-with-the-sam-cli
+
+The https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html[AWS SAM CLI]
+allows you to run your lambdas locally on your laptop in a simulated Lambda environment.  This requires
+https://www.docker.com/products/docker-desktop[docker] to be installed.  This is an optional approach should you choose
+to take advantage of it.  Otherwise, dev mode should be sufficient for most of your needs.
+
+A starter template has been generated for both JVM and native execution modes.
+
+Run the following SAM CLI command to locally test your lambda function:
+
+[source]
+----
+sam local invoke --template sam.jvm.yaml --event {json test file}
+----
+
+The native image can also be locally tested using the `sam.native.yaml` template:
+
+[source]
+----
+sam local invoke --template sam.native.yaml --event {json test file}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

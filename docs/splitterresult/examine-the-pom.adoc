@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="examine-the-pom_{context}"]
+= Examine the POM
+:context: examine-the-pom
+
+If you want to adapt an existing RESTEasy, Undertow, or Vert.x Web project to Amazon Lambda, there's a couple
+of things you need to do.  Take a look at the generate example project to get an example of what you need to adapt.
+
+[arabic]
+. Include the `quarkus-amazon-lambda-http` extension as a pom dependency
+. Configure Quarkus build an `uber-jar`
+. If you are doing a native GraalVM build, Amazon requires you to rename your executable to `bootstrap` and zip it up.  Notice that the `pom.xml` uses the `maven-assembly-plugin` to perform this requirement.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

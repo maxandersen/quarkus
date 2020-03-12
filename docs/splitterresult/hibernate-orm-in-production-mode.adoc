@@ -1,0 +1,29 @@
+ifdef::context[:parent-context: {context}]
+[id="hibernate-orm-in-production-mode_{context}"]
+= Hibernate ORM in production mode
+:context: hibernate-orm-in-production-mode
+
+Quarkus comes with default profiles (`dev`, `test` and `prod`).
+And you can add your own custom profiles to describe various environments (`staging`, `prod-us`, etc).
+
+The Hibernate ORM Quarkus extension sets some default configurations differently in dev and test modes than in other environments.
+
+* `quarkus.hibernate-orm.sql-load-script` is set to `no-file` for all profiles except the `dev` and `test` ones.
+
+You can override it in your `application.properties` explicitly
+(e.g. `%prod.quarkus.hibernate-orm.sql-load-script = import.sql`)
+but we wanted you to avoid overriding your database by accident in prod :)
+
+Speaking of, make sure to not drop your database schema in production!
+Add the following in your properties file.
+
+.application.properties
+[source]
+----
+%prod.quarkus.hibernate-orm.database.generation = none
+%prod.quarkus.hibernate-orm.sql-load-script = no-file
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

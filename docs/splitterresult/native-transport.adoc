@@ -1,0 +1,55 @@
+ifdef::context[:parent-context: {context}]
+[id="native-transport_{context}"]
+= Native Transport
+:context: native-transport
+
+Vert.x is capable of using https://netty.io/wiki/native-transports.html[Netty's native transports] which offers
+performance improvements on certain platforms. To enable them you must include the appropriate dependency for your
+platform. It's usually a good idea to include both to keep your application platform agnostic. Netty is smart enough
+to use the correct one, that includes none at all on unsupported platforms:
+
+[source,xml]
+----
+<dependency>
+  <groupId>io.netty</groupId>
+  <artifactId>netty-transport-native-epoll</artifactId>
+  <classifier>linux-x86_64</classifier>
+</dependency>
+
+<dependency>
+  <groupId>io.netty</groupId>
+  <artifactId>netty-transport-native-kqueue</artifactId>
+  <classifier>osx-x86_64</classifier>
+</dependency>
+----
+
+You will also have to explicitly configure Vert.x to use the native transport. In `application.properties` add:
+
+[source]
+----
+quarkus.vertx.prefer-native-transport=true
+----
+
+Or in `application.yml`:
+
+[source,yml]
+----
+quarkus:
+  vertx:
+    prefer-native-transport: true
+----
+
+If all is well quarkus will log:
+
+[listing]
+----
+[io.qua.ver.cor.run.VertxCoreRecorder] (main) Vertx has Native Transport Enabled: true
+----
+
+include::modules/native-linux-transport.adoc[leveloffset=+1]
+
+include::modules/native-macos-transport.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

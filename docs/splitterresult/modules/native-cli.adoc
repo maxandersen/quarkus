@@ -1,0 +1,41 @@
+[id="native-cli_{context}"]
+= Native CLI
+
+Download the binaries here:
+
+* https://coming-soon[Linux Binary] (coming soon)
+* https://coming-soon[macOS Binary] (coming soon)
+
+We recommend that you create a specific Quarkus folder, eg '~/quarkus' and move the
+binary there.
+Then in your shell profile (for Bash shell edit '~/.bash_profile'), export the 'QUARKUS_HOME'
+folder and add that to your 'PATH':
+
+[source,shell]
+----
+export QUARKUS_HOME=/path/to/quarkus-cli
+export PATH="$PATH:$QUARKUS_HOME"
+----
+
+Reload your terminal or do:
+
+[source,shell]
+----
+source ~/.bash_profile
+----
+
+Now you can run the Quarkus CLI:
+
+[source,shell]
+----
+$ quarkus --help
+----
+
+This will display the help information with all the available commands.
+
+[source,shell]
+----
+$ quarkus -i
+----
+
+This will start the Quarkus CLI in interactive mode.

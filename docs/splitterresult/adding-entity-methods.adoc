@@ -1,0 +1,33 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-entity-methods_{context}"]
+= Adding entity methods
+:context: adding-entity-methods
+
+Add custom queries on your entities inside the entities themselves.
+That way, you and your co-workers can find them easily, and queries are co-located with the object they operate on.
+Adding them as static methods in your entity class is the Panache Active Record way.
+
+[source,java]
+----
+public class Person extends PanacheMongoEntity {
+    public String name;
+    public LocalDate birth;
+    public Status status;
+
+    public static Person findByName(String name){
+        return find("name", name).firstResult();
+    }
+
+    public static List<Person> findAlive(){
+        return list("status", Status.Alive);
+    }
+
+    public static void deleteLoics(){
+        delete("name", "Loïc");
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

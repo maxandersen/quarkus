@@ -1,0 +1,76 @@
+ifdef::context[:parent-context: {context}]
+[id="using-injection_{context}"]
+= Using injection
+:context: using-injection
+
+Dependency injection in Quarkus is based on ArC which is a CDI-based dependency injection solution tailored for Quarkus' architecture.
+You can learn more about it in the link:cdi-reference[Contexts and Dependency Injection guide].
+
+ArC comes as a dependency of `quarkus-resteasy` so you already have it handy.
+
+Let's modify the application and add a companion bean.
+Create the `src/main/java/org/acme/getting/started/GreetingService.java` file with the following content:
+
+[source,java]
+----
+package org.acme.getting.started;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class GreetingService {
+
+    public String greeting(String name) {
+        return "hello " + name;
+    }
+
+}
+----
+
+Edit the `GreetingResource` class to inject the `GreetingService` and create a new endpoint using it:
+
+[source,java]
+----
+package org.acme.getting.started;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+@Path("/hello")
+public class GreetingResource {
+
+    @Inject
+    GreetingService service;
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("/greeting/{name}")
+    public String greeting(@PathParam String name) {
+        return service.greeting(name);
+    }
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+}
+----
+
+If you stopped the application, restart the application with `./mvnw compile quarkus:dev`.
+Then check that the endpoint returns `hello quarkus` as expected:
+
+[source,shell,subs="attributes+"]
+----
+$ curl -w "\n" http://localhost:8080/hello/greeting/quarkus
+hello quarkus
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

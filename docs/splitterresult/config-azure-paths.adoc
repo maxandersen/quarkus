@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="config-azure-paths_{context}"]
+= Configuring Root Paths
+:context: config-azure-paths
+
+The default route prefix for an Azure Function is `/api`.  All of your JAX-RS, Servlet, and Vert.x Web endpoints must
+explicitly take this into account.
+
+If you modify the `path` or add a `routePrefix` within the `azure-config/function.json`
+deployment descriptor, your code must also reflect any prefixes you specify for your path.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,19 @@
+ifdef::context[:parent-context: {context}]
+[id="programmatically-access-the-configuration_{context}"]
+= Programmatically access the configuration
+:context: programmatically-access-the-configuration
+
+You can access the configuration programmatically.
+It can be handy to achieve dynamic lookup, or retrieve configured values from classes that are neither CDI beans or JAX-RS resources.
+
+You can access the configuration programmatically using `org.eclipse.microprofile.config.ConfigProvider.getConfig()` such as in:
+
+[source,java]
+----
+String databaseName = ConfigProvider.getConfig().getValue("database.name", String.class);
+Optional<String> maybeDatabaseName = ConfigProvider.getConfig().getOptionalValue("database.name", String.class);
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

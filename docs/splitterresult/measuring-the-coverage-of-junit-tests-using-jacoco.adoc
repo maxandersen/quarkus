@@ -1,0 +1,52 @@
+ifdef::context[:parent-context: {context}]
+[id="measuring-the-coverage-of-junit-tests-using-jacoco_{context}"]
+= Measuring the coverage of JUnit tests using JaCoCo
+:context: measuring-the-coverage-of-junit-tests-using-jacoco
+
+It is now time to introduce JaCoCo to measure the coverage. The straightforward way to add JaCoCo to your build is to reference the plugin in your `pom.xml`.
+
+[source,xml,subs="attributes+"]
+----
+    <properties>
+    ...
+        <jacoco.version>0.8.4</jacoco.version>
+    </properties>
+
+    <build>
+        <plugins>
+        ...
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>default-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>default-report</id>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco.exec</dataFile>
+                            <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you run `./mvnw clean test` the coverage information will be collected during the execution of the unit tests in the file `jacoco.exec`.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

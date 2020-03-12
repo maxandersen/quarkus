@@ -1,0 +1,13 @@
+[id="dealing-with-messages_{context}"]
+= Dealing with messages
+
+As said above, this mechanism is based on the Vert.x event bus. So, you can also use `Message` directly:
+
+[source,java]
+----
+@ConsumeEvent("greeting")
+public void consume(Message<String> msg) {
+    System.out.println(msg.address());
+    System.out.println(msg.body());
+}
+----

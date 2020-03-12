@@ -1,0 +1,104 @@
+ifdef::context[:parent-context: {context}]
+[id="reactive_{context}"]
+= Reactive MongoDB Client
+:context: reactive
+
+A reactive MongoDB Client is included in Quarkus.
+Using it is as easy as using the classic MongoDB Client.
+You can rewrite the previous example to use it like the following.
+
+.Deprecation
+[NOTE,textlabel="Note",name="note"]
+====
+The `io.quarkus.mongodb.ReactiveMongoClient` client is deprecated and will be removed in the future.
+It is recommended to switch to the `io.quarkus.mongodb.reactive.ReactiveMongoClient` client providing the `Mutiny` API.
+====
+
+.Mutiny
+[TIP,textlabel="Tip",name="tip"]
+====
+The MongoDB reactive client uses Mutiny reactive types, if you're not familiar with them, read the link:getting-started-reactive#mutiny[Getting Started with Reactive guide] first.
+====
+
+[source,java]
+----
+package org.acme.mongodb;
+
+import io.quarkus.mongodb.reactive.ReactiveMongoClient;
+import io.quarkus.mongodb.reactive.ReactiveMongoCollection;
+import io.smallrye.mutiny.Uni;
+import org.bson.Document;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+import java.util.List;
+
+@ApplicationScoped
+public class ReactiveFruitService {
+
+    @Inject
+    ReactiveMongoClient mongoClient;
+
+    public Uni<List<Fruit>> list() {
+        return getCollection().find()
+                .map(doc -> {
+                    Fruit fruit = new Fruit();
+                    fruit.setName(doc.getString("name"));
+                    fruit.setDescription(doc.getString("description"));
+                    return fruit;
+                }).collectItems().asList();
+    }
+
+    public Uni<Void> add(Fruit fruit) {
+        Document document = new Document()
+                .append("name", fruit.getName())
+                .append("description", fruit.getDescription());
+        return getCollection().insertOne(document);
+    }
+
+    private ReactiveMongoCollection<Document> getCollection() {
+        return mongoClient.getDatabase("fruit").getCollection("fruit");
+    }
+}
+----
+
+[source,java]
+----
+package org.acme.mongodb;
+
+import io.smallrye.mutiny.Uni;
+
+import java.util.List;
+
+import javax.inject.Inject;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.core.MediaType;
+
+@Path("/reactive_fruits")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class ReactiveFruitResource {
+
+    @Inject
+    ReactiveFruitService fruitService;
+
+    @GET
+    public Uni<List<Fruit>> list() {
+        return fruitService.list();
+    }
+
+    @POST
+    public Uni<List<Fruit>> add(Fruit fruit) {
+        return fruitService.add(fruit)
+                .onItem().ignore().andSwitchTo(this::list);
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

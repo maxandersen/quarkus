@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="lock-management_{context}"]
+= Lock management
+:context: lock-management
+
+Panache provides direct support for database locking with your entity/repository, using `findById(Object, LockModeType)` or `find().withLock(LockModeType)`.
+
+The following examples are for the entity pattern, but the same can be used with repositories.
+
+include::modules/first-locking-using-findbyid.adoc[leveloffset=+1]
+
+include::modules/second-locking-in-a-find.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

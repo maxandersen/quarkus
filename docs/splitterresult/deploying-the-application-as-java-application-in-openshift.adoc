@@ -1,0 +1,39 @@
+ifdef::context[:parent-context: {context}]
+[id="deploying-the-application-as-java-application-in-openshift_{context}"]
+= Deploying the application as Java application in OpenShift
+:context: deploying-the-application-as-java-application-in-openshift
+
+In this section, we are going to leverage the S2I build mechanism of OpenShift.
+We use a Java S2I Builder, and therefore do not need a `Dockerfile` in this approach.
+You do not need to locally clone the Git repository, as it will be directly built inside OpenShift.
+We are going to create an OpenShift `build` executing it:
+
+[source,shell,subs="attributes"]
+----
+# To build the image on OpenShift
+oc new-app registry.access.redhat.com/redhat-openjdk-18/openjdk18-openshift~{quickstarts-clone-url} --context-dir=getting-started --name=quarkus-quickstart
+oc logs -f bc/quarkus-quickstart
+
+# To create the route
+oc expose svc/quarkus-quickstart
+
+# Get the route URL
+export URL="http://$(oc get route | grep quarkus-quickstart | awk '{print $2}')"
+curl $URL/hello/greeting/quarkus
+----
+
+Your application is accessible at the printed URL.
+
+The `.s2i/environment` file in the quickstart sets required variables for the S2I Builder image to find the Quarkus `runner` JAR, and copy the JARs from the `lib/` directory:
+
+[source,text]
+----
+MAVEN_S2I_ARTIFACT_DIRS=target
+S2I_SOURCE_DEPLOYMENTS_FILTER=*-runner.jar lib
+JAVA_OPTIONS=-Dquarkus.http.host=0.0.0.0
+AB_JOLOKIA_OFF=true
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

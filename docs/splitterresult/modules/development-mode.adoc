@@ -1,0 +1,4 @@
+[id="development-mode_{context}"]
+= Development Mode
+
+In the development mode, all files located in `src/main/resources/templates` are watched for changes and modifications are immediately visible.

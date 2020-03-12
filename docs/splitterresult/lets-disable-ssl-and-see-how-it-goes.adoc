@@ -1,0 +1,80 @@
+ifdef::context[:parent-context: {context}]
+[id="lets-disable-ssl-and-see-how-it-goes_{context}"]
+= Let&#8217;s disable SSL and see how it goes
+:context: lets-disable-ssl-and-see-how-it-goes
+
+Quarkus has an option to disable the SSL support entirely.
+Why? Because it comes at a certain cost.
+So if you are sure you don't need it, you can disable it entirely.
+
+First, let's disable it without changing the REST service URL and see how it goes.
+
+Open `src/main/resources/application.properties` and add the following line:
+
+[source]
+----
+quarkus.ssl.native=false
+----
+
+And let's try to build again:
+
+[source]
+----
+./mvnw clean install -Pnative
+----
+
+The native executable tests will fail with the following error:
+
+[source]
+----
+Exception handling request to /country/name/greece: com.oracle.svm.core.jdk.UnsupportedFeatureError: Accessing an URL protocol that was not enabled. The URL protocol https is supported but not enabled by default. It must be enabled by adding the --enable-url-protocols=https option to the native-image command.
+----
+
+This error is the one you obtain when trying to use SSL while it was not explicitly enabled in your native executable.
+
+Now, let's change the REST service URL to **not** use SSL in `src/main/resources/application.properties`:
+
+[source]
+----
+org.acme.restclient.CountriesService/mp-rest/url=http://restcountries.eu/rest
+----
+
+And build again:
+
+[source]
+----
+./mvnw clean install -Pnative
+----
+
+If you check carefully the native executable build options, you can see that the SSL related options are gone:
+
+[source]
+----
+[INFO] [io.quarkus.creator.phase.nativeimage.NativeImagePhase] /opt/graalvm/bin/native-image -J-Djava.util.logging.manager=org.jboss.logmanager.LogManager -J-Dcom.sun.xml.internal.bind.v2.bytecode.ClassTailor.noOptimize=true -H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime -jar rest-client-1.0-SNAPSHOT-runner.jar -J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1 -H:+PrintAnalysisCallTree -H:EnableURLProtocols=http -H:-SpawnIsolates -H:+JNI --no-server -H:-UseServiceLoaderFeature -H:+StackTrace
+----
+
+And we end up with:
+
+[source]
+----
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+----
+
+You remember we checked the size of the native executable with SSL enabled?
+Let's check again with SSL support entirely disabled:
+
+[source]
+----
+$ ls -lh target/rest-client-1.0-SNAPSHOT-runner
+-rwxrwxr-x. 1 gsmet gsmet 25M Feb 22 15:19 target/rest-client-1.0-SNAPSHOT-runner
+----
+
+Yes, it is now **25 MB** whereas it used to be **34 MB**. SSL comes with a 9 MB overhead in native executable size.
+
+And there's more to it.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

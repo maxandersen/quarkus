@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="quarkus-http_{context}"]
+= Quarkus HTTP
+:context: quarkus-http
+
+Before going further, let's have a look at the HTTP layer of Quarkus.
+Quarkus HTTP support is based on a non-blocking and reactive engine (Eclipse Vert.x and Netty).
+All the HTTP requests your application receive are handled by _event loops_ (IO Thread) and then are routed towards the code that manages the request.
+Depending on the destination, it can invoke the code managing the request on a worker thread (Servlet, Jax-RS) or use the IO Thread (reactive route).
+Note that because of this, a reactive route must be non-blocking or explicitly declare its blocking nature (which would result by being called on a worker thread).
+
+image:http-architecture.png[alt=Quarkus HTTP Architecture]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

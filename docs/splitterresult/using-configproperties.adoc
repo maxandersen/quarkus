@@ -1,0 +1,98 @@
+ifdef::context[:parent-context: {context}]
+[id="using-configproperties_{context}"]
+= Using @ConfigProperties
+:context: using-configproperties
+
+As an alternative to injecting multiple related configuration values in the way that was shown in the previous example,
+users can also use the `@io.quarkus.arc.config.ConfigProperties` annotation to group these properties together.
+
+For the greeting properties above, a `GreetingConfiguration` class could be created like so:
+
+[source,java]
+----
+package org.acme.config;
+
+import io.quarkus.arc.config.ConfigProperties;
+import java.util.Optional;
+
+@ConfigProperties(prefix = "greeting") <1>
+public class GreetingConfiguration {
+
+    private String message;
+    private String suffix = "!"; <2>
+    private Optional<String> name;
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public String getSuffix() {
+        return suffix;
+    }
+
+    public void setSuffix(String suffix) {
+        this.suffix = suffix;
+    }
+
+    public Optional<String> getName() {
+        return name;
+    }
+
+    public void setName(Optional<String> name) {
+        this.name = name;
+    }
+}
+----
+
+[arabic]
+<1> `prefix` is optional. If not set then the prefix to be used will be determined by the class name. In this case it would still be `greeting` (since the `Configuration` suffix is removed). If the class were named `GreetingExtraConfiguration` then the resulting default prefix would be `greeting-extra`.
+<2> `!` will be the default value if `greeting.suffix` is not set
+
+This class could then be injected into the `GreetingResource` using the familiar CDI `@Inject` annotation like so:
+
+[source,java]
+----
+@Inject
+GreetingConfiguration greetingConfiguration;
+----
+
+Another alternative style provided by Quarkus is to create `GreetingConfiguration` as an interface like so:
+
+[source,java]
+----
+package org.acme.config;
+
+import io.quarkus.arc.config.ConfigProperties;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import java.util.Optional;
+
+@ConfigProperties(prefix = "greeting")
+public interface GreetingConfiguration {
+
+    @ConfigProperty(name = "message") <1>
+    String message();
+
+    @ConfigProperty(defaultValue = "!")
+    String getSuffix(); <2>
+
+    Optional<String> getName(); <3>
+}
+----
+
+[arabic]
+<1> The `@ConfigProperty` annotation is needed because the name of the configuration property that the method corresponds to doesn't follow the getter method naming conventions
+<2> In this case since `name` was not set, the corresponding property will be `greeting.suffix`.
+<3> It is unnecessary to specify the `@ConfigProperty` annotation because the method name follows the getter method naming conventions (`greeting.name` being the corresponding property) and no default value is needed.
+
+When using `@ConfigProperties` on a class or an interface, if the value of one of its fields is not provided, the application startup will fail and a `javax.enterprise.inject.spi.DeploymentException` indicating the missing value information will be thrown.
+This does not apply to `Optional` fields and fields with a default value.
+
+include::modules/additional-notes-on-configproperties.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

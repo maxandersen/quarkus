@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="read-only-deployment-environments_{context}"]
+= Read only deployment environments
+:context: read-only-deployment-environments
+
+In environments with read only file systems you may receive errors of the form:
+
+[source]
+----
+java.lang.IllegalStateException: Failed to create cache dir
+----
+
+Assuming `/tmp/` is writeable this can be fixed by setting the `vertx.cacheDirBase` property to point to a directory in `/tmp/` for instance in OpenShift by creating an environment variable `JAVA_OPTS` with the value `-Dvertx.cacheDirBase=/tmp/vertx`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

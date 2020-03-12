@@ -1,0 +1,42 @@
+ifdef::context[:parent-context: {context}]
+[id="injection-into-tests_{context}"]
+= Injection into tests
+:context: injection-into-tests
+
+So far we have only covered integration style tests that test the app via HTTP endpoints, but what if we want to do unit
+testing and test our beans directly?
+
+Quarkus supports this by allowing you to inject CDI beans into your tests via the `@Inject` annotation (in fact, tests in
+Quarkus are full CDI beans, so you can use all CDI functionality). Let's create a simple test that tests the greeting
+service directly without using HTTP:
+
+[source,java]
+----
+package org.acme.getting.started.testing;
+
+import javax.inject.Inject;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
+
+@QuarkusTest
+public class GreetingServiceTest {
+
+    @Inject //<1>
+    GreetingService service;
+
+    @Test
+    public void testGreetingService() {
+        Assertions.assertEquals("hello Quarkus", service.greeting("Quarkus"));
+    }
+}
+----
+
+[arabic]
+<1> The `GreetingService` bean will be injected into the test
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

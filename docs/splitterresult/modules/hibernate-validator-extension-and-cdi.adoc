@@ -1,0 +1,12 @@
+[id="hibernate-validator-extension-and-cdi_{context}"]
+= Hibernate Validator extension and CDI
+
+The Hibernate Validator extension is tightly integrated with CDI.
+
+[id="configuring-the-validatorfactory_{context}"]
+== Configuring the ValidatorFactory
+:context: configuring-the-validatorfactory
+
+[id="constraint-validators-as-beans_{context}"]
+== Constraint validators as beans
+:context: constraint-validators-as-beans

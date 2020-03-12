@@ -1,0 +1,20 @@
+ifdef::context[:parent-context: {context}]
+[id="enabling-persistence_{context}"]
+= Enabling persistence
+:context: enabling-persistence
+
+Since 0.3.0 of Kogito, there is an option to enable persistence to preserve process instance state
+across application restarts. That supports long running process instances that can be resumed at any
+point in time.
+
+include::modules/prerequisites-2.adoc[leveloffset=+1]
+
+include::modules/add-dependencies-to-project.adoc[leveloffset=+1]
+
+include::modules/configure-connection-with-infinispan-server.adoc[leveloffset=+1]
+
+include::modules/test-with-enabled-persistence.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

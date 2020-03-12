@@ -1,0 +1,156 @@
+ifdef::context[:parent-context: {context}]
+[id="simplifying-mongodb-client-usage-using-bson-codec_{context}"]
+= Simplifying MongoDB Client usage using BSON codec
+:context: simplifying-mongodb-client-usage-using-bson-codec
+
+By using a Bson `Codec`, the MongoDB Client will take care of the transformation of your domain object to/from a MongoDB `Document` automatically.
+
+First you need to create a Bson `Codec` that will tell Bson how to transform your entity to/from a MongoDB `Document`.
+Here we use a `CollectibleCodec` as our object is retrievable from the database (it has a MongoDB identifier), if not we would have used a `Codec` instead.
+More information in the codec documentation: https://mongodb.github.io/mongo-java-driver/3.10/bson/codecs.
+
+[source,java]
+----
+package org.acme.mongodb.codec;
+
+import com.mongodb.MongoClientSettings;
+import org.acme.mongodb.Fruit;
+import org.bson.Document;
+import org.bson.BsonWriter;
+import org.bson.BsonValue;
+import org.bson.BsonReader;
+import org.bson.BsonString;
+import org.bson.codecs.Codec;
+import org.bson.codecs.CollectibleCodec;
+import org.bson.codecs.DecoderContext;
+import org.bson.codecs.EncoderContext;
+
+import java.util.UUID;
+
+public class FruitCodec implements CollectibleCodec<Fruit> {
+
+    private final Codec<Document> documentCodec;
+
+    public FruitCodec() {
+        this.documentCodec = MongoClientSettings.getDefaultCodecRegistry().get(Document.class);
+    }
+
+    @Override
+    public void encode(BsonWriter writer, Fruit fruit, EncoderContext encoderContext) {
+        Document doc = new Document();
+        doc.put("name", fruit.getName());
+        doc.put("description", fruit.getDescription());
+        documentCodec.encode(writer, doc, encoderContext);
+    }
+
+    @Override
+    public Class<Fruit> getEncoderClass() {
+        return Fruit.class;
+    }
+
+    @Override
+    public Fruit generateIdIfAbsentFromDocument(Fruit document) {
+        if (!documentHasId(document)) {
+            document.setId(UUID.randomUUID().toString());
+        }
+        return document;
+    }
+
+    @Override
+    public boolean documentHasId(Fruit document) {
+        return document.getId() != null;
+    }
+
+    @Override
+    public BsonValue getDocumentId(Fruit document) {
+        return new BsonString(document.getId());
+    }
+
+    @Override
+    public Fruit decode(BsonReader reader, DecoderContext decoderContext) {
+        Document document = documentCodec.decode(reader, decoderContext);
+        Fruit fruit = new Fruit();
+        if (document.getString("id") != null) {
+            fruit.setId(document.getString("id"));
+        }
+        fruit.setName(document.getString("name"));
+        fruit.setDescription(document.getString("description"));
+        return fruit;
+    }
+}
+----
+
+Then you need to create a `CodecProvider` to link this `Codec` to the `Fruit` class.
+
+[source,java]
+----
+package org.acme.mongodb.codec;
+
+import org.acme.mongodb.Fruit;
+import org.bson.codecs.Codec;
+import org.bson.codecs.configuration.CodecProvider;
+import org.bson.codecs.configuration.CodecRegistry;
+
+public class FruitCodecProvider implements CodecProvider {
+    @Override
+    public <T> Codec<T> get(Class<T> clazz, CodecRegistry registry) {
+        if (clazz == Fruit.class) {
+            return (Codec<T>) new FruitCodec();
+        }
+        return null;
+    }
+
+}
+----
+
+Quarkus takes care of registering the `CodecProvider` for you.
+
+Finally, when getting the `MongoCollection` from the database you can use directly the `Fruit` class instead of the `Document` one, the codec will automatically map the `Document` to/from your `Fruit` class.
+
+Here is an example of using a `MongoCollection` with the `FruitCodec`.
+
+[source,java]
+----
+package org.acme.mongodb;
+
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoCursor;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+import java.util.ArrayList;
+import java.util.List;
+
+@ApplicationScoped
+public class CodecFruitService {
+
+    @Inject MongoClient mongoClient;
+
+    public List<Fruit> list(){
+        List<Fruit> list = new ArrayList<>();
+        MongoCursor<Fruit> cursor = getCollection().find().iterator();
+
+        try {
+            while (cursor.hasNext()) {
+                list.add(cursor.next());
+            }
+        } finally {
+            cursor.close();
+        }
+        return list;
+    }
+
+    public void add(Fruit fruit){
+        getCollection().insertOne(fruit);
+    }
+
+    private MongoCollection<Fruit> getCollection(){
+        return mongoClient.getDatabase("fruit").getCollection("fruit", Fruit.class);
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

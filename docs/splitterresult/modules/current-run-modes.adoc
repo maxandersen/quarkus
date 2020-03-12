@@ -1,0 +1,15 @@
+[id="current-run-modes_{context}"]
+= Current Run Modes
+
+At the moment we have the following use cases for bootstrapping Quarkus:
+
+- Maven creating production application
+- Maven dev mode
+- Gradle creating a production application
+- Gradle dev mode
+- QuarkusTest (Maven, Gradle and IDE)
+- QuarkusUnitTest (Maven, Gradle and IDE)
+- QuarkusDevModeTest (Maven, Gradle and IDE)
+- Arquillian Adaptor
+
+One of the goals of this refactor is to have all these different run modes boot Quarkus in fundamentally the same way.

@@ -1,0 +1,38 @@
+ifdef::context[:parent-context: {context}]
+[id="storing-roles-in-another-entity_{context}"]
+= Storing roles in another entity
+:context: storing-roles-in-another-entity
+
+You can also store roles in another entity:
+
+[source,java]
+----
+@UserDefinition
+@Table(name = "test_user")
+@Entity
+public class User extends PanacheEntity {
+    @Username
+    public String name;
+
+    @Password
+    public String pass;
+
+    @ManyToMany
+    @Roles
+    public List<Role> roles = new ArrayList<>();
+}
+
+@Entity
+public class Role extends PanacheEntity {
+
+    @ManyToMany(mappedBy = "roles")
+    public List<ExternalRolesUserEntity> users;
+
+    @RolesValue
+    public String role;
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

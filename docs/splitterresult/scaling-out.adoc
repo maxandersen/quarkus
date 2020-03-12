@@ -1,0 +1,325 @@
+ifdef::context[:parent-context: {context}]
+[id="scaling-out_{context}"]
+= Scaling Out
+:context: scaling-out
+
+A very interesting trait of Kafka Streams applications is that they can be scaled out,
+i.e. the load and state can be distributed amongst multiple application instances running the same pipeline.
+Each node will then contain a subset of the aggregation results,
+but Kafka Streams provides you with https://kafka.apache.org/22/documentation/streams/developer-guide/interactive-queries.html#querying-remote-state-stores-for-the-entire-app[an API] to obtain the information which node is hosting a given key.
+The application can then either fetch the data directly from the other instance, or simply point the client to the location of that other node.
+
+Launching multiple instances of the `aggregator` application will make look the overall architecture like so:
+
+[imagesdir="null",alt="Architecture with multiple aggregator nodes",target="kafka-streams-guide-architecture-distributed.png"]
+image::
+
+image::
+
+The `InteractiveQueries` class must be adjusted slightly for this distributed architecture:
+
+[source,java]
+----
+public GetWeatherStationDataResult getWeatherStationData(int id) {
+    StreamsMetadata metadata = streams.metadataForKey(                  // <1>
+            TopologyProducer.WEATHER_STATIONS_STORE,
+            id,
+            Serdes.Integer().serializer()
+    );
+
+    if (metadata == null || metadata == StreamsMetadata.NOT_AVAILABLE) {
+        LOG.warn("Found no metadata for key {}", id);
+        return GetWeatherStationDataResult.notFound();
+    }
+    else if (metadata.host().equals(host)) {                            // <2>
+        LOG.info("Found data for key {} locally", id);
+        Aggregation result = getWeatherStationStore().get(id);
+
+        if (result != null) {
+            return GetWeatherStationDataResult.found(WeatherStationData.from(result));
+        }
+        else {
+            return GetWeatherStationDataResult.notFound();
+        }
+    }
+    else {                                                              // <3>
+        LOG.info(
+            "Found data for key {} on remote host {}:{}",
+            id,
+            metadata.host(),
+            metadata.port()
+        );
+        return GetWeatherStationDataResult.foundRemotely(metadata.host(), metadata.port());
+    }
+}
+
+public List<PipelineMetadata> getMetaData() {                           // <4>
+    return streams.allMetadataForStore(TopologyProducer.WEATHER_STATIONS_STORE)
+            .stream()
+            .map(m -> new PipelineMetadata(
+                    m.hostInfo().host() + ":" + m.hostInfo().port(),
+                    m.topicPartitions()
+                        .stream()
+                        .map(TopicPartition::toString)
+                        .collect(Collectors.toSet()))
+            )
+            .collect(Collectors.toList());
+}
+----
+
+[arabic]
+<1> The streams metadata for the given weather station id is obtained
+<2> The given key (weather station id) is maintained by the local application node, i.e. it can answer the query itself
+<3> The given key is maintained by another application node; in this case the information about that node (host and port) will be returned
+<4> The `getMetaData()` method is added to provide callers with a list of all the nodes in the application cluster.
+
+The `GetWeatherStationDataResult` type must be adjusted accordingly:
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.streams;
+
+import java.util.Optional;
+import java.util.OptionalInt;
+
+import org.acme.kafka.streams.aggregator.model.WeatherStationData;
+
+public class GetWeatherStationDataResult {
+
+    private static GetWeatherStationDataResult NOT_FOUND =
+            new GetWeatherStationDataResult(null, null, null);
+
+    private final WeatherStationData result;
+    private final String host;
+    private final Integer port;
+
+    private GetWeatherStationDataResult(WeatherStationData result, String host,
+            Integer port) {
+        this.result = result;
+        this.host = host;
+        this.port = port;
+    }
+
+    public static GetWeatherStationDataResult found(WeatherStationData data) {
+        return new GetWeatherStationDataResult(data, null, null);
+    }
+
+    public static GetWeatherStationDataResult foundRemotely(String host, int port) {
+        return new GetWeatherStationDataResult(null, host, port);
+    }
+
+    public static GetWeatherStationDataResult notFound() {
+        return NOT_FOUND;
+    }
+
+    public Optional<WeatherStationData> getResult() {
+        return Optional.ofNullable(result);
+    }
+
+    public Optional<String> getHost() {
+        return Optional.ofNullable(host);
+    }
+
+    public OptionalInt getPort() {
+        return port != null ? OptionalInt.of(port) : OptionalInt.empty();
+    }
+}
+----
+
+Also the return type for `getMetaData()` must be defined
+(`aggregator/src/main/java/org/acme/kafka/streams/aggregator/streams/PipelineMetadata.java`):
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.streams;
+
+import java.util.Set;
+
+public class PipelineMetadata {
+
+    public String host;
+    public Set<String> partitions;
+
+    public PipelineMetadata(String host, Set<String> partitions) {
+        this.host = host;
+        this.partitions = partitions;
+    }
+}
+----
+
+Lastly, the REST endpoint class must be updated:
+
+[source,java]
+----
+package org.acme.kafka.streams.aggregator.rest;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+
+import org.acme.kafka.streams.aggregator.streams.GetWeatherStationDataResult;
+import org.acme.kafka.streams.aggregator.streams.KafkaStreamsPipeline;
+import org.acme.kafka.streams.aggregator.streams.PipelineMetadata;
+
+@ApplicationScoped
+@Path("/weather-stations")
+public class WeatherStationEndpoint {
+
+    @Inject
+    InteractiveQueries interactiveQueries;
+
+    @GET
+    @Path("/data/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response getWeatherStationData(@PathParam("id") int id) {
+        GetWeatherStationDataResult result = interactiveQueries.getWeatherStationData(id);
+
+        if (result.getResult().isPresent()) {                     // <1>
+            return Response.ok(result.getResult().get()).build();
+        }
+        else if (result.getHost().isPresent()) {                  // <2>
+            URI otherUri = getOtherUri(result.getHost().get(), result.getPort().getAsInt(),
+                    id);
+            return Response.seeOther(otherUri).build();
+        }
+        else {                                                    // <3>
+            return Response.status(Status.NOT_FOUND.getStatusCode(),
+                    "No data found for weather station " + id).build();
+        }
+    }
+
+    @GET
+    @Path("/meta-data")
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<PipelineMetadata> getMetaData() {                 // <4>
+        return interactiveQueries.getMetaData();
+    }
+
+    private URI getOtherUri(String host, int port, int id) {
+        try {
+            return new URI("http://" + host + ":" + port + "/weather-stations/data/" + id);
+        }
+        catch (URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
+    }
+}
+----
+
+[arabic]
+<1> The data was found locally, so return it
+<2> The data is maintained by another node, so reply with a redirect (HTTP status code 303) if the data for the given key is stored on one of the other nodes.
+<3> No data was found for the given weather station id
+<4> Exposes information about all the hosts forming the application cluster
+
+Now stop the `aggregator` service again and rebuild it.
+Then let's spin up three instances of it:
+
+[source,subs="attributes+"]
+----
+./mvnw clean package -f aggregator/pom.xml
+docker-compose stop aggregator
+docker-compose up --build -d --scale aggregator=3
+----
+
+When invoking the REST API on any of the three instances, it might either be
+that the aggregation for the requested weather station id is stored locally on the node receiving the query,
+or it could be stored on one of the other two nodes.
+
+As the load balancer of Docker Compose will distribute requests to the `aggregator` service in a round-robin fashion,
+we'll invoke the actual nodes directly.
+The application exposes information about all the host names via REST:
+
+[source,subs="attributes+"]
+----
+http aggregator:8080/weather-stations/meta-data
+
+HTTP/1.1 200 OK
+Connection: keep-alive
+Content-Length: 202
+Content-Type: application/json
+Date: Tue, 18 Jun 2019 20:00:23 GMT
+
+[
+    {
+        "host": "2af13fe516a9:8080",
+        "partitions": [
+            "temperature-values-2"
+        ]
+    },
+    {
+        "host": "32cc8309611b:8080",
+        "partitions": [
+            "temperature-values-1"
+        ]
+    },
+    {
+        "host": "1eb39af8d587:8080",
+        "partitions": [
+            "temperature-values-0"
+        ]
+    }
+]
+----
+
+Retrieve the data from one of the three hosts shown in the response
+(your actual host names will differ):
+
+[source,subs="attributes+"]
+----
+http 2af13fe516a9:8080/weather-stations/data/1
+----
+
+If that node holds the data for key "1", you'll get a response like this:
+
+[source]
+----
+HTTP/1.1 200 OK
+Connection: keep-alive
+Content-Length: 74
+Content-Type: application/json
+Date: Tue, 11 Jun 2019 19:16:31 GMT
+
+{
+  "avg": 11.9,
+  "count": 259,
+  "max": 50.0,
+  "min": -30.1,
+  "stationId": 1,
+  "stationName": "Hamburg"
+}
+----
+
+Otherwise, the service will send a redirect:
+
+[source]
+----
+HTTP/1.1 303 See Other
+Connection: keep-alive
+Content-Length: 0
+Date: Tue, 18 Jun 2019 20:01:03 GMT
+Location: http://1eb39af8d587:8080/weather-stations/data/1
+----
+
+You can also have _httpie_ automatically follow the redirect by passing the `--follow option`:
+
+[source,bash]
+----
+http --follow 2af13fe516a9:8080/weather-stations/data/1
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

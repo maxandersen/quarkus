@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="building-a-native-executable_{context}"]
+= Building a native executable
+:context: building-a-native-executable
+
+You can build a native executable with the usual command `./mvnw package -Pnative`.
+
+[NOTE,textlabel="Note",name="note"]
+====
+As usual with native executable compilation, this operation consumes a lot of memory.It might be safer to stop the two containers while you are building the native executable and start them again once you are done.
+====
+
+Running it is as simple as executing `./target/hibernate-search-elasticsearch-quickstart-1.0-SNAPSHOT-runner`.
+
+You can then point your browser to `http://localhost:8080/` and use your application.
+
+[NOTE,textlabel="Note",name="note"]
+====
+The startup is a bit slower than usual: it is mostly due to us dropping and recreating the database schema and the Elasticsearch mapping every time at startup.
+We also inject some data and execute the mass indexer.In a real life application, it is obviously something you won't do at startup.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

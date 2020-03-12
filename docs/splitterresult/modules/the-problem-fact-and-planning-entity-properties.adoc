@@ -1,0 +1,13 @@
+[id="the-problem-fact-and-planning-entity-properties_{context}"]
+= The problem fact and planning entity properties
+
+Furthermore, OptaPlanner needs to know which `Lesson` instances it can change
+as well as how to retrieve the `Timeslot` and `Room` instances used for score calculation
+by your `TimeTableConstraintProvider`.
+
+The `timeslotList` and `roomList` fields have an `@ProblemFactCollectionProperty` annotation,
+so your `TimeTableConstraintProvider` can select _from_ those instances.
+
+The `lessonList` has an `@PlanningEntityCollectionProperty` annotation,
+so OptaPlanner can change them during solving
+and your `TimeTableConstraintProvider` can select _from_ those too.

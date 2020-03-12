@@ -1,0 +1,33 @@
+[id="the-jax-rs-resources_{context}"]
+= The JAX-RS resources
+
+During the project creation, the `src/main/java/org/acme/getting/started/GreetingResource.java` file has been created with the following content:
+
+[source,java]
+----
+package org.acme.getting.started;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/hello")
+public class GreetingResource {
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+}
+----
+
+It's a very simple REST endpoint, returning "hello" to requests on "/hello".
+
+.Differences with vanilla JAX-RS
+[TIP,textlabel="Tip",name="tip"]
+====
+With Quarkus, there is no need to create an `Application` class. It's supported, but not required. In addition, only one instance
+of the resource is created and not one per request. You can configure this using the different `*Scoped` annotations (`ApplicationScoped`, `RequestScoped`, etc).
+====

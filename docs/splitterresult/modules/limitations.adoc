@@ -1,0 +1,20 @@
+[id="limitations_{context}"]
+= Limitations
+
+XML mapping:: Hibernate ORM allows to map entities using XML files; this capability isn't enabled in Quarkus: use annotations instead
+as Quarkus can handle them very efficiently.
+This limitation could be lifted in the future, if there's a compelling need for it and if someone contributes it.
+JMX:: Management beans are not working in GraalVM native images;
+therefore Hibernate's capability to register statistics and management operations with the JMX bean is disabled when compiling into a native image.
+This limitation is likely permanent, as it's not a goal for native images
+to implement support for JMX. All such metrics can be accessed in other ways.
+JACC Integration:: Hibernate ORM's capability to integrate with JACC is disabled when building GraalVM native images,
+as JACC is not available - nor useful - in native mode.
+Binding the Session to ThreadLocal context:: Essentially using the `ThreadLocalSessionContext` helper of Hibernate ORM is not implemented.
+The team believes this isn't a big deal as it's trivial to inject the Session via CDI instead, or
+handling the binding into a ThreadLocal yourself, making this a legacy feature.
+This limitation might be resolved in the future, if someone opens a ticket for it and provides a reasonable use case to justify the need.
+JPA Callbacks:: Annotations allowing for application callbacks on entity lifecycle events defined by JPA such as `@javax.persistence.PostUpdate`, `@javax.persistence.PostLoad`, `@javax.persistence.PostPersist`, etc... are currently not processed.
+This limitation could be resolved in a future version, depending on user demand.
+Single instance:: It is currently not possible to configure more than one instance of Hibernate ORM.
+This is a temporary limitation, the team is working on it - please be patient!

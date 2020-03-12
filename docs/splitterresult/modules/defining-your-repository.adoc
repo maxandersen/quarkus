@@ -1,0 +1,40 @@
+[id="defining-your-repository_{context}"]
+= Defining your repository
+
+When using Repositories, you can get the exact same convenient methods as wit the active record pattern, injected in your Repository,
+by making them implements `PanacheMongoRepository`:
+
+[source,java]
+----
+@ApplicationScoped
+public class PersonRepository implements PanacheMongoRepository<Person> {
+
+   // put your custom logic here as instance methods
+
+   public Person findByName(String name){
+       return find("name", name).firstResult();
+   }
+
+   public List<Person> findAlive(){
+       return list("status", Status.Alive);
+   }
+
+   public void deleteLoics(){
+       delete("name", "Loïc");
+  }
+}
+----
+
+All the operations that are defined on `PanacheMongoEntityBase` are available on your repository, so using it
+is exactly the same as using the active record pattern, except you need to inject it:
+
+[source,java]
+----
+@Inject
+PersonRepository personRepository;
+
+@GET
+public long count(){
+    return personRepository.count();
+}
+----

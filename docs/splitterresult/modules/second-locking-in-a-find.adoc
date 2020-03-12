@@ -1,0 +1,19 @@
+[id="second-locking-in-a-find_{context}"]
+= Second: Locking in a find().
+
+[source,java]
+----
+public class PersonEndpoint {
+
+    @GET
+    @Transactional
+    public Person findByNameForUpdate(String name){
+        Person p = Person.find("name", name).withLock(LockModeType.PESSIMISTIC_WRITE).findOne();
+        //do something useful, the lock will be released when the transaction ends.
+        return person;
+    }
+
+}
+----
+
+Be careful that locks are released when the transaction ends, so the method that invokes the lock query must be annotated with the `@Transactional` annotation.

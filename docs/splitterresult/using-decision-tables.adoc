@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="using-decision-tables_{context}"]
+= Using decision tables
+:context: using-decision-tables
+
+Kogito allows to define business rules as decision tables using the Microsoft Excel file formats.
+To be able to use such assets in your application, an additional dependency is required:
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.kie.kogito</groupId>
+    <artifactId>drools-decisiontables</artifactId>
+</dependency>
+----
+
+Once the dependency is added to the project, decision tables in `xls` or `xlsx` format can be properly handled.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

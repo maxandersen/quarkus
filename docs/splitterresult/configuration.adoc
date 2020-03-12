@@ -1,0 +1,26 @@
+ifdef::context[:parent-context: {context}]
+[id="configuration_{context}"]
+= Configuration
+:context: configuration
+
+Once you have your Quarkus project configured you can add the `kubernetes-client` extension
+to your project by running the following command in your project base directory.
+
+[source]
+----
+./mvnw quarkus:add-extension -Dextensions="kubernetes-client"
+----
+
+This will add the following to your pom.xml:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-kubernetes-client</artifactId>
+</dependency>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

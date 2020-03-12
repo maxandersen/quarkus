@@ -1,0 +1,4 @@
+[id="openapi_{context}"]
+= OpenAPI
+
+link:{generated-dir}/config/quarkus-smallrye-openapi.adoc[]

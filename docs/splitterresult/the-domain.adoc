@@ -1,0 +1,35 @@
+ifdef::context[:parent-context: {context}]
+[id="the-domain_{context}"]
+= The domain
+:context: the-domain
+
+As with some of the other guides, the application shall manage fruit entities.
+
+[source,java]
+----
+package org.acme.neo4j;
+
+public class Fruit {
+
+    public Long id;
+
+    public String name;
+
+    public Fruit() {
+        // This is needed for the REST-Easy JSON Binding
+    }
+
+    public Fruit(String name) {
+        this.name = name;
+    }
+
+    public Fruit(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

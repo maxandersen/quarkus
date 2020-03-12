@@ -1,0 +1,215 @@
+[id="using-quarkus-reactive-apis_{context}"]
+= Using Quarkus reactive APIs
+
+Quarkus provides many reactive APIs using the Mutiny model.
+In this section, we are going to see how you can use the Reactive PostgreSQL driver to interact with your database in a non-blocking and reactive way.
+
+Create a new project using:
+
+[source,shell,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=getting-started-reactive-crud \
+    -DclassName="org.acme.reactive.crud.FruitResource" \
+    -Dpath="/fruits" \
+    -Dextensions="resteasy-mutiny, resteasy-jsonb, reactive-pg-client"
+cd getting-started-reactive-crud
+----
+
+This application is interacting with a PostgreSQL database, so you need one:
+
+[source,shell]
+----
+docker run --ulimit memlock=-1:-1 -it --rm=true --memory-swappiness=0 \
+           --name postgres-quarkus-reactive -e POSTGRES_USER=quarkus_test \
+           -e POSTGRES_PASSWORD=quarkus_test -e POSTGRES_DB=quarkus_test \
+           -p 5432:5432 postgres:11.2
+----
+
+Then, let's configure our datasource.
+Open the `src/main/resources/application.properties` and add the following content:
+
+[source,properties]
+----
+quarkus.datasource.db-kind=postgresql
+quarkus.datasource.username=quarkus_test
+quarkus.datasource.password=quarkus_test
+quarkus.datasource.reactive.url=postgresql://localhost:5432/quarkus_test
+myapp.schema.create=true
+----
+
+The 3 first lines define the datasource.
+The last line is going to be used in the application to indicate whether we insert a few items when the application gets initialized.
+
+Now, let's create our _entity_.
+Create the `org.acme.reactive.crud.Fruit` class with the following content:
+
+[source,java]
+----
+package org.acme.reactive.crud;
+
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
+import io.vertx.mutiny.pgclient.PgPool;
+import io.vertx.mutiny.sqlclient.Row;
+import io.vertx.mutiny.sqlclient.RowSet;
+import io.vertx.mutiny.sqlclient.Tuple;
+
+import java.util.stream.StreamSupport;
+
+public class Fruit {
+
+    public Long id;
+
+    public String name;
+
+    public Fruit() {
+        // default constructor.
+    }
+
+    public Fruit(String name) {
+        this.name = name;
+    }
+
+    public Fruit(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public static Multi<Fruit> findAll(PgPool client) {
+        return client.query("SELECT id, name FROM fruits ORDER BY name ASC")
+                // Create a Multi from the set of rows:
+                .onItem().produceMulti(set -> Multi.createFrom().items(() -> StreamSupport.stream(set.spliterator(), false)))
+                // For each row create a fruit instance
+                .onItem().apply(Fruit::from);
+    }
+
+    public static Uni<Fruit> findById(PgPool client, Long id) {
+        return client.preparedQuery("SELECT id, name FROM fruits WHERE id = $1", Tuple.of(id))
+                .onItem().apply(RowSet::iterator)
+                .onItem().apply(iterator -> iterator.hasNext() ? from(iterator.next()) : null);
+    }
+
+    public Uni<Long> save(PgPool client) {
+        return client.preparedQuery("INSERT INTO fruits (name) VALUES ($1) RETURNING (id)", Tuple.of(name))
+                .onItem().apply(pgRowSet -> pgRowSet.iterator().next().getLong("id"));
+    }
+
+    public Uni<Boolean> update(PgPool client) {
+        return client.preparedQuery("UPDATE fruits SET name = $1 WHERE id = $2", Tuple.of(name, id))
+                .onItem().apply(pgRowSet -> pgRowSet.rowCount() == 1);
+    }
+
+    public static Uni<Boolean> delete(PgPool client, Long id) {
+        return client.preparedQuery("DELETE FROM fruits WHERE id = $1", Tuple.of(id))
+                .onItem().apply(pgRowSet -> pgRowSet.rowCount() == 1);
+    }
+
+    private static Fruit from(Row row) {
+        return new Fruit(row.getLong("id"), row.getString("name"));
+    }
+}
+----
+
+This _entity_ contains a few fields and methods to find, update, and delete rows from the database.
+These methods return either `Unis` or `Multis` as the produced items are emitted asynchronously when the results have been retrieved.
+Notice that the reactive PostgreSQL client already provides `Uni` and `Multi` instances.
+So you only transform the results from the database into _business-friendly_ objects.
+
+Then, let's use this `Fruit` class in the `FruitResource`.
+Edit the `FruitResource` class to match the following content:
+
+[source,java]
+----
+package org.acme.reactive.crud;
+
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.Uni;
+import io.vertx.mutiny.pgclient.PgPool;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.annotation.PostConstruct;
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.ResponseBuilder;
+import javax.ws.rs.core.Response.Status;
+import java.net.URI;
+
+@Path("fruits")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class FruitResource {
+
+    @Inject
+    @ConfigProperty(name = "myapp.schema.create", defaultValue = "true")
+    boolean schemaCreate;
+
+    @Inject
+    PgPool client;
+
+    @PostConstruct
+    void config() {
+        if (schemaCreate) {
+            initdb();
+        }
+    }
+
+    private void initdb() {
+        client.query("DROP TABLE IF EXISTS fruits")
+                .flatMap(r -> client.query("CREATE TABLE fruits (id SERIAL PRIMARY KEY, name TEXT NOT NULL)"))
+                .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Kiwi')"))
+                .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Durian')"))
+                .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Pomelo')"))
+                .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Lychee')"))
+                .await().indefinitely();
+    }
+
+    @GET
+    public Multi<Fruit> get() {
+        return Fruit.findAll(client);
+    }
+
+    @GET
+    @Path("{id}")
+    public Uni<Response> getSingle(@PathParam Long id) {
+        return Fruit.findById(client, id)
+                .onItem().apply(fruit -> fruit != null ? Response.ok(fruit) : Response.status(Status.NOT_FOUND))
+                .onItem().apply(ResponseBuilder::build);
+    }
+
+    @POST
+    public Uni<Response> create(Fruit fruit) {
+        return fruit.save(client)
+                .onItem().apply(id -> URI.create("/fruits/" + id))
+                .onItem().apply(uri -> Response.created(uri).build());
+    }
+
+    @PUT
+    @Path("{id}")
+    public Uni<Response> update(@PathParam Long id, Fruit fruit) {
+        return fruit.update(client)
+                .onItem().apply(updated -> updated ? Status.OK : Status.NOT_FOUND)
+                .onItem().apply(status -> Response.status(status).build());
+    }
+
+    @DELETE
+    @Path("{id}")
+    public Uni<Response> delete(@PathParam Long id) {
+        return Fruit.delete(client, id)
+                .onItem().apply(deleted -> deleted ? Status.NO_CONTENT : Status.NOT_FOUND)
+                .onItem().apply(status -> Response.status(status).build());
+    }
+}
+----
+
+This resource returns `Uni` and `Multi` instances based on the result produced by the `Fruit` class.

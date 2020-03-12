@@ -1,0 +1,4 @@
+[id="quarkus-configuration_{context}"]
+= Quarkus configuration
+
+link:{generated-dir}/config/quarkus-smallrye-jwt.adoc[]

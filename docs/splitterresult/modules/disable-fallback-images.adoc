@@ -1,0 +1,10 @@
+[id="disable-fallback-images_{context}"]
+= Disable fallback images
+
+Fallback native images are a feature of GraalVM to "fall back" to run your application in the normal JVM, should the compilation
+to native code fail for some reason.
+
+Quarkus disables this feature by setting `-H:FallbackThreshold=0`: this will ensure you get a compilation failure rather
+risking to not notice that the application is unable to really run in native mode.
+
+If you instead want to just run in Java mode, that's totally possible: just skip the native-image build and run it as a jar.

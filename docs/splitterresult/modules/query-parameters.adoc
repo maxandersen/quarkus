@@ -1,0 +1,61 @@
+[id="query-parameters_{context}"]
+= Query parameters
+
+You can pass query parameters, for both native and PanacheQL queries, by index (1-based) as shown below:
+
+[source,java]
+----
+Person.find("name = ?1 and status = ?2", "Loïc", Status.Alive);
+Person.find("{'name': ?1, 'status': ?2}", "Loïc", Status.Alive);
+----
+
+Or by name using a `Map`:
+
+[source,java]
+----
+Map<String, Object> params = new HashMap<>();
+params.put("name", "Loïc");
+params.put("status", Status.Alive);
+Person.find("name = :name and status = :status", params);
+Person.find("{'name': :name, 'status', :status}", params);
+----
+
+Or using the convenience class `Parameters` either as is or to build a `Map`:
+
+[source,java]
+----
+// generate a Map
+Person.find("name = :name and status = :status",
+         Parameters.with("name", "Loïc").and("status", Status.Alive).map());
+
+// use it as-is
+Person.find("{'name': :name, 'status': :status}",
+         Parameters.with("name", "Loïc").and("status", Status.Alive));
+----
+
+Every query operation accepts passing parameters by index (`Object...`), or by name (`Map<String,Object>` or `Parameters`).
+
+When you use query parameters, be careful that PanacheQL queries will refer to the Object parameters name but native queries will refer to MongoDB field names.
+
+Imagine the following entity:
+
+[source,java]
+----
+public class Person extends PanacheMongoEntity {
+    @BsonProperty("lastname")
+    public String name;
+    public LocalDate birth;
+    public Status status;
+
+    public static Person findByNameWithPanacheQLQuery(String name){
+        return find("name", name).firstResult();
+    }
+
+    public static Person findByNameWithNativeQuery(String name){
+        return find("{'lastname': ?1}", name).firstResult();
+    }
+}
+----
+
+Both `findByNameWithPanacheQLQuery()` and `findByNameWithNativeQuery()` methods will return the same result but query written in PanacheQL
+will use the entity field name: `name`, and native query will use the MongoDB field name: `lastname`.

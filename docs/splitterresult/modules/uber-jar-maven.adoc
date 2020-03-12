@@ -1,0 +1,13 @@
+[id="uber-jar-maven_{context}"]
+= Uber-Jar Creation
+
+Quarkus Maven plugin supports the generation of Uber-Jars by specifying a `quarkus.package.uber-jar=true` configuration option in your `application.properties`.
+
+The original jar will still be present in the `target` directory but it will be renamed to contain the `.original` suffix.
+
+When building an Uber-Jar you can specify entries that you want to exclude from the generated jar by using the `quarkus.package.ignored-entries` configuration
+option, this takes a comma seperated list of entries to ignore.
+
+Uber-Jar creation by default excludes link:https://docs.oracle.com/javase/tutorial/deployment/jar/intro.html[signature files] that might be present in the dependencies of the application.
+
+Uber-Jar's final name is configurable via a Maven's build settings `finalName` option.

@@ -1,0 +1,33 @@
+ifdef::context[:parent-context: {context}]
+[id="advanced-configuration_{context}"]
+= Advanced Configuration
+:context: advanced-configuration
+
+This guide only covered an easy use case, the extension offers multiple datasources, multiple principal queries configuration as well as a bcrypt password mapper.
+
+[source,properties]
+----
+quarkus.datasource.url=jdbc:postgresql:multiple-data-sources-users
+quarkus.datasource.driver=org.postgresql.Driver
+quarkus.datasource.username=quarkus
+quarkus.datasource.password=quarkus
+
+quarkus.datasource.permissions.url=jdbc:postgresql:multiple-data-sources-permissions
+quarkus.datasource.permissions.driver=org.postgresql.Driver
+quarkus.datasource.permissions.username=quarkus
+quarkus.datasource.permissions.password=quarkus
+
+quarkus.security.jdbc.enabled=true
+quarkus.security.jdbc.principal-query.sql=SELECT u.password FROM test_user u WHERE u.username=?
+quarkus.security.jdbc.principal-query.clear-password-mapper.enabled=true
+quarkus.security.jdbc.principal-query.clear-password-mapper.password-index=1
+
+quarkus.security.jdbc.principal-query.roles.sql=SELECT r.role_name FROM test_role r, test_user_role ur WHERE ur.username=? AND ur.role_id = r.id
+quarkus.security.jdbc.principal-query.roles.datasource=permissions
+quarkus.security.jdbc.principal-query.roles.attribute-mappings.0.index=1
+quarkus.security.jdbc.principal-query.roles.attribute-mappings.0.to=groups
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="update-the-lambda_{context}"]
+= Update the Lambda
+:context: update-the-lambda
+
+You can update the Java code as you see fit.  Once you've rebuilt, you can redeploy your lambda by executing the
+`update` command.
+
+[source,subs="attributes+"]
+----
+sh manage.sh update
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

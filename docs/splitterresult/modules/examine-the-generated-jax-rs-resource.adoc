@@ -1,0 +1,24 @@
+[id="examine-the-generated-jax-rs-resource_{context}"]
+= Examine the generated JAX-RS resource
+
+Open the `src/main/java/org/acme/tika/TikaParserResource.java` file and see the following content:
+
+[source,java]
+----
+package org.acme.tika;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/parse")
+public class TikaParserResource {
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+}
+----

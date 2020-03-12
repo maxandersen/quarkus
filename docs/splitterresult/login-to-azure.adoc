@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="login-to-azure_{context}"]
+= Login to Azure
+:context: login-to-azure
+
+If you don't login to Azure you won't be able to deploy.
+
+[source,subs="attributes+"]
+----
+az login
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

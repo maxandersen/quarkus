@@ -1,0 +1,6 @@
+[id="undertow-handlers-conf_{context}"]
+= undertow-handlers.conf
+
+You can make use of the Undertow predicate language using an `undertow-handlers.conf` file. This file should be placed
+in the `META-INF` directory of your application jar. This file contains handlers defined using the
+link:http://undertow.io/undertow-docs/undertow-docs-2.0.0/index.html#predicates-attributes-and-handlers[Undertow predicate language].

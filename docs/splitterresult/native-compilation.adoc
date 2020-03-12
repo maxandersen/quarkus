@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="native-compilation_{context}"]
+= Native compilation
+:context: native-compilation
+
+Native executable fails on macOS with `error: unknown type name 'uint8_t'`::
++
+The solution is to* `sudo mv /usr/local/include /usr/local/include.old`
+* Reinstall XCode for good measure
+* (optional?) `brew install llvm`
+* generally reinstall your brew dependencies with native compilation
+
+The executable should work now.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

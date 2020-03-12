@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="scheduler-configuration-reference_{context}"]
+= Scheduler Configuration Reference
+:context: scheduler-configuration-reference
+
+link:{generated-dir}/config/quarkus-scheduler.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

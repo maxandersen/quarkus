@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="gzip-support_{context}"]
+= GZip Support
+:context: gzip-support
+
+Quarkus comes with GZip support (even though it is not enabled by default). The following configuration knobs allow to configure GZip support.
+
+[source,properties]
+----
+quarkus.resteasy.gzip.enabled=true // <1>
+quarkus.resteasy.gzip.max-input=10M // <2>
+----
+
+[arabic]
+<1> Enable Gzip support.
+<2> Configure the upper limit on deflated request body. This is useful to mitigate potential attacks by limiting their reach. The default value is `10M`.
+This configuration option would recognize strings in this format (shown as a regular expression): `[0-9]+[KkMmGgTtPpEeZzYy]?`. If no suffix is given, assume bytes.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

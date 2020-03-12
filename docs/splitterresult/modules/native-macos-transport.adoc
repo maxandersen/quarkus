@@ -1,0 +1,11 @@
+[id="native-macos-transport_{context}"]
+= Native MacOS Transport
+
+On MacOS Sierra and above you can enable the following socket options:
+
+* SO_REUSEPORT
+
+[listing]
+----
+quarkus.http.so-reuse-port=true
+----

@@ -1,0 +1,18 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-the-maven-deployment-project_{context}"]
+= Creating the Maven Deployment Project
+:context: creating-the-maven-deployment-project
+
+Create the Quarkus AWS Lambda maven project using our Maven Archetype.
+
+[source,subs="attributes+"]
+----
+mvn archetype:generate \
+       -DarchetypeGroupId=io.quarkus \
+       -DarchetypeArtifactId=quarkus-amazon-lambda-http-archetype \
+       -DarchetypeVersion={quarkus-version}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,34 @@
+ifdef::context[:parent-context: {context}]
+[id="constraints_{context}"]
+= Constraints
+:context: constraints
+
+In this application, we are going to test an elementary object, but we support complicated constraints and can validate graphs of objects.
+Create the `org.acme.validation.Book` class with the following content:
+
+[source,java]
+----
+package org.acme.validation;
+
+import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Min;
+
+public class Book {
+
+    @NotBlank(message="Title may not be blank")
+    public String title;
+
+    @NotBlank(message="Author may not be blank")
+    public String author;
+
+    @Min(message="Author has been very lazy", value=1)
+    public double pages;
+}
+----
+
+Constraints are added on fields, and when an object is validated, the values are checked.
+The getter and setter methods are also used for JSON mapping.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

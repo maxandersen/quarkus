@@ -1,0 +1,18 @@
+[id="in-app-packages_{context}"]
+= “In Application” Stack Frames
+
+Sentry differentiates stack frames that are directly related to your application (“in application”) from stack frames that come from other packages such as the standard library, frameworks, or other dependencies. The difference is visible in the Sentry web interface where only the “in application” frames are displayed by default.
+
+You can configure which package prefixes your application uses with the `in-app-packages` option, which takes a comma separated list of packages:
+
+[source,properties]
+----
+quarkus.log.sentry.in-app-packages=com.mycompany,com.other.name
+----
+
+If you don’t want to use this feature but want to disable the warning, simply set it to `*`:
+
+[source,properties]
+----
+quarkus.log.sentry.in-app-packages=*
+----

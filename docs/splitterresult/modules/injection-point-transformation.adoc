@@ -1,0 +1,29 @@
+[id="injection-point-transformation_{context}"]
+= Injection Point Transformation
+
+Every now and then it is handy to be able to change qualifiers of an injection point programmatically.
+You can do just that with `InjectionPointTransformerBuildItem`.
+The following sample shows how to apply transformation to injection points with type `Foo` that contain qualifier `MyQualifier`:
+
+[source,java]
+----
+@BuildStep
+InjectionPointTransformerBuildItem transformer() {
+    return new InjectionPointTransformerBuildItem(new InjectionPointsTransformer() {
+
+        public boolean appliesTo(Type requiredType) {
+            return requiredType.name().equals(DotName.createSimple(Foo.class.getName()));
+        }
+
+        public void transform(TransformationContext context) {
+            if (context.getQualifiers().stream()
+                    .anyMatch(a -> a.name().equals(DotName.createSimple(MyQualifier.class.getName())))) {
+                context.transform()
+                        .removeAll()
+                        .add(DotName.createSimple(MyOtherQualifier.class.getName()))
+                        .done();
+            }
+        }
+    });
+}
+----

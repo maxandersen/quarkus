@@ -1,0 +1,54 @@
+[id="defining-our-user-entity_{context}"]
+= Defining our user entity
+
+We can now describe how our security information is stored in our model by adding a few annotations to our `User` entity:
+
+[source,java]
+----
+package org.acme.security.jpa;
+
+import javax.persistence.Entity;
+import javax.persistence.Table;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.security.common.BcryptUtil;
+import io.quarkus.security.jpa.Password;
+import io.quarkus.security.jpa.Roles;
+import io.quarkus.security.jpa.UserDefinition;
+import io.quarkus.security.jpa.Username;
+
+@Entity
+@Table(name = "test_user")
+@UserDefinition <1>
+public class User extends PanacheEntity {
+    @Username <2>
+    public String username;
+    @Password <3>
+    public String password;
+    @Roles <4>
+    public String role;
+
+    /**
+     * Adds a new user in the database
+     * @param username the user name
+     * @param password the unencrypted password (it will be encrypted with bcrypt)
+     * @param role the comma-separated roles
+     */
+    public static void add(String username, String password, String role) { <5>
+        User user = new User();
+        user.username = username;
+        user.password = BcryptUtil.bcryptHash(password);
+        user.role = role;
+        user.persist();
+    }
+}
+
+----
+The `security-jpa` extension is only initialized if there is a single entity annotated with `@UserDefinition`.
+
+[arabic]
+<1> This annotation must be present on a single entity. It can be a regular Hibernate ORM entity or a Hibernate ORM with Panache entity as in this example.
+<2> This indicates the field used for the user name.
+<3> This indicates the field used for the password. This defaults to using bcrypt hashed passwords, but you can also configure it for clear text passwords.
+<4> This indicates the comma-separated list of roles added to the target Principal representation attributes.
+<5> This method allows us to add users while hashing the password with the proper bcrypt hash.

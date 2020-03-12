@@ -1,0 +1,69 @@
+[id="asynchronous-processing_{context}"]
+= Asynchronous processing
+
+To asynchronously handle the HTTP request, the endpoint method must return a `java.util.concurrent.CompletionStage` or an `io.smallrye.mutiny.Uni` (requires the `quarkus-resteasy-mutiny` extension):
+
+[source,java]
+----
+@Path("/lorem")
+public class GreetingResource {
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public Uni<String> doSomethingAsync() {
+        // Mimic an asynchronous computation.
+        return Uni.createFrom()
+                .item(() -> "Hello!")
+                .onItem().delayIt().by(Duration.ofMillis(10));
+    }
+}
+----
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+Then, open your browser to 'http://localhost:8080/lorem' and you should get the message.
+
+So far so good.
+Now let's use the Vert.x API instead of this artificial delay:
+
+[source,java]
+----
+package org.acme.vertx;
+
+import io.smallrye.mutiny.Uni;
+import io.vertx.mutiny.core.Vertx;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/lorem")
+public class GreetingResource {
+
+    @Inject
+    Vertx vertx;
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public Uni<String> doSomethingAsync() {
+        return vertx.fileSystem().readFile("/META-INF/resources/lorem.txt")
+                .onItem().apply(b -> b.toString("UTF-8"));
+    }
+}
+----
+
+In this code, we inject the `vertx` instance (`io.vertx.mutiny.core.Vertx`) and read a file from the file system.
+
+Create the `src/main/resources/META_INF/resources/lorem.txt` file with the following content:
+
+[source,text]
+----
+Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+----
+
+Then, refresh the page, you should see the _lorem ipsum_ text.

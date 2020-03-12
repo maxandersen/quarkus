@@ -1,0 +1,80 @@
+ifdef::context[:parent-context: {context}]
+[id="handling-streams_{context}"]
+= Handling streams
+:context: handling-streams
+
+So far, we only return an asynchronous result.
+In this section, we extend the application with streams conveying multiple items.
+These streams could come from Kafka or any other source of data, but to keep things simple, we just generate periodic greeting messages.
+
+In the `ReactiveGreetingService`, add the following method:
+
+[source,java]
+----
+public Multi<String> greetings(int count, String name) {
+  return Multi.createFrom().ticks().every(Duration.ofSeconds(1))
+        .onItem().apply(n -> String.format("hello %s - %d", name, n))
+        .transform().byTakingFirstItems(count);
+}
+----
+
+It generates a greeting message every second and stops after `count` messages.
+
+In the `ReactiveGreetingResource` add the following method:
+
+[source,java]
+----
+@GET
+@Produces(MediaType.APPLICATION_JSON)
+@Path("/greeting/{count}/{name}")
+public Multi<String> greetings(@PathParam int count, @PathParam String name) {
+  return service.greetings(count, name);
+}
+----
+
+This endpoint streams the items to the client as a JSON Array.
+The name and number of messages are parameterized using path parameters.
+
+So calling the endpoint produces something like:
+
+[source,shell]
+----
+$ curl http://localhost:8080/hello/greeting/3/neo
+["hello neo - 0","hello neo - 1","hello neo - 2"]
+----
+
+We can also generate Server-Sent Event responses by returning a `Multi`:
+
+[source,java]
+----
+@GET
+@Produces(MediaType.SERVER_SENT_EVENTS)
+@SseElementType(MediaType.TEXT_PLAIN)
+@Path("/stream/{count}/{name}")
+public Multi<String> greetingsAsStream(@PathParam int count, @PathParam String name) {
+    return service.greetings(count, name);
+}
+----
+
+The only difference with the previous snippet is the produced type and the `@SseElementType` annotation indicating the type of each event.
+As the `@Produces` annotation defines `SERVER_SENT_EVENTS`, JAX-RS needs it to knows the content type of each (nested) event.
+
+You can see the result using:
+
+[source,shell]
+----
+$ curl -N http://localhost:8080/hello/stream/5/neo
+data: hello neo - 0
+
+data: hello neo - 1
+
+data: hello neo - 2
+
+data: hello neo - 3
+
+data: hello neo - 4
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

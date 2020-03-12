@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="getting-started_{context}"]
+= Getting Started
+:context: getting-started
+
+* link:getting-started.html[Getting Started]
+* link:building-native-image.html[Building Native Executable]
+* link:deploying-to-kubernetes.html[Deploy Application on Kubernetes]
+* link:getting-started-knative.html[Deploy as Knative Application on Kubernetes]
+* link:tooling.html[Project Scaffolding and IDE]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

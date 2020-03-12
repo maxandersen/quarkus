@@ -1,0 +1,28 @@
+ifdef::context[:parent-context: {context}]
+[id="using-the-underlying-vert-x-mail-client_{context}"]
+= Using the underlying Vert.x Mail Client
+:context: using-the-underlying-vert-x-mail-client
+
+The Quarkus Mailer is implemented on top of the https://vertx.io/docs/vertx-mail-client/java/[Vert.x Mail Client], providing an asynchronous and non-blocking way to send emails.
+If you need fine control on how the mail is sent, for instance if you need to retrieve the message ids, you can inject the underlying client, and use it directly:
+
+[source,java]
+----
+@Inject MailClient client;
+----
+
+Three API flavors are exposed:
+
+* the Mutiny client (`io.vertx.mutiny.ext.mail.MailClient`)
+* the Axle client (`io.vertx.axle.ext.mail.MailClient`), using `CompletionStage` and Reactive Streams `Publisher` - deprecated, it is recommended to switch to the Mutiny client
+* the RX Java 2 client (`io.vertx.reactivex.ext.mail.MailClient`) - deprecated, it is recommended to switch to the Mutiny client
+* the bare client (`io.vertx.ext.mail.MailClient`)
+
+Check the link:vertx[Using Vert.x guide] for further details about these different APIs and how to select the most suitable for you.
+
+The retrieved `MailClient` is configured using the configuration key presented above.
+You can also create your own instance, and pass your own configuration.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

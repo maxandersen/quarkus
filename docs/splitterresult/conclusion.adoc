@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="conclusion_{context}"]
+= Conclusion
+:context: conclusion
+
+You now have all the information you need to study the coverage of your tests!
+But remember, some code that is not covered is certinaly not well tested. But some code that is covered is not necessarily *well* tested. Make sure to write good tests!
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

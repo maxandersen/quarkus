@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="run-the-application-as-a-native-executable_{context}"]
+= Run the application as a native executable
+:context: run-the-application-as-a-native-executable
+
+You can of course create a native image using the instructions of the link:building-native-image[Building a native executable guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,32 @@
+ifdef::context[:parent-context: {context}]
+[id="sending-html-emails-with-inlined-attachments_{context}"]
+= Sending HTML emails with inlined attachments
+:context: sending-html-emails-with-inlined-attachments
+
+When sending HTML email, you can add inlined attachments.
+For example, you can send an image with your email, and this image will be displayed in the mail content. If you put the image file into resources folder, you should specify the full path to the file. "e.g." "META-INF/resources/quarkus-logo.png" otherwise quarkus will lookup in the root folder of the project
+
+[source,java]
+----
+@GET
+@Path("/html")
+public Response sendingHTML() {
+    String body = "<strong>Hello!</strong>" + "\n" +
+        "<p>Here is an image for you: <img src=\"cid:my-image@quarkus.io\"/></p>" +
+        "<p>Regards</p>";
+    mailer.send(Mail.withHtml("to@acme.org", "An email in HTML", body)
+        .addInlineAttachment("quarkus-logo.png",
+            new File("quarkus-logo.png"),
+            "image/png", "<my-image@quarkus.io>"));
+    return Response.accepted().build();
+}
+----
+
+Note the _content-id_ format and reference.
+By spec, when you create the inline attachment, the content-id must be structured as follows: `<id@domain>`.
+If you don't wrap your content-id between `<>`, it is automatically wrapped for you.
+When you want to reference your attachment, for instance in the `src` attribute, use `cid:id@domain` (without the `<` and `>`).
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

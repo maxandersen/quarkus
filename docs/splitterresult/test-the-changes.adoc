@@ -1,0 +1,20 @@
+ifdef::context[:parent-context: {context}]
+[id="test-the-changes_{context}"]
+= Test the changes
+:context: test-the-changes
+
+Access allowed::
++
+The word `hello` should be displayed.
+Access forbidden::
++
+The result should be:[source]
+----
+Access to localhost was denied
+You don't have authorization to view this page.
+HTTP ERROR 403
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

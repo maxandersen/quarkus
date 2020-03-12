@@ -1,0 +1,28 @@
+[id="caching-of-queries_{context}"]
+= Caching of queries
+
+Queries can also benefit from second-level caching. Cached query results can be returned immediately to the caller, avoiding to run the query on the database.
+
+Be careful as this implies the results might not reflect recent changes.
+
+To cache a query, mark it as cacheable on the `Query` instance:
+
+[source,java]
+----
+Query query = ...
+query.setHint("org.hibernate.cacheable", Boolean.TRUE);
+----
+
+If you have a `NamedQuery` then you can enable caching directly on its definition, which will usually be on an entity:
+
+[source,java]
+----
+@Entity
+@NamedQuery(name = "Fruits.findAll",
+      query = "SELECT f FROM Fruit f ORDER BY f.name",
+      hints = @QueryHint(name = "org.hibernate.cacheable", value = "true") )
+public class Fruit {
+   ...
+----
+
+That's all! Caching technology is already integrated and enabled by default in Quarkus, so it's enough to set which ones are safe to be cached.

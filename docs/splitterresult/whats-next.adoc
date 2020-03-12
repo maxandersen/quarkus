@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="whats-next_{context}"]
+= What&#8217;s next?
+:context: whats-next
+
+This guide covered the creation of a native (binary) executable for your application.
+It provides an application exhibiting a swift startup time and consuming less memory.
+However, there is much more.
+
+We recommend continuing the journey with the link:deploying-to-kubernetes[deployment to Kubernetes and OpenShift].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

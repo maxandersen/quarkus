@@ -1,0 +1,9 @@
+[id="deploy-your-package_{context}"]
+= Deploy your package
+
+[source,subs="attributes+"]
+----
+sam deploy --template-file packaged.yaml --capabilities CAPABILITY_IAM --stack-name <YOUR_STACK_NAME>
+----
+
+The stack name can be anything you want.

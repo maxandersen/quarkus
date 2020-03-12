@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="querying_{context}"]
+= Querying
+:context: querying
+
+The Infinispan client supports both indexed and non indexed querying as long as the
+`ProtoStreamMarshaller` is configured above. This allows the user to query based on the
+properties of the proto schema.
+
+Query builds upon the proto definitions you can configure when setting up the `ProtoStreamMarshaller`.
+Either method of Serialization above will automatically register the schema with the server at
+startup, meaning that you will automatically gain the ability to query objects stored in the
+remote Infinispan Server.
+
+You can read more about this at https://infinispan.org/docs/stable/titles/developing/developing.html#query_dsl.
+
+You can use either the Query DSL or the Ickle Query language with the Quarkus Infinispan client
+extension.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

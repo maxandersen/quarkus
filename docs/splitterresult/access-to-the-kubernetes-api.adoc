@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="access-to-the-kubernetes-api_{context}"]
+= Access to the Kubernetes API
+:context: access-to-the-kubernetes-api
+
+In many cases in order to access the Kubernetes API server a `ServiceAccount`, `Role` and `RoleBinding` will be necessary.
+An example that allows listing all pods could look something like this:
+
+[source,yaml]
+----
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: <applicationName>
+  namespace: <namespace>
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: <applicationName>
+  namespace: <namespace>
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: <applicationName>
+  namespace: <namespace>
+roleRef:
+  kind: Role
+  name: <applicationName>
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: <applicationName>
+    namespace: <namespace>
+----
+
+Replace `<applicationName>` and `<namespace>` with your values.
+Have a look at https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/[Configure Service Accounts for Pods] to get further information.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

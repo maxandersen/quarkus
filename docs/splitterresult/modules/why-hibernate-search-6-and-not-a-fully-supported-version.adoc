@@ -1,0 +1,6 @@
+[id="why-hibernate-search-6-and-not-a-fully-supported-version_{context}"]
+= Why Hibernate Search 6 (and not a fully supported version)?
+
+To optimize the Hibernate Search bootstrap for Quarkus, the Hibernate team had to reorganize things a bit (collect the metadata offline, start the Elasticsearch client later...).
+
+This couldn't be done in the 5.x code base so we decided to go with the in-progress Hibernate Search 6.

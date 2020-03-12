@@ -1,0 +1,41 @@
+ifdef::context[:parent-context: {context}]
+[id="producing-a-native-executable_{context}"]
+= Producing a native executable
+:context: producing-a-native-executable
+
+The native executable for our application will contain the application code, required libraries, Java APIs, and a reduced version of a VM. The smaller VM base improves the startup time of the application and produces a minimal disk footprint.
+
+image:native-executable-process.png[Creating a native executable]
+
+If you have generated the application from the previous tutorial, you can find in the `pom.xml` the following _profile_:
+
+[source,xml]
+----
+<profiles>
+    <profile>
+        <id>native</id>
+        <properties>
+            <quarkus.package.type>native</quarkus.package.type>
+        </properties>
+    </profile>
+</profiles>
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You can provide custom options for the `native-image` command using the `<quarkus.native.additional-build-args>` property.
+Multiple options may be separated by a comma.Another possibility is to include the `quarkus.native.additional-build-args` configuration property in your `application.properties`.You can find more information about how to configure the native image building process in the <<configuration-reference>> section below.
+====
+
+We use a profile because, you will see very soon, packaging the native executable takes a _few_ minutes. You could
+just pass -Dquarkus.package.type=native as a property on the command line, however it is better to use a profile as
+this allows native image tests to also be run.
+
+Create a native executable using: `./mvnw package -Pnative`.
+
+In addition to the regular files, the build also produces `target/getting-started-1.0-SNAPSHOT-runner`.
+You can run it using: `./target/getting-started-1.0-SNAPSHOT-runner`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

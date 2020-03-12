@@ -1,0 +1,17 @@
+[id="native-memory-tracking_{context}"]
+= Native Memory Tracking
+
+In order to view the native memory used by the JVM, you can enable the https://docs.oracle.com/javase/8/docs/technotes/guides/vm/nmt-8.html[Native Memory Tracking] (NMT) feature in hotspot;
+
+Enable NMT on the command line;
+
+....
+-XX:NativeMemoryTracking=[off | summary | detail] <1>
+....
+[arabic]
+<1> NOTE: this feature will add cause an approximately 5-10% performance overhead
+It is then possible to use jcmd to dump a report of the native memory usage of the Hotspot JVM running your application;
+
+....
+jcmd <pid> VM.native_memory [summary | detail | baseline | summary.diff | detail.diff | shutdown] [scale= KB | MB | GB]
+....

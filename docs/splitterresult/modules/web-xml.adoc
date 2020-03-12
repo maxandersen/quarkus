@@ -1,0 +1,4 @@
+[id="web-xml_{context}"]
+= web.xml
+
+If you are using a `web.xml` file as your configuration file, you can place it in the `src/main/resources/META-INF` directory.

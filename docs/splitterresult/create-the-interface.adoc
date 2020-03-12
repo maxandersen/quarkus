@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="create-the-interface_{context}"]
+= Create the interface
+:context: create-the-interface
+
+Using the MicroProfile REST Client is as simple as creating an interface using the proper JAX-RS and MicroProfile annotations. In our case the interface should be created at `src/main/java/org/acme/rest/client/CountriesService.java` and have the following content:
+
+[source,java]
+----
+package org.acme.rest.client;
+
+import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import java.util.Set;
+
+@Path("/v2")
+@RegisterRestClient
+public interface CountriesService {
+
+    @GET
+    @Path("/name/{name}")
+    @Produces("application/json")
+    Set<Country> getByName(@PathParam String name);
+}
+----
+
+The `getByName` method gives our code the ability to query a country by name from the REST Countries API. The client will handle all the networking and marshalling leaving our code clean of such technical details.
+
+The purpose of the annotations in the code above is the following:
+
+* `@RegisterRestClient` allows Quarkus to know that this interface is meant to be available for
+CDI injection as a REST Client
+* `@Path`, `@GET` and `@PathParam` are the standard JAX-RS annotations used to define how to access the service
+* `@Produces` defines the expected content-type
+
+[NOTE,textlabel="Note",name="note"]
+====
+While `@Consumes` and `@Produces` are optional as auto-negotiation is supported,
+it is heavily recommended to annotate your endpoints with them to define precisely the expected content-types.It will allow to narrow down the number of JAX-RS providers (which can be seen as converters) included in the native executable.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

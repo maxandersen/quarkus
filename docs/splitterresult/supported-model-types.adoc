@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="supported-model-types_{context}"]
+= Supported model types
+:context: supported-model-types
+
+- The `@UserDefinition` class must be a JPA entity (with Panache or not).
+- The `@Username` and `@Password` field types must be of type `String`.
+- The `@Roles` field must either be of type `String` or `Collection<String>` or alternately a `Collection<X>` where `X` is an entity class with one `String` field annotated with the `@RolesValue` annotation.
+- Each `String` role element type will be parsed as a comma-separated list of roles.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

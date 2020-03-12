@@ -1,0 +1,14 @@
+[id="sorting_{context}"]
+= Sorting
+
+All methods accepting a query string also accept an optional `Sort` parameter, which allows you to abstract your sorting:
+
+[source,java]
+----
+List<Person> persons = Person.list(Sort.by("name").and("birth"));
+
+// and with more restrictions
+List<Person> persons = Person.list("status", Sort.by("name").and("birth"), Status.Alive);
+----
+
+The `Sort` class has plenty of methods for adding columns and specifying sort direction.

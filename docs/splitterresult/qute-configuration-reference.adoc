@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="qute-configuration-reference_{context}"]
+= Qute Configuration Reference
+:context: qute-configuration-reference
+
+link:{generated-dir}/config/quarkus-qute.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

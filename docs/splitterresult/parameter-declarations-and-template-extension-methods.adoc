@@ -1,0 +1,100 @@
+ifdef::context[:parent-context: {context}]
+[id="parameter-declarations-and-template-extension-methods_{context}"]
+= Parameter Declarations and Template Extension Methods
+:context: parameter-declarations-and-template-extension-methods
+
+Qute has many useful features.
+In this example, we'll demonstrate two of them.
+If you declare a *parameter declaration* in a template then Qute attempts to validate all expressions that reference this parameter and if an incorrect expression is found the build fails.
+*Template extension methods* are used to extend the set of accessible properties of data objects.
+
+Let's suppose we have a simple class like this:
+
+.Item.java
+[source,java]
+----
+public class Item {
+    public String name;
+    public BigDecimal price;
+}
+----
+
+And we'd like to render a simple HTML page that contains the item name, price and also a discounted price.
+The discounted price is sometimes called a "computed property".
+We will implement a template extension method to render this property easily.
+Let's start again with the template:
+
+.item.html
+[source,html]
+----
+{@org.acme.Item item} <1>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>{item.name}</title> <2>
+</head>
+<body>
+    <h1>{item.name}</h1>
+    <div>Price: {item.price}</div>
+    {#if item.price > 100} <3>
+    <div>Discounted Price: {item.discountedPrice}</div> <4>
+    {/if}
+</body>
+</html>
+----
+
+[arabic]
+<1> Optional parameter declaration. Qute attempts to validate all expressions that reference the parameter `item`.
+<2> This expression is validated. Try to change the expression to `{item.nonSense}` and the build should fail.
+<3> `if` is a basic control flow section.
+<4> This expression is also validated against the `Item` class and obviously there is no such property declared. However, there is a template extension method declared on the `ItemResource` class - see below.
+
+Finally, let's create a resource class.
+
+.ItemResource.java
+[source,java]
+----
+package org.acme.quarkus.sample;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import io.quarkus.qute.TemplateInstance;
+import io.quarkus.qute.Template;
+
+@Path("item")
+public class ItemResource {
+
+    @Inject
+    ItemService service;
+
+    @Inject
+    Template item; <1>
+
+    @GET
+    @Path("{id}")
+    @Produces(MediaType.TEXT_HTML)
+    public TemplateInstance get(@PathParam("id") Integer id) {
+        return item.data("item", service.findItem(id)); <2>
+    }
+
+    @TemplateExtension <3>
+    static BigDecimal discountedPrice(Item item) {
+        return item.price.multiply(new BigDecimal("0.9"));
+    }
+}
+----
+
+[arabic]
+<1> Inject the template with path `templates/item.html`.
+<2> Make the `Item` object accessible in the template.
+<3> A static template extension method can be used to add "computed properties" to a data class. The class of the first parameter is used to match the base object and the method name is used to match the property name.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

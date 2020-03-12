@@ -1,0 +1,35 @@
+[id="custom-contexts_{context}"]
+= Custom Contexts
+
+An extension can register a custom `InjectableContext` implementation by means of a `ContextRegistrarBuildItem`:
+
+[source,java]
+----
+@BuildStep
+ContextRegistrarBuildItem customContext() {
+    return new ContextRegistrarBuildItem(new ContextRegistrar() {
+         public void register(RegistrationContext registrationContext) {
+            registrationContext.configure(CustomScoped.class).normal().contextClass(MyCustomContext.class).done();
+         }
+    });
+}
+----
+
+If an extension needs to produce other build items during the "context registration" phase it should use the `ContextRegistrationPhaseBuildItem` instead.
+The reason is that injected objects are only valid during a `@BuildStep` method invocation.
+
+[source,java]
+----
+@BuildStep
+void addContext(ContextRegistrationPhaseBuildItem contextRegistrationPhase,
+            BuildProducer<MyBuildItem> myBuildItem,
+            BuildProducer<ContextConfiguratorBuildItem> contexts) {
+   contexts.produce(new ContextConfiguratorBuildItem(contextRegistrationPhase.getContext().configure(CustomScoped.class).normal().contextClass(MyCustomContext.class)));
+   myBuildItem.produce(new MyBuildItem());
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+See `ContextRegistrationPhaseBuildItem` javadoc for more information.
+====

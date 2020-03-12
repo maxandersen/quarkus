@@ -1,0 +1,112 @@
+[id="testing-extensions_{context}"]
+= Testing Extensions
+
+Testing of Quarkus extensions should be done with the `io.quarkus.test.QuarkusUnitTest` JUnit 5 extension.
+This extension allows for Arquillian-style tests that test specific functionalities.
+It is not intended for testing user applications, as this should be done via `io.quarkus.test.junit.QuarkusTest`.
+The main difference is that `QuarkusTest` simply boots the application once at the start of the run, while `QuarkusUnitTest` deploys a custom
+Quarkus application for each test class.
+
+These tests should be placed in the deployment module, if additional Quarkus modules are required for testing
+their deployment modules should also be added as test scoped dependencies.
+
+Note that `QuarkusUnitTest` is in the `quarkus-junit5-internal` module.
+
+An example test class may look like:
+
+[source,java]
+----
+package io.quarkus.health.test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
+
+import org.eclipse.microprofile.health.Health;
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+import io.quarkus.test.QuarkusUnitTest;
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.asset.EmptyAsset;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+import io.restassured.RestAssured;
+
+public class FailingUnitTest {
+
+    @RegisterExtension                                                                  // <1>
+    static final QuarkusUnitTest config = new QuarkusUnitTest()
+            .setArchiveProducer(() ->
+                    ShrinkWrap.create(JavaArchive.class)                                // <2>
+                            .addClasses(FailingHealthCheck.class)
+                            .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml")
+            );
+
+    @Inject                                                                             // <3>
+    @Health
+    Instance<HealthCheck> checks;
+
+    @Test
+    public void testHealthServlet() {
+        RestAssured.when().get("/health").then().statusCode(503);                       // <4>
+    }
+
+    @Test
+    public void testHealthBeans() {
+        List<HealthCheck> check = new ArrayList<>();                                    // <5>
+        for (HealthCheck i : checks) {
+            check.add(i);
+        }
+        assertEquals(1, check.size());
+        assertEquals(HealthCheckResponse.State.DOWN, check.get(0).call().getState());
+    }
+}
+----
+[arabic]
+<1> The `QuarkusUnitTest` extension must be used with a static field. If used with a non-static field, the test application is not started.
+<2> This producer is used to build the application to be tested. It uses Shrinkwrap to create a JavaArchive to test
+<3> It is possible to inject beans from our test deployment directly into the test case
+<4> This method directly invokes the health check Servlet and verifies the response
+<5> This method uses the injected health check bean to verify it is returning the expected result
+If you want to test that an extension properly fails at build time, use the `setExpectedException` method:
+
+[source,java]
+----
+
+package io.quarkus.hibernate.orm;
+
+import io.quarkus.deployment.configuration.ConfigurationError;
+import io.quarkus.test.QuarkusUnitTest;
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+
+public class PersistenceAndQuarkusConfigTest {
+
+    @RegisterExtension
+    static QuarkusUnitTest runner = new QuarkusUnitTest()
+            .setExpectedException(ConfigurationError.class)                     <1>
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+                    .addAsManifestResource("META-INF/some-persistence.xml", "persistence.xml")
+                    .addAsResource("application.properties"));
+
+    @Test
+    public void testPersistenceAndConfigTest() {
+        // should not be called, deployment exception should happen first:
+        // it's illegal to have Hibernate configuration properties in both the
+        // application.properties and in the persistence.xml
+        Assertions.fail();
+    }
+
+}
+----
+[arabic]
+<1> This tells JUnit that the Quarkus deployment should fail with a specific exception

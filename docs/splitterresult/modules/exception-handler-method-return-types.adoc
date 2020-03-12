@@ -1,0 +1,9 @@
+[id="exception-handler-method-return-types_{context}"]
+= Exception handler method return types
+
+The following method return types are supported:
+
+* `org.springframework.http.ResponseEntity`
+* `java.util.Map`
+
+Other return types mentioned in the Spring `https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/bind/annotation/ExceptionHandler.html[ExceptionHandler javadoc]` are not supported.

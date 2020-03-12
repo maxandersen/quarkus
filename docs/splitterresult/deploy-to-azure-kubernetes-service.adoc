@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="deploy-to-azure-kubernetes-service_{context}"]
+= Deploy to Azure Kubernetes Service
+:context: deploy-to-azure-kubernetes-service
+
+You can also deploy the container image as a microservice in a Kubernetes cluster on Azure. To do that, follow this tutorial:
+
+https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-deploy-cluster?WT.mc_id=opensource-quarkus-brborges[Tutorial: Deploy an Azure Kubernetes Service (AKS) cluster]
+
+Once deployed, the application will be running on whatever port is used to expose the service. By default, Quarkus apps run on port 8080 internally.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,28 @@
+ifdef::context[:parent-context: {context}]
+[id="finally-secured-access-to-securedroles-allowed_{context}"]
+= Finally, Secured Access to /secured/roles-allowed
+:context: finally-secured-access-to-securedroles-allowed
+
+Now let's use this to make a secured request to the /secured/roles-allowed endpoint. Make sure you have the Quarkus server running using the `./mvnw compile quarkus:dev` command, and then run the following command, making sure to use your version of the generated JWT from the previous step:
+
+[source,shell]
+----
+curl -H "Authorization: Bearer eyJraWQiOiJcL3ByaXZhdGVLZXkucGVtIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJqZG9lLXVzaW5nLWp3dC1yYmFjIiwiYXVkIjoidXNpbmctand0LXJiYWMiLCJ1cG4iOiJqZG9lQHF1YXJrdXMuaW8iLCJiaXJ0aGRhdGUiOiIyMDAxLTA3LTEzIiwiYXV0aF90aW1lIjoxNTUxNjUyMDkxLCJpc3MiOiJodHRwczpcL1wvcXVhcmt1cy5pb1wvdXNpbmctand0LXJiYWMiLCJyb2xlTWFwcGluZ3MiOnsiZ3JvdXAyIjoiR3JvdXAyTWFwcGVkUm9sZSIsImdyb3VwMSI6Ikdyb3VwMU1hcHBlZFJvbGUifSwiZ3JvdXBzIjpbIkVjaG9lciIsIlRlc3RlciIsIlN1YnNjcmliZXIiLCJncm91cDIiXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiamRvZSIsImV4cCI6MTU1MTY1MjM5MSwiaWF0IjoxNTUxNjUyMDkxLCJqdGkiOiJhLTEyMyJ9.aPA4Rlc4kw7n_OZZRRk25xZydJy_J_3BRR8ryYLyHTO1o68_aNWWQCgpnAuOW64svPhPnLYYnQzK-l2vHX34B64JySyBD4y_vRObGmdwH_SEufBAWZV7mkG3Y4mTKT3_4EWNu4VH92IhdnkGI4GJB6yHAEzlQI6EdSOa4Nq8Gp4uPGqHsUZTJrA3uIW0TbNshFBm47-oVM3ZUrBz57JKtr0e9jv0HjPQWyvbzx1HuxZd6eA8ow8xzvooKXFxoSFCMnxotd3wagvYQ9ysBa89bgzL-lhjWtusuMFDUVYwFqADE7oOSOD4Vtclgq8svznBQ-YpfTHfb9QEcofMlpyjNA" http://127.0.0.1:8080/secured/roles-allowed; echo
+----
+
+.curl Command for /secured/roles-allowed With JWT
+[source,shell]
+----
+$ curl -H "Authorization: Bearer eyJraWQ..." http://127.0.0.1:8080/secured/roles-allowed; echo
+hello + jdoe@quarkus.io, isSecure: false, authScheme: MP-JWT, hasJWT: true
+----
+
+Success! We now have:
+
+* a non-anonymous caller name of jdoe@quarkus.io
+* an authentication scheme of Bearer
+* a non-null JsonWebToken
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

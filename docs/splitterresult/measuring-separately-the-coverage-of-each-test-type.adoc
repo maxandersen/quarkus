@@ -1,0 +1,72 @@
+ifdef::context[:parent-context: {context}]
+[id="measuring-separately-the-coverage-of-each-test-type_{context}"]
+= Measuring separately the coverage of each test type
+:context: measuring-separately-the-coverage-of-each-test-type
+
+It is not strictly necessary, but let's distinguish the coverage brought by each test type. To do so, we`ll just output the coverage info in two different files, one in `jacoco-ut.exec` and one in `jacoco-it.exec`.
+We also need to generate a separate report for each test execution. Let's adjust the Jacoco configuration for that:
+
+[source,xml,subs="attributes+"]
+----
+    <properties>
+    ...
+        <jacoco.version>0.8.4</jacoco.version>
+    </properties>
+
+    <build>
+        <plugins>
+        ...
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent-ut</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco-ut.exec</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>prepare-agent-it</id>
+                        <phase>pre-integration-test</phase>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco-it.exec</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report-ut</id>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco-ut.exec</dataFile>
+                            <outputDirectory>${project.reporting.outputDirectory}/jacoco-ut</outputDirectory>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>report-it</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco-it.exec</dataFile>
+                            <outputDirectory>${project.reporting.outputDirectory}/jacoco-it</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

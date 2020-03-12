@@ -1,0 +1,19 @@
+[id="named-mongo-client-injection_{context}"]
+= Named Mongo client Injection
+
+When using multiple clients, each `MongoClient`, you can select the client to inject using the `io.quarkus.mongodb.runtime.MongoClientName` qualifier.
+Using the above properties to configure three different clients, you can also inject each one as follows:
+
+[source,java,indent="0"]
+----
+@Inject
+MongoClient defaultMongoClient;
+
+@Inject
+@MongoClientName("users")
+MongoClient mongoClient1;
+
+@Inject
+@MongoClientName("inventory")
+ReactiveMongoClient mongoClient2;
+----

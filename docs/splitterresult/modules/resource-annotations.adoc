@@ -1,0 +1,19 @@
+[id="resource-annotations_{context}"]
+= Resource Annotations
+
+`ResourceAnnotationBuildItem` is used to specify resource annotations  that make it possible to resolve non-CDI injection points, such as Java EE resources.
+
+[NOTE,textlabel="Note",name="note"]
+====
+An integrator must also provide a corresponding `io.quarkus.arc.ResourceReferenceProvider` implementation.
+====
+
+[source,java]
+----
+@BuildStep
+void setupResourceInjection(BuildProducer<ResourceAnnotationBuildItem> resourceAnnotations, BuildProducer<GeneratedResourceBuildItem> resources) {
+    resources.produce(new GeneratedResourceBuildItem("META-INF/services/io.quarkus.arc.ResourceReferenceProvider",
+        JPAResourceReferenceProvider.class.getName().getBytes()));
+    resourceAnnotations.produce(new ResourceAnnotationBuildItem(DotName.createSimple(PersistenceContext.class.getName())));
+}
+----

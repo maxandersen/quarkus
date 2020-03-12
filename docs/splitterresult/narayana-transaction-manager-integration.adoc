@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="narayana-transaction-manager-integration_{context}"]
+= Narayana Transaction Manager integration
+:context: narayana-transaction-manager-integration
+
+If the Narayana JTA extension is also available, integration is automatic.
+
+You can override this by setting the `transactions` configuration property - see the <<configuration-reference, Configuration Reference>> below.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

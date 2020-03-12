@@ -1,0 +1,23 @@
+ifdef::context[:parent-context: {context}]
+[id="get-it-running_{context}"]
+= Get it running
+:context: get-it-running
+
+If you followed the instructions, you should have the AMQP broker running.
+Then, you just need to run the application using:
+
+[source,shell]
+----
+./mvnw quarkus:dev
+----
+
+Open `http://localhost:8080/prices.html` in your browser.
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you started the AMQP broker with docker compose, stop it using `CTRL+C` followed by `docker-compose down`.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

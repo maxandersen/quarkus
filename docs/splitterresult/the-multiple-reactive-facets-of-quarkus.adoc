@@ -1,0 +1,32 @@
+ifdef::context[:parent-context: {context}]
+[id="the-multiple-reactive-facets-of-quarkus_{context}"]
+= The multiple reactive facets of Quarkus
+:context: the-multiple-reactive-facets-of-quarkus
+
+Quarkus is reactive.
+If you look under the hood, you will find a reactive engine powering your Quarkus application.
+This engine is Eclipse Vert.x (https://vertx.io).
+Every IO interaction passes through the non-blocking and reactive Vert.x engine.
+
+image:quarkus-reactive-stack.png[alt=Quarkus is based on a reactive engine, 50%]
+
+Let's take 2 examples to explain how it works.
+Imagine an incoming HTTP request.
+The (Vert.x) HTTP server receives the request and then routes it to the application.
+If the request targets a JAX-RS resource, the routing layer invokes the resource method in a worker thread and writes the response when the data is available.
+So far, nothing new or outstanding.
+The following picture depicts this behavior.
+
+image:http-blocking-sequence.png[alt=Behavior when using the imperative routes, 50%]
+
+But if the HTTP request targets a reactive (non-blocking) route, the routing layer invokes the route on the IO thread giving lots of benefits such as higher concurrency and performance:
+
+image:http-reactive-sequence.png[alt=Behavior when using the reactive routes, 50%]
+
+As a consequence, many Quarkus components are designed with reactive in mind, such as database access (PostgreSQL, MySQL, Mongo, etc.), application services (mail, template engine, etc.), messaging (Kafka, AMQP, etc.) and so on.
+But, to fully benefit from this model, the application code should be written in a non-blocking manner.
+That’s where having a reactive API is an ultimate weapon.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

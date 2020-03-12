@@ -1,0 +1,25 @@
+[id="caffeine-configuration-properties_{context}"]
+= Caffeine configuration properties
+
+Each of the Caffeine caches backing up the Quarkus application data caching extension can be configured using the following
+properties in the `application.properties` file.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You need to replace `cache-name` in all of the following properties with the real name of the cache you want to configure.
+====
+
+link:{generated-dir}/config/quarkus-cache-config-group-cache-config-caffeine-config.adoc[]
+
+Here's what your cache configuration could look like:
+
+[source,properties]
+----
+quarkus.cache.caffeine."foo".initial-capacity=10 <1>
+quarkus.cache.caffeine."foo".maximum-size=20
+quarkus.cache.caffeine."foo".expire-after-write=60S
+quarkus.cache.caffeine."bar".maximum-size=1000 <2>
+----
+[arabic]
+<1> The `foo` cache is being configured.
+<2> The `bar` cache is being configured.

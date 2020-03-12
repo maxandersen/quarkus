@@ -1,0 +1,18 @@
+ifdef::context[:parent-context: {context}]
+[id="recommended-tooling_{context}"]
+= Recommended tooling
+:context: recommended-tooling
+
+_Mandatory:_
+
+* https://adoptopenjdk.net/[Java - OpenJDK 1.8+]
+* https://maven.apache.org/install.html[Maven 3.5+]
+
+_Recommended:_
+
+* https://docs.docker.com/install/[Docker]
+* http://www.graalvm.org/docs/getting-started/[GraalVM {graalvm-version}]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

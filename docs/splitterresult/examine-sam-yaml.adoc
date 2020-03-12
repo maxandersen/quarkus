@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="examine-sam-yaml_{context}"]
+= Examine sam.yaml
+:context: examine-sam-yaml
+
+The `sam.yaml` syntax is beyond the scope of this document.  There's a couple of things to note though that are particular
+to the `quarkus-amazon-lambda-http` extension.
+
+Amazon's API Gateway assumes that HTTP response bodies are text unless you explicitly tell it which media types are
+binary through configuration.  To make things easier, the Quarkus extension forces a binary (base 64) encoding of all
+HTTP response messages and the `sam.yaml` file must configure the API Gateway to assume all media types are binary:
+
+[source,subs="attributes+"]
+----
+  Globals:
+    Api:
+      EndpointConfiguration: REGIONAL
+      BinaryMediaTypes:
+        - "*/*"
+----
+
+Another thing to note is that for pure Java lambda deployments, do not change the Lambda handler name.
+
+[source,subs="attributes+"]
+----
+     Properties:
+        Handler: io.quarkus.amazon.lambda.runtime.QuarkusStreamHandler::handleRequest
+        Runtime: java8
+----
+
+This particular handler handles all the intricacies of integrating with the Quarkus runtime.  So you must use that
+handler.
+
+Finally, there's an environment variable that must be set for native GraalVM deployments.  If you look at `sam.native.yaml`
+you'll see this:
+
+[source,subs="attributes+"]
+----
+        Environment:
+          Variables:
+            DISABLE_SIGNAL_HANDLERS: true
+----
+
+This environment variable resolves some incompatibilities between Quarkus and the Amazon Lambda Custom Runtime environment.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

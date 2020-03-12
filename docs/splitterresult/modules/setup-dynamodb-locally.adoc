@@ -1,0 +1,34 @@
+[id="setup-dynamodb-locally_{context}"]
+= Setup DynamoDB locally
+
+The easiest way to start working with DynamoDB is to run a local instance as a container.
+
+[source,shell,subs="verbatim,attributes"]
+----
+docker run --publish 8000:8000 amazon/dynamodb-local:1.11.477 -jar DynamoDBLocal.jar -inMemory -sharedDb
+----
+
+This starts a DynamoDB instance that is accessible on port `8000`.
+You can check it's running by accessing the web shell on `http://localhost:8000/shell`.
+
+Have a look at the https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html[Setting Up DynamoDB Local guide] for other options to run DynamoDB.
+
+Open `http://localhost:8000/shell` in your browser.
+
+Copy and paste the following code to the shell and run it:
+
+[source,js,subs="verbatim,attributes"]
+----
+var params = {
+    TableName: 'QuarkusFruits',
+    KeySchema: [{ AttributeName: 'fruitName', KeyType: 'HASH' }],
+    AttributeDefinitions: [{  AttributeName: 'fruitName', AttributeType: 'S', }],
+    ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1, }
+};
+
+dynamodb.createTable(params, function(err, data) {
+    if (err) ppJson(err);
+    else ppJson(data);
+
+});
+----

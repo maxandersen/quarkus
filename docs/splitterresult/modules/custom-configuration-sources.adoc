@@ -1,0 +1,8 @@
+[id="custom-configuration-sources_{context}"]
+= Custom configuration sources
+
+You can also introduce custom configuration sources in the standard MicroProfile Config manner.  To
+do this, you must provide a class which implements either `org.eclipse.microprofile.config.spi.ConfigSource`
+or `org.eclipse.microprofile.config.spi.ConfigSourceProvider`.  Create a
+https://docs.oracle.com/javase/8/docs/api/java/util/ServiceLoader.html[service file] for the
+class and it will be detected and installed at application startup.

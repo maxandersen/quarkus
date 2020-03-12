@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="set-the-termination-time_{context}"]
+= Set the termination time
+:context: set-the-termination-time
+
+Without a termination setting or a termination event, the solver runs forever.
+To avoid that, limit the solving time to five seconds.
+That is short enough to avoid the HTTP timeout.
+
+Create the `src/main/resources/application.properties` file:
+
+[source,properties]
+----
+# The solver runs only for 5 seconds to avoid a HTTP timeout in this simple implementation.
+# It's recommended to run for at least 5 minutes ("5m") otherwise.
+quarkus.optaplanner.solver.termination.spent-limit=5s
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

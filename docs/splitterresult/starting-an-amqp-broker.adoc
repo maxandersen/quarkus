@@ -1,0 +1,37 @@
+ifdef::context[:parent-context: {context}]
+[id="starting-an-amqp-broker_{context}"]
+= Starting an AMQP broker
+:context: starting-an-amqp-broker
+
+Then, we need an AMQP broker.
+You can follow the instructions from the https://activemq.apache.org/components/artemis/[Apache Artemis web site] or create a `docker-compose.yaml` file with the following content:
+
+[source,yaml]
+----
+# A docker compose file to start an Artemis AMQP broker
+# more details on https://github.com/vromero/activemq-artemis-docker.
+version: '2'
+
+services:
+
+  artemis:
+    image: vromero/activemq-artemis:2.8.0-alpine
+    ports:
+      - "8161:8161"
+      - "61616:61616"
+      - "5672:5672"
+    environment:
+      ARTEMIS_USERNAME: quarkus
+      ARTEMIS_PASSWORD: quarkus
+----
+
+Once created, run `docker-compose up`.
+
+[NOTE,textlabel="Note",name="note"]
+====
+This is a development cluster, do not use in production.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

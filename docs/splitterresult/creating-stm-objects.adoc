@@ -1,0 +1,42 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-stm-objects_{context}"]
+= Creating STM objects
+:context: creating-stm-objects
+
+The STM subsystem needs to be told about which objects it should be managing. The Quarkus (aka Narayana) STM implementation
+does this by providing containers of transactional memory within which these object instances reside. Until an object
+is placed within one of these STM containers it cannot be managed within transactions and any state changes will
+not possess the A, C, I (or even D) properties.
+
+Note, the term "container" was defined within the STM implementation years before Linux containers came along. It may
+be confusing to use especially in a Kubernetes native environment such as Quarkus, but hopefully
+the reader can do the mental mapping.
+
+The default STM container (`org.jboss.stm.Container`) provides support for volatile objects that can only be shared between
+threads in the same microservice/JVM instance. When a STM-aware object is placed into the container it returns a handle
+through which that object should then be used in the future. It is important to use this handle as continuing to access
+the object through the original reference will not allow the STM subsystem to track access and manage state and
+concurrency control.
+
+[source,java]
+----
+    import org.jboss.stm.Container;
+
+    ...
+
+    Container<FlightService> container = new Container<>(); <1>
+    FlightServiceImpl instance = new FlightServiceImpl(); <2>
+    FlightService flightServiceProxy = container.create(instance); <3>
+----
+
+[arabic]
+<1> You need to tell each Container about the type of objects for which it will be responsible. In this example
+it will be instances that implement the FlightService interface.
+<2> Then you create an instance that implements `FlightService`. You should not use it directly at this stage because
+access to it is not being managed by the STM subsystem.
+<3> To obtain a managed instance, pass the original object to the STM `container` which then returns a reference
+through which you will be able perform transactional operations. This reference can be used safely from multiple threads.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

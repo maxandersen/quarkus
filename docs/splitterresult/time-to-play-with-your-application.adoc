@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="time-to-play-with-your-application_{context}"]
+= Time to play with your application
+:context: time-to-play-with-your-application
+
+You can now interact with your REST service:
+
+* start Quarkus with `./mvnw compile quarkus:dev`
+* open a browser to `http://localhost:8080/`
+* search for authors or book titles (we initialized some data for you)
+* create new authors and books and search for them too
+
+As you can see, all your updates are automatically synchronized to the Elasticsearch cluster.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

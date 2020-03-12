@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="build-tool_{context}"]
+= Choosing your build tool
+:context: build-tool
+
+Quarkus comes with a toolchain to help you at all development stages.
+You can use Maven or Gradle as build tool.
+And we offer a native CLI that is convenient to use (coming soon).
+
+* link:maven-tooling[Maven]
+* link:gradle-tooling[Gradle]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

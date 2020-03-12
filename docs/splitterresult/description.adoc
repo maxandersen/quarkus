@@ -1,0 +1,19 @@
+ifdef::context[:parent-context: {context}]
+[id="description_{context}"]
+= Description
+:context: description
+
+Sentry is a really easy way to be notified of errors happening in your Quarkus application.
+
+It is a self-hosted and cloud-based error monitoring that helps software teams discover, triage, and prioritize errors in real-time.
+
+They offer a free starter price for cloud-based or you can self host it for free.
+
+[WARNING,textlabel="Warning",name="warning"]
+====
+Sentry's Java SDK is open source, but recently sentry.io https://blog.sentry.io/2019/11/06/relicensing-sentry[changed the license] for their backend to the non-open source https://github.com/getsentry/sentry/blob/master/LICENSE[BSL license]. This might or might not be an issue for your project and product.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

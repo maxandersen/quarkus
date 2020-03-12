@@ -1,0 +1,19 @@
+ifdef::context[:parent-context: {context}]
+[id="injecting-a-datasource_{context}"]
+= Injecting a Datasource
+:context: injecting-a-datasource
+
+Because Quarkus uses CDI, injecting a datasource is very simple:
+
+[source,java,indent="0"]
+----
+@Inject
+AgroalDataSource defaultDataSource;
+----
+
+In the above example, the type is `AgroalDataSource` which is a subtype of `javax.sql.DataSource`.
+Because of this, you can also use `javax.sql.DataSource`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,14 @@
+[id="cacheinvalidate_{context}"]
+= @CacheInvalidate
+
+Removes an entry from the cache.
+
+When a method annotated with `@CacheInvalidate` is invoked, Quarkus will compute a cache key and use it to try to remove an existing entry from the cache.
+If the method has one or more arguments, the key computation is done from all the method arguments if none of them is annotated with `@CacheKey`, or all the arguments annotated with `@CacheKey` otherwise.
+This annotation can also be used on a method with no arguments, a default key derived from the cache name is generated in that case.
+If the key does not identify any cache entry, nothing will happen.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+If the `@CacheResult` or `@CacheInvalidate` annotations are used on a method with no parameters, a unique default cache key derived from the cache name will be generated and used.
+====

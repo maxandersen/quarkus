@@ -1,0 +1,24 @@
+[id="managing-proxy-classes-2_{context}"]
+= Managing Proxy Classes
+
+Very similarly, Quarkus allows extensions authors to register a `NativeImageProxyDefinitionBuildItem`. An example of doing so is:
+
+[source,java]
+----
+public class S3Processor {
+
+    @BuildStep
+    NativeImageProxyDefinitionBuildItem httpProxies() {
+        return new NativeImageProxyDefinitionBuildItem("org.apache.http.conn.HttpClientConnectionManager",
+                "org.apache.http.pool.ConnPoolControl", "com.amazonaws.http.conn.Wrapped");
+    }
+
+}
+----
+
+Using such a construct means that a `-H:DynamicProxyConfigurationResources` option will automatically be added to the `native-image` command line.
+
+[NOTE,textlabel="Note",name="note"]
+====
+For more information about Proxy Classes you can read https://github.com/oracle/graal/blob/master/substratevm/DYNAMIC_PROXY.md[the GraalVM documentation].
+====

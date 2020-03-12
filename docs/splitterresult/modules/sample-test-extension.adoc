@@ -1,0 +1,49 @@
+[id="sample-test-extension_{context}"]
+= Sample Test Extension
+
+We have an extension that is used to test for regressions in the extension processing. It is located in {quarkus-tree-url}/core/test-extension directory. In this section we touch on some of the tasks an extension
+author will typically need to perform using the test-extension code to illustrate how the task could be done.
+
+[id="features-and-capabilities_{context}"]
+== Features and Capabilities
+:context: features-and-capabilities
+
+[id="bean-defining-annotations_{context}"]
+== Bean Defining Annotations
+:context: bean-defining-annotations
+
+[id="parsing-config-to-objects_{context}"]
+== Parsing Config to Objects
+:context: parsing-config-to-objects
+
+[id="scanning-deployments-using-jandex_{context}"]
+== Scanning Deployments Using Jandex
+:context: scanning-deployments-using-jandex
+
+[id="interacting-with-extension-beans_{context}"]
+== Interacting With Extension Beans
+:context: interacting-with-extension-beans
+
+[id="manage-non-cdi-service_{context}"]
+== Manage Non-CDI Service
+:context: manage-non-cdi-service
+
+[id="startup-and-shutdown-events_{context}"]
+== Startup and Shutdown Events
+:context: startup-and-shutdown-events
+
+[id="register-resources-for-use-in-native-image_{context}"]
+== Register Resources for Use in Native Image
+:context: register-resources-for-use-in-native-image
+
+[id="service-files_{context}"]
+== Service files
+:context: service-files
+
+[id="object-substitution_{context}"]
+== Object Substitution
+:context: object-substitution
+
+[id="replacing-classes-in-the-native-image_{context}"]
+== Replacing Classes in the Native Image
+:context: replacing-classes-in-the-native-image

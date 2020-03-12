@@ -1,0 +1,43 @@
+ifdef::context[:parent-context: {context}]
+[id="scratch-pad_{context}"]
+= Scratch pad
+:context: scratch-pad
+
+Quarkus believes in developer Joy.
+
+It unifies imperative and reactive.
+It is a Microservice first toolkit.
+
+Standards based
+Quarkus brings all the standards and frameworks you love and use: RESTEasy, Hibernate, Netty, vert.x, Camel...)
+
+Imperative and Reactive
+
+* ahead-of-time native binary (executable binary)
+* Cloud Native
+* Java
+* modular
+* Substrate VM native
+
+Seamlessly build container optimal
+
+Container affinity
+
+Container optimal
+
+* low memory
+* low startup time
+* ahead of time optimal
+
+Unifying Imperative and Reactive under one framework.
+
+Usability
+* easy to use
+* productive environment
+* hot reload
+
+Standards based
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

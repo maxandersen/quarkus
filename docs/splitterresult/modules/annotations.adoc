@@ -1,0 +1,25 @@
+[id="annotations_{context}"]
+= Annotations
+
+The table below summarizes the supported annotations:
+
+.Supported Spring Web annotation
+[table,tablepcwidth="100",rowcount="17",header-option="",colcount="2"]
+|===
+| @RestController | 
+| @RequestMapping | 
+| @GetMapping | 
+| @PostMapping | 
+| @PutMapping | 
+| @DeleteMapping | 
+| @PatchMapping | 
+| @RequestParam | 
+| @RequestHeader | 
+| @MatrixVariable | 
+| @PathVariable | 
+| @CookieValue | 
+| @RequestBody | 
+| @ResponseStatus | 
+| @ExceptionHandler | Can only be used in a @RestControllerAdvice class, not on a per-controller basis
+| @RestControllerAdvice | Only the @ExceptionHandler capability is supported
+|===

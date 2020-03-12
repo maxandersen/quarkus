@@ -1,0 +1,39 @@
+ifdef::context[:parent-context: {context}]
+[id="running-natively_{context}"]
+= Running Natively
+:context: running-natively
+
+The Quarkus extension for Kafka Streams enables the execution of stream processing applications
+natively via GraalVM without further configuration.
+
+To run both the `producer` and `aggregator` applications in native mode,
+the Maven builds can be executed using the `native` profile:
+
+[source,shell]
+----
+./mvnw clean package -f producer/pom.xml -Pnative -Dnative-image.container-runtime=docker
+./mvnw clean package -f aggregator/pom.xml -Pnative -Dnative-image.container-runtime=docker
+----
+
+Now create an environment variable named `QUARKUS_MODE` and with value set to "native":
+
+[source,shell]
+----
+export QUARKUS_MODE=native
+----
+
+This is used by the Docker Compose file to use the correct `Dockerfile` when building the `producer` and `aggregator` images.
+The Kafka Streams application can work with less than 50 MB RSS in native mode.
+To do so, add the `Xmx` option to the program invocation in `aggregator/src/main/docker/Dockerfile.native`:
+
+[source,shell]
+----
+CMD ["./application", "-Dquarkus.http.host=0.0.0.0", "-Xmx32m"]
+----
+
+Now start Docker Compose as described above
+(don't forget to rebuild the container images).
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

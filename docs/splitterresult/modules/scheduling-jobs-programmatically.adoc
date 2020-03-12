@@ -1,0 +1,56 @@
+[id="scheduling-jobs-programmatically_{context}"]
+= Scheduling Jobs Programmatically
+
+It is also possible to leverage the Quartz API directly.
+You can inject the underlying `org.quartz.Scheduler` in any bean:
+
+[source,java]
+----
+package org.acme.quartz;
+
+@ApplicationScoped
+public class TaskBean {
+
+    @Inject
+    org.quartz.Scheduler quartz; <1>
+
+    void onStart(@Observes StartupEvent event) {
+       JobDetail job = JobBuilder.newJob(MyJob.class)
+                         .withIdentity("myJob", "myGroup")
+                         .build();
+       Trigger trigger = TriggerBuilder.newTrigger()
+                            .withIdentity("myTrigger", "myGroup")
+                            .startNow()
+                            .withSchedule(
+                               SimpleScheduleBuilder.simpleSchedule()
+                                  .withIntervalInSeconds(10)
+                                  .repeatForever())
+                            .build();
+       quartz.scheduleJob(job, trigger); <2>
+    }
+
+    @Transactional
+    void performTask() {
+        Task task = new Task();
+        task.persist();
+    }
+
+    // A new instance of MyJob is created by Quartz for every job execution
+    static class MyJob implements Job {
+
+       public void execute(JobExecutionContext context) throws JobExecutionException {
+          Arc.container().instance(TaskBean.class).get(). performTask(); <3>
+       }
+
+    }
+}
+----
+[arabic]
+. Inject the underlying `org.quartz.Scheduler` instance.
+. Schedule a new job using the Quartz API.
+. Lookup the bean instance of `TaskBean` and invoke the `performTask()` method from the job.
+
+[NOTE,textlabel="Note",name="note"]
+====
+By default, the scheduler is not started unless a `@Scheduled` business method is found. You may need to force the start of the scheduler for "pure" programmatic scheduling. See also <<quartz-configuration-reference>>.
+====

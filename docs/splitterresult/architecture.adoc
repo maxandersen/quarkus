@@ -1,0 +1,29 @@
+ifdef::context[:parent-context: {context}]
+[id="architecture_{context}"]
+= Architecture
+:context: architecture
+
+In this guide, we are going to generate (random) temperature values in one component (named `generator`).
+These values are associated to given weather stations and are written in a Kafka topic (`temperature-values`).
+Another topic (`weather-stations`) contains just the master data about the weather stations themselves (id and name).
+
+A second component (`aggregator`) reads from the two Kafka topics and processes them in a streaming pipeline:
+
+* the two topics are joined on weather station id
+* per weather station the min, max and average temperature is determined
+* this aggregated data is written out to a third topic (`temperatures-aggregated`)
+
+The data can be examined by inspecting the output topic.
+By exposing a Kafka Streams https://kafka.apache.org/22/documentation/streams/developer-guide/interactive-queries.html[interactive query],
+the latest result for each weather station can alternatively be obtained via a simple REST query.
+
+The overall architecture looks like so:
+
+[imagesdir="null",alt="Architecture",target="kafka-streams-guide-architecture.png"]
+image::
+
+image::
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

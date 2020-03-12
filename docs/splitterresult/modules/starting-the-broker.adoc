@@ -1,0 +1,10 @@
+[id="starting-the-broker_{context}"]
+= Starting the broker
+
+Then, we need an AMQP broker. In this case we will use an ActiveMQ Artemis server.
+You can follow the instructions from the https://activemq.apache.org/components/artemis/[Apache Artemis web site] or start a broker via docker:
+
+[source]
+----
+docker run -it --rm -p 8161:8161 -p 61616:61616 -p 5672:5672 -e ARTEMIS_USERNAME=quarkus -e ARTEMIS_PASSWORD=quarkus vromero/activemq-artemis:2.11.0-alpine
+----

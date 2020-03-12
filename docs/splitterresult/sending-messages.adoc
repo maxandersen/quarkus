@@ -1,0 +1,64 @@
+ifdef::context[:parent-context: {context}]
+[id="sending-messages_{context}"]
+= Sending messages
+:context: sending-messages
+
+Ok, we have seen how to receive messages, let's now switch to the _other side_: the sender.
+Sending and publishing messages use the Vert.x event bus:
+
+[source,java]
+----
+package org.acme.vertx;
+
+import io.smallrye.mutiny.Uni;
+import io.vertx.mutiny.core.eventbus.EventBus;
+import io.vertx.mutiny.core.eventbus.Message;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/async")
+public class EventResource {
+
+    @Inject
+    EventBus bus;                                       // <1>
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("{name}")
+    public Uni<String> greeting(@PathParam String name) {
+        return bus.<String>request("greeting", name)        // <2>
+                .onItem().apply(Message::body);
+    }
+}
+----
+
+[arabic]
+<1> Inject the Event bus
+<2> Send a message to the address `greeting`. Message payload is `name`
+
+The `EventBus` object provides methods to:
+
+[arabic]
+. `send` a message to a specific address - one single consumer receives the message.
+. `publish` a message to a specific address - all consumers receive the messages.
+. `send` a message and expect reply
+
+[source,java]
+----
+// Case 1
+bus.sendAndForget("greeting", name)
+// Case 2
+bus.publish("greeting", name)
+// Case 3
+Uni<String> response = bus.<String>request("address", "hello, how are you?")
+        .onItem().apply(Message::body);
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

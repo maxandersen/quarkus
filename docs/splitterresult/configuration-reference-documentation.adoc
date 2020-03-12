@@ -1,0 +1,24 @@
+ifdef::context[:parent-context: {context}]
+[id="configuration-reference-documentation_{context}"]
+= Configuration reference documentation
+:context: configuration-reference-documentation
+
+The configuration is an important part of each extension and therefore needs to be properly documented.
+Each configuration property should have a proper Javadoc comment.
+
+While it is handy to have the documentation available when coding, this configuration documentation must also be available in the extension guides.
+The Quarkus build automatically generates the configuration documentation for you based on the Javadoc comments but you need to explicitly include it in your guide.
+
+In this section, we will explain everything you need to know about the configuration reference documentation.
+
+include::modules/writing-the-documentation.adoc[leveloffset=+1]
+
+include::modules/writing-section-documentation.adoc[leveloffset=+1]
+
+include::modules/generating-the-documentation.adoc[leveloffset=+1]
+
+include::modules/including-the-documentation-in-the-extension-guide.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

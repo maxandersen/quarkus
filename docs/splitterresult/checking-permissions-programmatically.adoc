@@ -1,0 +1,34 @@
+ifdef::context[:parent-context: {context}]
+[id="checking-permissions-programmatically_{context}"]
+= Checking Permissions Programmatically
+:context: checking-permissions-programmatically
+
+In some cases, you may want to programmatically check whether or not a request is granted to access a protected resource. By
+injecting a `SecurityIdentity` instance in your beans, you are allowed to check permissions as follows:
+
+[source,java]
+----
+@Path("/api/protected")
+public class ProtectedResource {
+
+    @Inject
+    SecurityIdentity identity;
+
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    public CompletionStage<List<Permission>> get() {
+        return identity.checkPermission(new AuthPermission("{resource_name}"))
+                .thenCompose(granted -> {
+                    if (granted) {
+                        return CompletableFuture.completedFuture(doGetState());
+                    }
+                    throw new ForbiddenException();
+                });
+    }
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,19 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-extensions_{context}"]
+= Adding extension(s)
+:context: adding-extensions
+
+The Quarkus CLI can add Quarkus extensions to your project with the 'add-extension'
+command:
+
+[source,shell]
+----
+$ quarkus add-extension --extension=hibernate-validator /path/to/my/project
+----
+
+The argument path either needs to be the base folder for the project or a direct path to the
+build file.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

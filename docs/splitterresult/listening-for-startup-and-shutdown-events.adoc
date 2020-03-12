@@ -1,0 +1,56 @@
+ifdef::context[:parent-context: {context}]
+[id="listening-for-startup-and-shutdown-events_{context}"]
+= Listening for startup and shutdown events
+:context: listening-for-startup-and-shutdown-events
+
+Create a new class named `AppLifecycleBean` (or pick another name) in the `org.acme.lifecycle` package, and copy the
+following content:
+
+[source,java]
+----
+package org.acme.lifecycle;
+
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.event.Observes;
+
+import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
+import org.jboss.logging.Logger;
+
+@ApplicationScoped
+public class AppLifecycleBean {
+
+    private static final Logger LOGGER = Logger.getLogger("ListenerBean");
+
+    void onStart(@Observes StartupEvent ev) {               // <1>
+        LOGGER.info("The application is starting...");
+    }
+
+    void onStop(@Observes ShutdownEvent ev) {               // <2>
+        LOGGER.info("The application is stopping...");
+    }
+
+}
+----
+
+[arabic]
+. Method called when the application is starting
+. Method called when the application is terminating
+
+[TIP,textlabel="Tip",name="tip"]
+====
+The events are also called in _dev mode_ between each redeployment.
+====
+
+[NOTE,textlabel="Note",name="note"]
+====
+The methods can access injected beans. Check the {quickstarts-blob-url}/lifecycle-quickstart/src/main/java/org/acme/lifecycle/AppLifecycleBean.java[AppLifecycleBean.java] class for details.
+====
+
+include::modules/what-is-the-difference-from-initializedapplicationscoped-class-and-destroyedapplicationscoped-class.adoc[leveloffset=+1]
+
+include::modules/using-startup-to-initialize-a-cdi-bean-at-application-startup.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

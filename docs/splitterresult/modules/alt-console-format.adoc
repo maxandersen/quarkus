@@ -1,0 +1,10 @@
+[id="alt-console-format_{context}"]
+= Alternative Console Logging Formats
+
+It is possible to change the output format of the console log. This can be useful in environments where the output
+of the Quarkus application is captured by a service which can, for example, process and store the log information for
+later analysis.
+
+[id="json-logging_{context}" id="json-logging"]
+== JSON Logging
+:context: json-logging

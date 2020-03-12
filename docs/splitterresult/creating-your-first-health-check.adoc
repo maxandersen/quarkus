@@ -1,0 +1,53 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-your-first-health-check_{context}"]
+= Creating your first health check
+:context: creating-your-first-health-check
+
+In this section, we create our first simple health check procedure.
+
+Create the `org.acme.microprofile.health.SimpleHealthCheck` class:
+
+[source,java]
+----
+package org.acme.microprofile.health;
+
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.Liveness;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@Liveness
+@ApplicationScoped
+public class SimpleHealthCheck implements HealthCheck {
+
+    @Override
+    public HealthCheckResponse call() {
+        return HealthCheckResponse.up("Simple health check");
+    }
+}
+----
+
+As you can see health check procedures are defined as implementations of the
+`HealthCheck` interface which are defined as CDI beans with the one of the
+following CDI qualifiers:
+
+- `@Liveness` - the liveness check accessible at `/health/live`
+- `@Readiness` - the readiness check accessible at `/health/ready`
+
+`HealthCheck` is a functional interface whose single method `call` returns a
+`HealthCheckResponse` object which can be easily constructed by the fluent builder
+API shown in the example.
+
+As we have started our Quarkus application in dev mode simply repeat the request
+to `http://localhost:8080/health/live` by refreshing your browser window or by
+using `curl http://localhost:8080/health/live`. Because we defined our health check
+to be a liveness procedure (with `@Liveness` qualifier) the new health check procedure
+is now present in the `checks` array.
+
+Congratulations! You've created your first Quarkus health check procedure. Let's
+continue by exploring what else can be done with the MicroProfile Health specification.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,48 @@
+[id="serializing-via-jackson_{context}"]
+= Serializing via Jackson
+
+First, you need to include the `quarkus-resteasy-jackson` extension (if you already use the `quarkus-jackson-jsonb` extension, this is not needed).
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-resteasy-jackson</artifactId>
+</dependency>
+----
+
+There is an existing `ObjectMapperSerializer` that can be used to serialize all pojos via Jackson,
+but the corresponding deserializer is generic, so it needs to be subclassed.
+
+So, let's create a `FruitDeserializer` that extends the `ObjectMapperDeserializer`.
+
+[source,java]
+----
+package com.acme.fruit.jackson;
+
+import io.quarkus.kafka.client.serialization.ObjectMapperDeserializer;
+
+public class FruitDeserializer extends ObjectMapperDeserializer<Fruit> {
+    public FruitDeserializer(){
+        // pass the class to the parent.
+        super(Fruit.class);
+    }
+}
+----
+
+Finally, configure your streams to use the Jackson serializer and deserializer.
+
+[source,properties]
+----
+# Configure the Kafka source (we read from it)
+mp.messaging.incoming.fruit-in.connector=smallrye-kafka
+mp.messaging.incoming.fruit-in.topic=fruit-in
+mp.messaging.incoming.fruit-in.value.deserializer=com.acme.fruit.jackson.FruitDeserializer
+
+# Configure the Kafka sink (we write to it)
+mp.messaging.outgoing.fruit-out.connector=smallrye-kafka
+mp.messaging.outgoing.fruit-out.topic=fruit-out
+mp.messaging.outgoing.fruit-out.value.serializer=io.quarkus.kafka.client.serialization.ObjectMapperSerializer
+----
+
+Now, your Kafka messages will contain a Jackson serialized representation of your Fruit pojo.

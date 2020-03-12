@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-quartz-tables_{context}"]
+= Creating Quartz Tables
+:context: creating-quartz-tables
+
+Add a SQL migration file named `src/main/resources/db/migration/V2.0.0__QuarkusQuartzTasks.sql` with the content copied from
+file with the content from {quickstarts-blob-url}/quartz-quickstart/src/main/resources/db/migration/V2.0.0__QuarkusQuartzTasks.sql[V2.0.0__QuarkusQuartzTasks.sql].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

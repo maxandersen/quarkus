@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="using-ssl-with-native-executables_{context}"]
+= Using SSL with native executables
+:context: using-ssl-with-native-executables
+
+Note that if you enable SSL for the mailer and you want to build a native executable, you will need to enable the SSL support.
+Please refer to the link:native-and-ssl[Using SSL With Native Executables] guide for more information.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

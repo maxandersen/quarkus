@@ -1,0 +1,77 @@
+ifdef::context[:parent-context: {context}]
+[id="hello-world-with-jax-rs_{context}"]
+= Hello World with JAX-RS
+:context: hello-world-with-jax-rs
+
+If you want to use Qute in your JAX-RS application, you need to add the `quarkus-qute-resteasy` extension first.
+In your `pom.xml` file, add:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-resteasy-qute</artifactId>
+</dependency>
+----
+
+We'll start with a very simple template:
+
+.hello.txt
+[source]
+----
+Hello {name}! <1>
+----
+
+[arabic]
+<1> `{name}` is a value expression that is evaluated when the template is rendered.
+
+[NOTE,textlabel="Note",name="note"]
+====
+By default, all files located in the `src/main/resources/templates` directory and its subdirectories are registered as templates. Templates are validated during startup and watched for changes in the development mode.
+====
+
+Now let's inject the "compiled" template in the resource class.
+
+.HelloResource.java
+[source,java]
+----
+package org.acme.quarkus.sample;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.QueryParam;
+
+import io.quarkus.qute.TemplateInstance;
+import io.quarkus.qute.Template;
+
+@Path("hello")
+public class HelloResource {
+
+    @Inject
+    Template hello; <1>
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public TemplateInstance get(@QueryParam("name") String name) {
+        return hello.data("name", name); <2> <3>
+    }
+}
+----
+
+[arabic]
+<1> If there is no `@ResourcePath` qualifier provided, the field name is used to locate the template. In this particular case, we're injecting a template with path `templates/hello.txt`.
+<2> `Template.data()` returns a new template instance that can be customized before the actual rendering is triggered. In this case, we put the name value under the key `name`. The data map is accessible during rendering.
+<3> Note that we don't trigger the rendering - this is done automatically by a special `ContainerResponseFilter` implementation.
+
+If your application is running, you can request the endpoint:
+
+[source,shell]
+----
+$ curl -w "\n" http://localhost:8080/hello?name=Martin
+Hello Martin!
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

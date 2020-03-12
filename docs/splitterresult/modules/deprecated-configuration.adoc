@@ -1,0 +1,16 @@
+[id="deprecated-configuration_{context}"]
+= Deprecated configuration
+
+The following categories of configuration properties have been deprecated.
+
+[id="properties-without-the-quarkus-prefix_{context}"]
+== Properties without the quarkus prefix
+:context: properties-without-the-quarkus-prefix
+
+[id="docker-and-s2i-properties_{context}"]
+== Docker and S2i properties
+:context: docker-and-s2i-properties
+
+[id="config-group-arrays_{context}"]
+== Config group arrays
+:context: config-group-arrays

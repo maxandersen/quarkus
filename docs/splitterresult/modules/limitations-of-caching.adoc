@@ -1,0 +1,18 @@
+[id="limitations-of-caching_{context}"]
+= Limitations of Caching
+
+The caching technology provided within Quarkus is currently quite rudimentary and limited.
+
+The team thought it was better to have _some_ caching capability to start with, than having nothing; you can expect better caching solution to be integrated in future releases, and any help and feedback in this area is very welcome.
+
+[NOTE,textlabel="Note",name="note"]
+====
+These caches are kept locally, so they are not invalidated or updated when changes are made to the persistent store by other applications.Also, when running multiple copies of the same application (in a cluster, for example on Kubernetes/OpenShift), caches in separate copies of the application aren't synchronized.For these reasons, enabling caching is only suitable when certain assumptions can be made: we strongly recommend that only entities, collections and queries which never change are cached. Or at most, that when indeed such an entity is mutated and allowed to be read out of date (stale) this has no impact on the expectations of the application.Following this advice guarantees applications get the best performance out of the second-level cache and yet avoid unexpected behaviour.On top of immutable data, in certain contexts it might be acceptable to enable caching also on mutable data; this could be a necessary tradeoff on selected
+ entities which are read frequently and for which some degree of staleness is acceptable; this " acceptable degree of staleness" can be tuned by setting eviction properties.
+ This is however not recommended and should be done with extreme care, as it might
+ produce unexpected and unforeseen effects on the data.Rather than enabling caching on mutable data, ideally a better solution would be to use a clustered cache; however at this time Quarkus doesn't provide any such implementation: feel free to get in touch and let this need known so that the team can take this into account.
+====
+
+Finally, the second-level cache can be disabled globally by setting `hibernate.cache.use_second_level_cache` to `false`; this is a setting that needs to be specified in the `persistence.xml` configuration file.
+
+When second-level cache is disabled, all cache annotations are ignored and all queries are run ignoring caches; this is generally useful only to diagnose issues.

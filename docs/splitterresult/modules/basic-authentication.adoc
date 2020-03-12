@@ -1,0 +1,5 @@
+[id="basic-authentication_{context}"]
+= Basic Authentication
+
+To enable basic authentication set `quarkus.http.auth.basic=true`. You must also have at least one extension installed
+that provides a username/password based `IdentityProvider`, such as link:security-jdbc[Elytron JDBC].

@@ -1,0 +1,7 @@
+[id="cachekey_{context}"]
+= @CacheKey
+
+When a method argument is annotated with `@CacheKey`, it is identified as a part of the cache key during an invocation of a
+method annotated with `@CacheResult` or `@CacheInvalidate`.
+
+This annotation is optional and should only be used when some of the method arguments are NOT part of the cache key.

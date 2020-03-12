@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="metrics_{context}"]
+= Metrics
+:context: metrics
+
+The SmallRye Metrics extension is capable of exposing metrics that Hibernate ORM collects at runtime. To enable exposure of Hibernate metrics
+on the `/metrics` endpoint, make sure your project depends on the `quarkus-smallrye-metrics` artifact and set the configuration property `quarkus.hibernate-orm.metrics.enabled` to `true`.
+Metrics will then be available under the `vendor` scope.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

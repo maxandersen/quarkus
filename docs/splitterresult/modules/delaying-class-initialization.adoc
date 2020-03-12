@@ -1,0 +1,33 @@
+[id="delaying-class-initialization_{context}"]
+= Delaying class initialization
+
+By default, Quarkus initializes all classes at build time.
+
+There are cases where the initialization of certain classes is done in a static block needs to be postponed to runtime.
+Typically omitting such configuration would result in a runtime exception like the following:
+
+[source]
+----
+Error: No instances are allowed in the image heap for a class that is initialized or reinitialized at image runtime: sun.security.provider.NativePRNG
+Trace: object java.security.SecureRandom
+method com.amazonaws.services.s3.model.CryptoConfiguration.<init>(CryptoMode)
+Call path from entry point to com.amazonaws.services.s3.model.CryptoConfiguration.<init>(CryptoMode):
+----
+
+If you need to delay the initialization of a class, you can use the `--initialize-at-run-time=<package or class>` configuration knob.
+
+It should be added to the `native-image` configuration using an `<additionalBuildArg>` as shown in the examples above.
+
+[NOTE,textlabel="Note",name="note"]
+====
+You can find more information about all this in https://github.com/oracle/graal/blob/master/substratevm/CLASS-INITIALIZATION.md[the GraalVM documentation].
+====
+
+[NOTE,textlabel="Note",name="note"]
+====
+When multiple classes or packages need to be specified via the `quarkus.native.additional-build-args` configuration property, the `,` symbol needs to be escaped.
+An example of this is the following:[source]
+----
+quarkus.native.additional-build-args=--initialize-at-run-time=com.example.SomeClass\\,org.acme.SomeOtherClass
+----
+====

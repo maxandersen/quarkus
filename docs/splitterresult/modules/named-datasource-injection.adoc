@@ -1,0 +1,19 @@
+[id="named-datasource-injection_{context}"]
+= Named Datasource Injection
+
+When using multiple datasources, each `DataSource` also has the `io.quarkus.agroal.DataSource` qualifier with the name of the datasource in the property as the value.
+Using the above properties to configure three different datasources, you can also inject each one as follows:
+
+[source,java,indent="0"]
+----
+@Inject
+AgroalDataSource defaultDataSource;
+
+@Inject
+@DataSource("users")
+AgroalDataSource dataSource1;
+
+@Inject
+@DataSource("inventory")
+AgroalDataSource dataSource2;
+----

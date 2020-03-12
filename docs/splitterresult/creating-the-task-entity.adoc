@@ -1,0 +1,38 @@
+ifdef::context[:parent-context: {context}]
+[id="creating-the-task-entity_{context}"]
+= Creating the Task Entity
+:context: creating-the-task-entity
+
+In the `org.acme.quartz` package, create the `Task` class, with the following content:
+
+[source,java]
+----
+package org.acme.quartz;
+
+import javax.persistence.Entity;
+import java.time.Instant;
+import javax.persistence.Table;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+
+@Entity
+@Table(name="TASKS")
+public class Task extends PanacheEntity { <1>
+    public Instant createdAt;
+
+    public Task() {
+        createdAt = Instant.now();
+    }
+
+    public Task(Instant time) {
+        this.createdAt = time;
+    }
+}
+----
+
+[arabic]
+. Declare the entity using https://quarkus.io/guides/hibernate-orm-panache[Panache]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,54 @@
+ifdef::context[:parent-context: {context}]
+[id="example-application_{context}"]
+= Example application
+:context: example-application
+
+The following examples will all be based on the same example application that you can create with the following steps:
+
+- Create an application with the `quarkus-logging-gelf` extension. You can use the following Maven command to create it:
+
+[source,shell,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=gelf-logging \
+    -DclassName="org.acme.quickstart.GelfLoggingResource" \
+    -Dpath="/gelf-logging" \
+    -Dextensions="logging-gelf"
+----
+
+- For demonstration purposes, we create an endpoint that does nothing but log a sentence. You don't need to do this inside your application.
+
+[source,java]
+----
+import javax.enterprise.context.ApplicationScoped;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+
+import org.jboss.logging.Logger;
+
+@Path("/gelf-logging")
+@ApplicationScoped
+public class GelfLoggingResource {
+    private static final Logger LOG = Logger.getLogger(GelfLoggingResource.class);
+
+    @GET
+    public void log() {
+        LOG.info("Some useful log message");
+    }
+
+}
+----
+
+- Configure the GELF log handler to send logs to an external UDP endpoint on the port 12201:
+
+[source,properties]
+----
+quarkus.log.handler.gelf.enabled=true
+quarkus.log.handler.gelf.host=localhost
+quarkus.log.handler.gelf.port=12201
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

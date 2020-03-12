@@ -1,0 +1,28 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-mongodb-database_{context}"]
+= Configuring the MongoDB database
+:context: configuring-the-mongodb-database
+
+The main property to configure is the URL to access to MongoDB, almost all configuration can be included in the connection URI so we advise you to do so, you can find more information in the MongoDB documentation: https://docs.mongodb.com/manual/reference/connection-string/
+
+A sample configuration should look like this:
+
+[source,properties]
+----
+# configure the mongoDB client for a replica set of two nodes
+quarkus.mongodb.connection-string = mongodb://mongo1:27017,mongo2:27017
+----
+
+In this example, we are using a single instance running on localhost:
+
+[source,properties]
+----
+# configure the mongoDB client for a single instance on localhost
+quarkus.mongodb.connection-string = mongodb://localhost:27017
+----
+
+If you need more configuration properties, there is a full list at the end of this guide.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

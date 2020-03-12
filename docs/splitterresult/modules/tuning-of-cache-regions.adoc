@@ -1,0 +1,26 @@
+[id="tuning-of-cache-regions_{context}"]
+= Tuning of Cache Regions
+
+Caches store the data in separate regions to isolate different portions of data; such regions are assigned a name, which is useful for configuring each region independently, or to monitor their statistics.
+
+By default entities are cached in regions named after their fully qualified name, e.g. `org.acme.Country`.
+
+Collections are cached in regions named after the fully qualified name of their owner entity and collection field name, separated by `#` character, e.g. `org.acme.Country#cities`.
+
+All cached queries are by default kept in a single region dedicated to them called `default-query-results-region`.
+
+All regions are bounded by size and time by default. The defaults are `10000` max entries, and `100` seconds as maximum idle time.
+
+The size of each region can be customized via the `quarkus.hibernate-orm.cache."<region_name>".memory.object-count` property (Replace _<region_name>_ with the actual region name).
+
+To set the maximum idle time, provide the duration (see note on duration's format below) via the `quarkus.hibernate-orm.cache."<region_name>".expiration.max-idle` property (Replace _<region_name>_ with the actual region name).
+
+[NOTE,textlabel="Note",name="note"]
+====
+The double quotes are mandatory if your region name contains a dot. For instance:[source]
+----
+quarkus.hibernate-orm.cache."org.acme.MyEntity".memory.object-count=1000
+----
+====
+
+link:duration-format-note.adoc[]

@@ -1,0 +1,111 @@
+ifdef::context[:parent-context: {context}]
+[id="initializing-the-rest-service_{context}"]
+= Initializing the REST service
+:context: initializing-the-rest-service
+
+While everything is not yet set up for our REST service, we can initialize it with the standard CRUD operations we will need.
+
+Just copy this content in the `LibraryResource` file created by the Maven `create-project` command:
+
+[source,java]
+----
+package org.acme.hibernate.search.elasticsearch;
+
+import javax.inject.Inject;
+import javax.persistence.EntityManager;
+import javax.transaction.Transactional;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.acme.hibernate.search.elasticsearch.model.Author;
+import org.acme.hibernate.search.elasticsearch.model.Book;
+import org.jboss.resteasy.annotations.jaxrs.FormParam;
+import org.jboss.resteasy.annotations.jaxrs.PathParam;
+
+@Path("/library")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class LibraryResource {
+
+    @Inject
+    EntityManager em;
+
+    @PUT
+    @Path("book")
+    @Transactional
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public void addBook(@FormParam String title, @FormParam Long authorId) {
+        Author author = Author.findById(authorId);
+        if (author == null) {
+            return;
+        }
+
+        Book book = new Book();
+        book.title = title;
+        book.author = author;
+        book.persist();
+
+        author.books.add(book);
+        author.persist();
+    }
+
+    @DELETE
+    @Path("book/{id}")
+    @Transactional
+    public void deleteBook(@PathParam Long id) {
+        Book book = Book.findById(id);
+        if (book != null) {
+            book.author.books.remove(book);
+            book.delete();
+        }
+    }
+
+    @PUT
+    @Path("author")
+    @Transactional
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public void addAuthor(@FormParam String firstName, @FormParam String lastName) {
+        Author author = new Author();
+        author.firstName = firstName;
+        author.lastName = lastName;
+        author.persist();
+    }
+
+    @POST
+    @Path("author/{id}")
+    @Transactional
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public void updateAuthor(@PathParam Long id, @FormParam String firstName, @FormParam String lastName) {
+        Author author = Author.findById(id);
+        if (author == null) {
+            return;
+        }
+        author.firstName = firstName;
+        author.lastName = lastName;
+        author.persist();
+    }
+
+    @DELETE
+    @Path("author/{id}")
+    @Transactional
+    public void deleteAuthor(@PathParam Long id) {
+        Author author = Author.findById(id);
+        if (author != null) {
+            author.delete();
+        }
+    }
+}
+----
+
+Nothing out of the ordinary here: it is just good old Hibernate ORM with Panache operations in a standard JAX-RS service.
+
+In fact, the interesting part is that we will need to add very few elements to make our full text search application working.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,26 @@
+ifdef::context[:parent-context: {context}]
+[id="programming-model_{context}"]
+= Programming model
+:context: programming-model
+
+The driver and thus the Quarkus extension support three different programming models:
+
+* Blocking database access (much like standard JDBC)
+* Asynchronous programming based on JDK's completable futures and related infrastructure
+* Reactive programming based on http://www.reactive-streams.org[Reactive Streams]
+
+The reactive programming model is only available when connected against a 4.0+ version of Neo4j.
+Reactive programming in Neo4j is fully end-to-end reactive and therefore requires a server that supports backpressure.
+
+In this guide you will learn how to
+
+* Add the Neo4j extension to your project
+* Configure the driver
+* And how to use the driver to access a Neo4j database
+
+This guide will focus on asynchronous access to Neo4j, as this is ready to use for everyone.
+At the end of this guide, there will be a reactive version, which needs however a 4.0 database version.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

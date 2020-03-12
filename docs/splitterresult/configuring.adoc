@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring_{context}"]
+= Configuring
+:context: configuring
+
+The Neo4j driver can be configured with standard Quarkus properties:
+
+.src/main/resources/application.properties
+[source]
+----
+quarkus.neo4j.uri = bolt://localhost:7687
+quarkus.neo4j.authentication.username = neo4j
+quarkus.neo4j.authentication.password = secret
+----
+
+You'll recognize the authentication here that you passed on to the docker command above.
+
+Having done that, the driver is ready to use, there are however other configuration options, detailed below.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

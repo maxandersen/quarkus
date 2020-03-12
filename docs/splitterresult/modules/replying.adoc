@@ -1,0 +1,31 @@
+[id="replying_{context}"]
+= Replying
+
+The _return_ value of a method annotated with `@ConsumeEvent` is used as response to the incoming message.
+For instance, in the following snippet, the returned `String` is the response.
+
+[source,java]
+----
+@ConsumeEvent("greeting")
+public String consume(String name) {
+    return name.toUpperCase();
+}
+----
+
+You can also return a `Uni<T>` or a `CompletionStage<T>` to handle asynchronous reply:
+
+[source,java]
+----
+@ConsumeEvent("greeting")
+public Uni<String> consume2(String name) {
+    return Uni.createFrom().item(() -> name.toUpperCase()).emitOn(executor);
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+You can inject an `executor` if you use the Context Propagation extension:[source,code]
+----
+@Inject Executor executor;
+----
+====

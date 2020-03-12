@@ -1,0 +1,6 @@
+[id="other-notable-differences_{context}"]
+= Other notable differences
+
+Format of `import.sql`:: When importing a `import.sql` to setup your database, keep in mind that Quarkus reconfigures Hibernate ORM so to require a semicolon (';') to terminate each statement.
+The default in Hibernate is to have a statement per line, without requiring a terminator other than newline: remember to convert your scripts to use the ';' terminator character if you're reusing existing scripts.
+This is useful so to allow multi-line statements and human friendly formatting.

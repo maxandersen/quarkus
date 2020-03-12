@@ -1,0 +1,48 @@
+ifdef::context[:parent-context: {context}]
+[id="in-memory-databases_{context}"]
+= Testing with in-memory databases
+:context: in-memory-databases
+
+Some databases like H2 and Derby are commonly used in "embedded mode" as a facility to run quick integration tests.
+
+Our suggestion is to use the real database you intend to use in production; container technologies made this simple enough so you no longer have an excuse. Still, there are sometimes
+good reasons to also want the ability to run quick integration tests using the JVM powered databases,
+so this is possible as well.
+
+It is important to remember that when configuring H2 (or Derby) to use the embedded engine,
+this will work as usual in JVM mode but such an application will not compile into a native image, as the Quarkus extensions only cover for making the JDBC client code compatible with the native compilation step: embedding the whole database engine into a native image is currently not implemented.
+
+If you plan to run such integration tests in the JVM exclusively, it will of course work as usual.
+
+If you want the ability to run such integration test in both JVM and/or native images, we have some cool helpers for you: just add either `@QuarkusTestResource(H2DatabaseTestResource.class)` or `@QuarkusTestResource(DerbyDatabaseTestResource.class)` on any class in your integration tests, this will make sure the testsuite starts (and stops) the embedded database into a separate process as necessary to run your tests.
+
+These additional helpers are provided by the artifacts having Maven coordinates `io.quarkus:quarkus-test-h2:{quarkus-version}` and `io.quarkus:quarkus-test-derby:{quarkus-version}`, respectively for H2 and Derby.
+
+Follows an example for H2:
+
+[source,java]
+----
+package my.app.integrationtests.db;
+
+import io.quarkus.test.common.QuarkusTestResource;
+import io.quarkus.test.h2.H2DatabaseTestResource;
+
+@QuarkusTestResource(H2DatabaseTestResource.class)
+public class TestResources {
+}
+----
+
+This will allow you to test your application even when it's compiled into a native image,
+while the database will run in the JVM as usual.
+
+Connect to it using:
+
+[source]
+----
+quarkus.datasource.url=jdbc:h2:tcp://localhost/mem:test
+quarkus.datasource.driver=org.h2.Driver
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

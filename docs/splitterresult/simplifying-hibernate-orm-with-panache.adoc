@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="simplifying-hibernate-orm-with-panache_{context}"]
+= Simplifying Hibernate ORM with Panache
+:context: simplifying-hibernate-orm-with-panache
+
+The link:hibernate-orm-panache[Hibernate ORM with Panache] extension facilitates the usage of Hibernate ORM by providing active record style entities (and repositories) and focuses on making your entities trivial and fun to write in Quarkus.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

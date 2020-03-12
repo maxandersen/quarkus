@@ -1,0 +1,5 @@
+[id="prerequisites-2_{context}"]
+= Prerequisites
+
+Kogito uses Infinispan as the persistence service so you need to have Infinispan server installed and running.
+Version of the Infinispan is aligned with Quarkus BOM so make sure the right version is installed.

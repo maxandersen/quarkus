@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="the-pojo-codec_{context}"]
+= The POJO Codec
+:context: the-pojo-codec
+
+The link:http://mongodb.github.io/mongo-java-driver/3.12/bson/pojos[POJO Codec] provides a set of annotations that enable the customization of
+the way a POJO is mapped to a MongoDB collection and this codec is initialized automatically by Quarkus
+
+One of these annotations is the `@BsonDiscriminator` annotation that allows to storage multiple Java types in a single MongoDB collection by adding
+a discriminator field inside the document. It can be useful when working with abstract types or interfaces.
+
+Quarkus will automatically register all the classes annotated with `@BsonDiscriminator` with the POJO codec.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

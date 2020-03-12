@@ -1,0 +1,141 @@
+ifdef::context[:parent-context: {context}]
+[id="run-the-application_{context}"]
+= Run the application
+:context: run-the-application
+
+Now we are ready to run our application. Use:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+and you should see output similar to:
+
+.quarkus:dev Output
+[source,shell]
+----
+$ ./mvnw compile quarkus:dev
+[INFO] Scanning for projects...
+[INFO]
+[INFO] ----------------------< org.acme:security-jwt-quickstart >-----------------------
+[INFO] Building security-jwt-quickstart 1.0-SNAPSHOT
+[INFO] --------------------------------[ jar ]---------------------------------
+...
+Listening for transport dt_socket at address: 5005
+2019-03-03 07:23:06,988 INFO  [io.qua.dep.QuarkusAugmentor] (main) Beginning quarkus augmentation
+2019-03-03 07:23:07,328 INFO  [io.qua.dep.QuarkusAugmentor] (main) Quarkus augmentation completed in 340ms
+2019-03-03 07:23:07,493 INFO  [io.quarkus] (main) Quarkus started in 0.769s. Listening on: http://127.0.0.1:8080
+2019-03-03 07:23:07,493 INFO  [io.quarkus] (main) Installed features: [cdi, resteasy, resteasy-jsonb, security, smallrye-jwt, vertx, vertx-web]
+----
+
+Now that the REST endpoint is running, we can access it using a command line tool like curl:
+
+.curl command for /secured/permit-all
+[source,shell]
+----
+$ curl http://127.0.0.1:8080/secured/permit-all; echo
+hello + anonymous, isSecure: false, authScheme: null, hasJWT: false
+----
+
+We have not provided any JWT in our request, so we would not expect that there is any security state seen by the endpoint, and
+the response is consistent with that:
+
+* user name is anonymous
+* isSecure is false as https is not used
+* authScheme is null
+* hasJWT is false
+
+Use Ctrl-C to stop the Quarkus server.
+
+So now let's actually secure something. Take a look at the new endpoint method `helloRolesAllowed` in the following:
+
+.REST Endpoint V2
+[source,java]
+----
+package org.acme.security.jwt;
+
+import java.security.Principal;
+
+import javax.annotation.security.PermitAll;
+import javax.annotation.security.RolesAllowed;
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.SecurityContext;
+
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+/**
+ * Version 2 of the TokenSecuredResource
+ */
+@Path("/secured")
+@RequestScoped
+public class TokenSecuredResource {
+
+    @Inject
+    JsonWebToken jwt;
+
+    @GET()
+    @Path("permit-all")
+    @PermitAll
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello(@Context SecurityContext ctx) {
+        Principal caller =  ctx.getUserPrincipal();
+        String name = caller == null ? "anonymous" : caller.getName();
+        String helloReply = String.format("hello + %s, isSecure: %s, authScheme: %s", name, ctx.isSecure(), ctx.getAuthenticationScheme());
+        return helloReply;
+    }
+
+    @GET()
+    @Path("roles-allowed") // <1>
+    @RolesAllowed({"Echoer", "Subscriber"}) // <2>
+    @Produces(MediaType.TEXT_PLAIN)
+    public String helloRolesAllowed(@Context SecurityContext ctx) {
+        Principal caller =  ctx.getUserPrincipal();
+        String name = caller == null ? "anonymous" : caller.getName();
+        boolean hasJWT = jwt.getClaimNames() != null;
+        String helloReply = String.format("hello + %s, isSecure: %s, authScheme: %s, hasJWT: %s", name, ctx.isSecure(), ctx.getAuthenticationScheme(), hasJWT);
+        return helloReply;
+    }
+}
+----
+
+[arabic]
+<1> This new endpoint will be located at /secured/roles-allowed
+<2> @RolesAllowed is a JSR 250 common security annotation that indicates that the given endpoint is accessible by a caller if
+they have either a "Echoer" or "Subscriber" role assigned.
+
+After you make this addition to your `TokenSecuredResource`, rerun the `./mvnw compile quarkus:dev` command, and then try `curl -v http://127.0.0.1:8080/secured/roles-allowed; echo` to attempt to access the new endpoint. Your output should be:
+
+.curl command for /secured/roles-allowed
+[source,shell]
+----
+$ curl -v http://127.0.0.1:8080/secured/roles-allowed; echo
+*   Trying 127.0.0.1...
+* TCP_NODELAY set
+* Connected to 127.0.0.1 (127.0.0.1) port 8080 (#0)
+> GET /secured/roles-allowed HTTP/1.1
+> Host: 127.0.0.1:8080
+> User-Agent: curl/7.54.0
+> Accept: */*
+>
+< HTTP/1.1 401 Unauthorized
+< Connection: keep-alive
+< Content-Type: text/html;charset=UTF-8
+< Content-Length: 14
+< Date: Sun, 03 Mar 2019 16:32:34 GMT
+<
+* Connection #0 to host 127.0.0.1 left intact
+Not authorized
+----
+
+Excellent, we have not provided any JWT in the request, so we should not be able to access the endpoint, and we were not. Instead we received an HTTP 401 Unauthorized error. We need to obtain and pass in a valid JWT to access that endpoint. There are two steps to this, 1) configuring our {extension-name} extension with information on how to validate a JWT, and 2) generating a matching JWT with the appropriate claims.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

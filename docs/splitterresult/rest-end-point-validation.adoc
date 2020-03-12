@@ -1,0 +1,31 @@
+ifdef::context[:parent-context: {context}]
+[id="rest-end-point-validation_{context}"]
+= REST end point validation
+:context: rest-end-point-validation
+
+While using the `Validator` manually might be useful for some advanced usage,
+if you simply want to validate the parameters or the return value or your REST end point,
+you can annotate it directly, either with constraints (`@NotNull`, `@Digits`...)
+or with `@Valid` (which will cascade the validation to the bean).
+
+Let's create an end point validating the `Book` provided in the request:
+
+[source,java]
+----
+@Path("/end-point-method-validation")
+@POST
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public Result tryMeEndPointMethodValidation(@Valid Book book) {
+    return new Result("Book is valid! It was validated by end point method validation.");
+}
+----
+
+As you can see, we don't have to manually validate the provided `Book` anymore as it is automatically validated.
+
+If a validation error is triggered, a violation report is generated and serialized as JSON as our end point produces a JSON output.
+It can be extracted and manipulated to display a proper error message.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

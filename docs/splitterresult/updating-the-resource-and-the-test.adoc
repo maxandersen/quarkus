@@ -1,0 +1,68 @@
+ifdef::context[:parent-context: {context}]
+[id="updating-the-resource-and-the-test_{context}"]
+= Updating the resource and the test
+:context: updating-the-resource-and-the-test
+
+Edit the `TaskResource` class, and update the content to:
+
+[source,java]
+----
+package org.acme.quartz;
+
+import java.util.List;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/tasks")
+@Produces(MediaType.APPLICATION_JSON)
+public class TaskResource {
+
+    @GET
+    public List<Task> listAll() {
+        return Task.listAll(); <1>
+    }
+}
+----
+
+[arabic]
+. Retrieve the list of created tasks from the database
+
+We also need to update the tests. Edit the `TaskResourceTest` class to match:
+
+[source,java]
+----
+package org.acme.quartz;
+
+import io.quarkus.test.junit.QuarkusTest;
+
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+
+import org.junit.jupiter.api.Test;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
+
+@QuarkusTest
+public class TaskResourceTest {
+
+    @Test
+    public void tasks() throws InterruptedException {
+        Thread.sleep(1000); // wait at least a second to have the first task created
+        given()
+                .when().get("/tasks")
+                .then()
+                .statusCode(200)
+                .body("size()", is(greaterThanOrEqualTo(1))); <1>
+    }
+}
+----
+
+[arabic]
+. Ensure that we have a `200` response and at least one task created
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

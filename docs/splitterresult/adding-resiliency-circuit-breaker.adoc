@@ -1,0 +1,99 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-resiliency-circuit-breaker_{context}"]
+= Adding Resiliency: Circuit Breaker
+:context: adding-resiliency-circuit-breaker
+
+A circuit breaker is useful for limiting number of failures happening in the system, when part of the system becomes
+temporarily unstable. The circuit breaker records successful and failed invocations of a method, and when the ratio
+of failed invocations reaches the specified threshold, the circuit breaker _opens_ and blocks all further invocations
+of that method for a given time.
+
+Add the following code into the `CoffeeRepositoryService` bean, so that we can demonstrate a circuit breaker in action:
+
+[source,java]
+----
+import java.util.concurrent.atomic.AtomicLong;
+import org.eclipse.microprofile.faulttolerance.CircuitBreaker;
+...
+
+public class CoffeeRepositoryService {
+    ...
+
+    private AtomicLong counter = new AtomicLong(0);
+
+    @CircuitBreaker(requestVolumeThreshold = 4)
+    public Integer getAvailability(Coffee coffee) {
+        maybeFail();
+        return new Random().nextInt(30);
+    }
+
+    private void maybeFail() {
+        // introduce some artificial failures
+        final Long invocationNumber = counter.getAndIncrement();
+        if (invocationNumber % 4 > 1) { // alternate 2 successful and 2 failing invocations
+            throw new RuntimeException("Service failed.");
+        }
+    }
+}
+----
+
+And inject the code bellow into the `CoffeeResource` endpoint:
+
+[source,java]
+----
+public class CoffeeResource {
+    ...
+    @Path("/{id}/availability")
+    @GET
+    public Response availability(@PathParam int id) {
+        final Long invocationNumber = counter.getAndIncrement();
+
+        Coffee coffee = coffeeRepository.getCoffeeById(id);
+        // check that coffee with given id exists, return 404 if not
+        if (coffee == null) {
+            return Response.status(Response.Status.NOT_FOUND).build();
+        }
+
+        try {
+            Integer availability = coffeeRepository.getAvailability(coffee);
+            LOGGER.infof("CoffeeResource#availability() invocation #%d returning successfully", invocationNumber);
+            return Response.ok(availability).build();
+        } catch (RuntimeException e) {
+            String message = e.getClass().getSimpleName() + ": " + e.getMessage();
+            LOGGER.errorf("CoffeeResource#availability() invocation #%d failed: %s", invocationNumber, message);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR)
+                    .entity(message)
+                    .type(MediaType.TEXT_PLAIN_TYPE)
+                    .build();
+        }
+    }
+    ...
+}
+----
+
+We added another functionality - the application can return the amount of remaining packages of given coffee on our store
+(just a random number).
+
+This time an artificial failure was introduced in the CDI bean: the `CoffeeRepositoryService#getAvailability()` method is
+going to alternate between two successful and two failed invocations.
+
+We also added a `@CircuitBreaker` annotation with `requestVolumeThreshold = 4`. `CircuitBreaker.failureRatio` is
+by default 0.5, and `CircuitBreaker.delay` is by default 5 seconds. That means that a circuit breaker will open
+when 2 of the last 4 invocations failed and it will stay open for 5 seconds.
+
+To test this out, do the following:
+
+[arabic]
+. Go to `http://localhost:8080/coffee/2/availability` in your browser. You should see a number being returned.
+. Hit refresh, this second request should again be successful and return a number.
+. Refresh two more times. Both times you should see text "RuntimeException: Service failed.", which is the exception
+thrown by `CoffeeRepositoryService#getAvailability()`.
+. Refresh a couple more times. Unless you waited too long, you should again see exception, but this time it's
+"CircuitBreakerOpenException: getAvailability". This exception indicates that the circuit breaker opened
+and the `CoffeeRepositoryService#getAvailability()` method is not being called anymore.
+. Give it 5 seconds during which circuit breaker should close and you should be able to make two successful requests
+again.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

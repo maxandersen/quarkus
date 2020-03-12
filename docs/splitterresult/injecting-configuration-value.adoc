@@ -1,0 +1,53 @@
+ifdef::context[:parent-context: {context}]
+[id="injecting-configuration-value_{context}"]
+= Injecting configuration value
+:context: injecting-configuration-value
+
+Quarkus uses https://microprofile.io/project/eclipse/microprofile-config[MicroProfile Config] to inject the configuration in the application.
+The injection uses the `@ConfigProperty` annotation.
+
+[source,java]
+----
+@ConfigProperty(name = "greeting.message")
+String message;
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+When injecting a configured value, you can use `@Inject @ConfigProperty` or just `@ConfigProperty`.
+The `@Inject` annotation is not necessary for members annotated with `@ConfigProperty`, a behavior which differs from https://microprofile.io/project/eclipse/microprofile-config[MicroProfile Config]
+====
+
+Edit the `org.acme.config.GreetingResource`, and introduce the following configuration properties:
+
+[source,java]
+----
+@ConfigProperty(name = "greeting.message") <1>
+String message;
+
+@ConfigProperty(name = "greeting.suffix", defaultValue="!") <2>
+String suffix;
+
+@ConfigProperty(name = "greeting.name")
+Optional<String> name; <3>
+----
+
+[arabic]
+<1> If you do not provide a value for this property, the application startup fails with `javax.enterprise.inject.spi.DeploymentException: No config value of type [class java.lang.String] exists for: greeting.message`.
+<2> The default value is injected if the configuration does not provide a value for `greeting.suffix`.
+<3> This property is optional - an empty `Optional` is injected if the configuration does not provide a value for `greeting.name`.
+
+Now, modify the `hello` method to use the injected properties:
+
+[source,java]
+----
+@GET
+@Produces(MediaType.TEXT_PLAIN)
+public String hello() {
+    return message + " " + name.orElse("world") + suffix;
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

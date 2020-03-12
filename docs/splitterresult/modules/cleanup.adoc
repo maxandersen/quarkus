@@ -1,0 +1,9 @@
+[id="cleanup_{context}"]
+= Cleanup
+
+To delete the application:
+
+[source,bash]
+----
+skaffold delete
+----

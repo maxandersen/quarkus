@@ -1,0 +1,62 @@
+ifdef::context[:parent-context: {context}]
+[id="configuration-options_{context}"]
+= Configuration options
+:context: configuration-options
+
+The table below describe all the available configuration options.
+
+.Kubernetes
+[table,tablepcwidth="100",rowcount="31",colcount="4"]
+|===
+| Property | Type | Description | Default Value
+| quarkus.kubernetes.name | String |  | ${quarkus.container-image.name}
+| quarkus.kubernetes.version | String |  | ${quarkus.container-image.tag}
+| quarkus.kubernetes.part-of | String |  | 
+| quarkus.kubernetes.init-containers | Map<String, Container> |  | 
+| quarkus.kubernetes.labels | Map |  | 
+| quarkus.kubernetes.annotations | Map |  | 
+| quarkus.kubernetes.env-vars | Map<String, Env> |  | 
+| quarkus.kubernetes.working-dir | String |  | 
+| quarkus.kubernetes.command | String[] |  | 
+| quarkus.kubernetes.arguments | String[] |  | 
+| quarkus.kubernetes.replicas | int |  | 1
+| quarkus.kubernetes.service-account | String |  | 
+| quarkus.kubernetes.host | String |  | 
+| quarkus.kubernetes.ports | Map<String, Port> |  | 
+| quarkus.kubernetes.service-type | ServiceType |  | ClusterIP
+| quarkus.kubernetes.pvc-volumes | Map<String, PersistentVolumeClaimVolume> |  | 
+| quarkus.kubernetes.secret-volumes | Map<String, SecretVolume> |  | 
+| quarkus.kubernetes.config-map-volumes | Map<String, ConfigMapVolume> |  | 
+| quarkus.kubernetes.git-repo-volumes | Map<String, GitRepoVolume> |  | 
+| quarkus.kubernetes.aws-elastic-block-store-volumes | Map<String, AwsElasticBlockStoreVolume> |  | 
+| quarkus.kubernetes.azure-disk-volumes | Map<String, AzureDiskVolume> |  | 
+| quarkus.kubernetes.azure-file-volumes | Map<String, AzureFileVolume> |  | 
+| quarkus.kubernetes.mounts | Map<String, Mount> |  | 
+| quarkus.kubernetes.image-pull-policy | ImagePullPolicy |  | IfNotPresent
+| quarkus.kubernetes.image-pull-secrets | String[] |  | 
+| quarkus.kubernetes.liveness-probe | Probe |  | ( see Probe )
+| quarkus.kubernetes.readiness-probe | Probe |  | ( see Probe )
+| quarkus.kubernetes.sidecars | Map<String, Container> |  | 
+| quarkus.kubernetes.expose | boolean |  | false
+| quarkus.kubernetes.headless | boolean |  | false
+|===
+
+Properties that use non standard types, can be referenced by expanding the property.
+For example to define a `kubernetes-readiness-probe` which is of type `Probe`:
+
+[source]
+----
+quarkus.kubernetes.readiness-probe.initial-delay-seconds=20
+quarkus.kubernetes.readiness-probe.period-seconds=45
+----
+
+In this example `initial-delay` and `period-seconds` are fields of the type `Probe`.
+Below you will find tables describing all available types.
+
+include::modules/basic-types.adoc[leveloffset=+1]
+
+include::modules/mounts-and-volumes.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

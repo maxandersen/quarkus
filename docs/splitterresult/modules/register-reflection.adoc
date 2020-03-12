@@ -1,0 +1,24 @@
+[id="register-reflection_{context}"]
+= Register reflection
+
+Quarkus makes registration of reflection in an extension a breeze by using `ReflectiveClassBuildItem`, thus eliminating the need for a JSON configuration file.
+
+To register a class for reflection, one would need to create a Quarkus processor class and add a build step that registers reflection:
+
+[source,java]
+----
+public class SaxParserProcessor {
+
+    @BuildStep
+    ReflectiveClassBuildItem reflection() {
+        // since we only need reflection to the constructor of the class, we can specify `false` for both the methods and the fields arguments.
+        return new ReflectiveClassBuildItem(false, false, "com.sun.org.apache.xerces.internal.parsers.SAXParser");
+    }
+
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+More information about reflection in GraalVM can be found https://github.com/oracle/graal/blob/master/substratevm/REFLECTION.md[here].
+====

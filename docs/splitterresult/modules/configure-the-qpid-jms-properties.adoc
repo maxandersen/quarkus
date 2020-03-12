@@ -1,0 +1,17 @@
+[id="configure-the-qpid-jms-properties_{context}"]
+= Configure the Qpid JMS properties
+
+We need to configure the Qpid JMS properties used by the extension when
+injecting the ConnectionFactory.
+
+This is done in the `src/main/resources/application.properties` file.
+
+[source]
+----
+# Configures the Qpid JMS properties.
+quarkus.qpid-jms.url=amqp://localhost:5672
+quarkus.qpid-jms.username=quarkus
+quarkus.qpid-jms.password=quarkus
+----
+
+More detail about the configuration are available in the https://github.com/amqphub/quarkus-qpid-jms#configuration[Quarkus Qpid JMS] documentation.

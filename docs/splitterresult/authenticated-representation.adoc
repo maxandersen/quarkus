@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="authenticated-representation_{context}"]
+= Authenticated representation
+:context: authenticated-representation
+
+For every authenticated resource, you can inject a `SecurityIdentity` instance to get the authenticated identity information.
+
+In some other contexts you may have other parallel representations of the same information (or parts of it) such as `SecurityContext`
+for JAX-RS or `JsonWebToken` for JWT.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

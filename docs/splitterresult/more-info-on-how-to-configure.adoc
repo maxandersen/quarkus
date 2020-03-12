@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="more-info-on-how-to-configure_{context}"]
+= More info on how to configure
+:context: more-info-on-how-to-configure
+
+Quarkus relies on Eclipse MicroProfile and inherits its features.
+
+There are converters that convert your property file content from `String` to typed Java types. See the list link:https://github.com/eclipse/microprofile-config/blob/master/spec/src/main/asciidoc/converters.asciidoc[in the specification].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

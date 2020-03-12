@@ -1,0 +1,12 @@
+[id="get-it-running_{context}"]
+= Get it running
+
+If you followed the instructions, you should have the Artemis server running.
+Then, you just need to run the application using:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+Open `http://localhost:8080/prices.html` in your browser.

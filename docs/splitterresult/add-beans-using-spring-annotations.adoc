@@ -1,0 +1,139 @@
+ifdef::context[:parent-context: {context}]
+[id="add-beans-using-spring-annotations_{context}"]
+= Add beans using Spring annotations
+:context: add-beans-using-spring-annotations
+
+Let's proceed to create some beans using various Spring annotations.
+
+First we will create a `StringFunction` interface that some of our beans will implement and which will be injected into another bean later on.
+Create a `src/main/java/org/acme/spring/di/StringFunction.java` file and set the following content:
+
+[source,java]
+----
+package org.acme.spring.di;
+
+import java.util.function.Function;
+
+public interface StringFunction extends Function<String, String> {
+
+}
+----
+
+With the interface in place, we will add an `AppConfiguration` class which will use the Spring's Java Config style for defining a bean.
+It will be used to create a `StringFunction` bean that will capitalize the text passed as parameter.
+Create a `src/main/java/org/acme/spring/di/AppConfiguration.java` file with the following content:
+
+[source,java]
+----
+package org.acme.spring.di;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class AppConfiguration {
+
+    @Bean(name = "capitalizeFunction")
+    public StringFunction capitalizer() {
+        return String::toUpperCase;
+    }
+}
+----
+
+Now we define another bean that will implement `StringFunction` using Spring's stereotype annotation style.
+This bean will effectively be a no-op bean that simply returns the input as is.
+Create a `src/main/java/org/acme/spring/di/NoOpSingleStringFunction.java` file and set the following content:
+
+[source,java]
+----
+package org.acme.spring.di;
+
+import org.springframework.stereotype.Component;
+
+@Component("noopFunction")
+public class NoOpSingleStringFunction implements StringFunction {
+
+    @Override
+    public String apply(String s) {
+        return s;
+    }
+}
+----
+
+Quarkus also provides support for injecting configuration values using Spring's `@Value` annotation.
+To see that in action, first edit the `src/main/resources/application.properties` with the following content:
+
+[source,java]
+----
+# Your configuration properties
+greeting.message = hello
+----
+
+Next create a new Spring bean in `src/main/java/org/acme/spring/di/MessageProducer.java` with the following content:
+
+[source,java]
+----
+package org.acme.spring.di;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+@Service
+public class MessageProducer {
+
+    @Value("${greeting.message}")
+    String message;
+
+    public String getPrefix() {
+        return message;
+    }
+}
+----
+
+The final bean we will create ties together all the previous beans.
+Create a `src/main/java/org/acme/spring/di/GreeterBean.java` file and copy the following content:
+
+[source,java]
+----
+package org.acme.spring.di;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+@Component
+public class GreeterBean {
+
+    private final MessageProducer messageProducer;
+
+    @Autowired
+    @Qualifier("noopFunction")
+    StringFunction noopStringFunction;
+
+    @Autowired
+    @Qualifier("capitalizeFunction")
+    StringFunction capitalizerStringFunction;
+
+    @Value("${greeting.suffix:!}")
+    String suffix;
+
+    public GreeterBean(MessageProducer messageProducer) {
+        this.messageProducer = messageProducer;
+    }
+
+    public String greet(String name) {
+        final String initialValue = messageProducer.getPrefix() + " " + name + suffix;
+        return noopStringFunction.andThen(capitalizerStringFunction).apply(initialValue);
+    }
+}
+----
+
+In the code above, we see that both field injection and constructor injection are being used (note that constructor injection does not need the `@Autowired` annotation since there is a single constructor).
+Furthermore, the `@Value` annotation on `suffix` has also a default value defined, which in this case will be used since we have not defined `greeting.suffix` in `application.properties`.
+
+include::modules/update-the-jax-rs-resource.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

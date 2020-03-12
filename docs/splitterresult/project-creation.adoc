@@ -1,0 +1,34 @@
+ifdef::context[:parent-context: {context}]
+[id="project-creation_{context}"]
+= Creating a new project
+:context: project-creation
+
+To create a new project we use the create-project command:
+
+[source,shell]
+----
+$ quarkus create-project hello-world
+----
+
+This will create a folder called 'hello-world' in your current working directory using default
+groupId, artifactId and version values
+(groupId='org.acme', artifactId='quarkus' and version='1.0.0-SNAPSHOT').
+
+To specify the groupId, artifactId and version values,
+use the '--groupid', '--artifactid' and '--version' options:
+
+[source,shell]
+----
+$ quarkus create-project --groupid=com.foo --artifactId=bar --version=1.0  hello-world
+----
+
+Use the help option to display all the possible options:
+
+[source,shell]
+----
+$ quarkus create-project --help
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

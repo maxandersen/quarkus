@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="extension-health-checks_{context}"]
+= Extension health checks
+:context: extension-health-checks
+
+Some extension may provide default health checks, including the extension will automatically register its health checks.
+
+For example, `quarkus-agroal` that is used to manage Quarkus datasource(s) automatically register a readiness health check
+that will validate each datasources: link:datasource#datasource-health-check[Datasource Health Check].
+
+You can disable extension health check via the property `quarkus.health.extensions.enabled` so none will be automatically registered.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

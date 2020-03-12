@@ -1,0 +1,50 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-resiliency-retries_{context}"]
+= Adding Resiliency: Retries
+:context: adding-resiliency-retries
+
+Let the Quarkus development server running and in your IDE add the `@Retry` annotation to the `CoffeeResource#coffees()`
+method as follows and save the file:
+
+[source,java]
+----
+import org.eclipse.microprofile.faulttolerance.Retry;
+...
+
+public class CoffeeResource {
+    ...
+    @GET
+    @Retry(maxRetries = 4)
+    public List<Coffee> coffees() {
+        ...
+    }
+    ...
+}
+----
+
+Hit refresh in your browser. The Quarkus development server will automatically detect the changes
+and recompile the app for you, so there's no need to restart it.
+
+You can hit refresh couple more times. Practically all requests should now be succeeding. The `CoffeeResource#coffees()`
+method is still in fact failing in about 50 % of time, but every time it happens, the platform will automatically retry
+the call!
+
+To see that that the failures still happen, check the output of the development server. The log messages should be
+similar to these:
+
+[source]
+----
+2019-03-06 12:17:41,725 INFO  [org.acm.fau.CoffeeResource] (XNIO-1 task-1) CoffeeResource#coffees() invocation #5 returning successfully
+2019-03-06 12:17:44,187 INFO  [org.acm.fau.CoffeeResource] (XNIO-1 task-1) CoffeeResource#coffees() invocation #6 returning successfully
+2019-03-06 12:17:45,166 ERROR [org.acm.fau.CoffeeResource] (XNIO-1 task-1) CoffeeResource#coffees() invocation #7 failed
+2019-03-06 12:17:45,172 ERROR [org.acm.fau.CoffeeResource] (XNIO-1 task-1) CoffeeResource#coffees() invocation #8 failed
+2019-03-06 12:17:45,176 INFO  [org.acm.fau.CoffeeResource] (XNIO-1 task-1) CoffeeResource#coffees() invocation #9 returning successfully
+----
+
+You can see that every time an invocation fails, it's immediately followed by another invocation, until one succeeds.
+Since we allowed 4 retries, it would require 5 invocations to fail in a row, in order for the user to be actually exposed
+to a failure. Which is fairly unlikely to happen.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

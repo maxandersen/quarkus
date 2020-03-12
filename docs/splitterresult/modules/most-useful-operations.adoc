@@ -1,0 +1,65 @@
+[id="most-useful-operations_{context}"]
+= Most useful operations
+
+Once you have written your entity, here are the most common operations you will be able to perform:
+
+[source,java]
+----
+// creating a person
+Person person = new Person();
+person.name = "Loïc";
+person.birth = LocalDate.of(1910, Month.FEBRUARY, 1);
+person.status = Status.Alive;
+
+// persist it
+person.persist();
+
+person.status = Status.Dead;
+
+// Your must call update() in order to send your entity modifications to MongoDB
+person.update();
+
+// delete it
+person.delete();
+
+// getting a list of all Person entities
+List<Person> allPersons = Person.listAll();
+
+// finding a specific person by ID
+person = Person.findById(personId);
+
+// finding a specific person by ID via an Optional
+Optional<Person> optional = Person.findByIdOptional(personId);
+person = optional.orElseThrow(() -> new NotFoundException());
+
+// finding all living persons
+List<Person> livingPersons = Person.list("status", Status.Alive);
+
+// counting all persons
+long countAll = Person.count();
+
+// counting all living persons
+long countAlive = Person.count("status", Status.Alive);
+
+// delete all living persons
+Person.delete("status", Status.Alive);
+
+// delete all persons
+Person.deleteAll();
+----
+
+All `list` methods have equivalent `stream` versions.
+
+[source,java]
+----
+Stream<Person> persons = Person.streamAll();
+List<String> namesButEmmanuels = persons
+    .map(p -> p.name.toLowerCase() )
+    .filter( n -> ! "emmanuel".equals(n) )
+    .collect(Collectors.toList());
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+A `persistOrUpdate()` method exist that persist or update an entity in the database, it uses the __upsert__ capability of MongoDB to do it in a single query.
+====

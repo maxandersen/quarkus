@@ -1,0 +1,31 @@
+[id="multiple-annotations-on-a-single-method_{context}"]
+= Multiple annotations on a single method
+
+[source,java]
+----
+package org.acme.cache;
+
+import javax.inject.Singleton;
+
+import io.quarkus.cache.CacheInvalidate;
+import io.quarkus.cache.CacheInvalidateAll;
+import io.quarkus.cache.CacheResult;
+
+@Singleton
+public class CachedService {
+
+    @CacheInvalidate(cacheName = "foo")
+    @CacheResult(cacheName = "foo")
+    public String forceCacheEntryRefresh(Object key) { <1>
+        // Call expensive service here.
+    }
+
+    @CacheInvalidateAll(cacheName = "foo")
+    @CacheInvalidateAll(cacheName = "bar")
+    public void multipleInvalidateAll(Object key) { <2>
+    }
+}
+----
+[arabic]
+<1> This method can be used to force a refresh of the cache entry corresponding to the given key.
+<2> This method will invalidate all entries from the `foo` and `bar` caches with a single call.

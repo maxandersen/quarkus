@@ -1,0 +1,21 @@
+[id="caching-of-collections-and-relations_{context}"]
+= Caching of collections and relations
+
+Collections and relations need to be individually annotated to be cached; in this case the Hibernate specific `@org.hibernate.annotations.Cache` should be used, which requires also to specify the `CacheConcurrencyStrategy`:
+
+[source,java]
+----
+package org.acme;
+
+@Entity
+@Cacheable
+public class Country {
+    // ...
+
+    @OneToMany
+    @Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
+    List<City> cities;
+
+    // ...
+}
+----

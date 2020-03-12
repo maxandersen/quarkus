@@ -1,0 +1,38 @@
+[id="room_{context}"]
+= Room
+
+The `Room` class represents a location where lessons are taught,
+for example, `Room A` or `Room B`.
+For simplicity's sake, all rooms are without capacity limits
+and they can accommodate all lessons.
+
+Create the `src/main/java/org/acme/domain/Room.java` class:
+
+[source,java]
+----
+package org.acme.domain;
+
+public class Room {
+
+    private String name;
+
+    public Room() {
+    }
+
+    public Room(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
+}
+----
+
+`Room` instances do not change during solving, so `Room` is also a _problem fact_.

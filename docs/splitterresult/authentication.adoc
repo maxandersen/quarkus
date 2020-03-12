@@ -1,0 +1,24 @@
+ifdef::context[:parent-context: {context}]
+[id="authentication_{context}"]
+= Authentication
+:context: authentication
+
+This chart illustrates what mechanisms have been verified to be working properly with
+the Quarkus Infinispan Client extension.
+
+.Mechanisms
+[table,tablepcwidth="100",rowcount="6",header-option="",colcount="2"]
+|===
+| DIGEST-MD5 | [green]*Y*
+| PLAIN | [green]*Y*
+| EXTERNAL | [green]*Y*
+| GSSAPI | [red]*N*
+| Custom | [red]*N*
+|===
+
+The guide for configuring these can be found at https://infinispan.org/docs/dev/user_guide/user_guide.html#authentication.
+However you need to configure these through the `hotrod-client.properties` file if using Dependency Injection.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

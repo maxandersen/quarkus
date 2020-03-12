@@ -1,0 +1,18 @@
+ifdef::context[:parent-context: {context}]
+[id="starting-and-stopping-transactions-defining-your-boundaries_{context}"]
+= Starting and stopping transactions: defining your boundaries
+:context: starting-and-stopping-transactions-defining-your-boundaries
+
+You can define your transaction boundaries the easy way, or the less easy way :)
+
+include::modules/declarative-approach.adoc[leveloffset=+1]
+
+include::modules/transaction-configuration.adoc[leveloffset=+1]
+
+include::modules/reactive-extensions.adoc[leveloffset=+1]
+
+include::modules/api-approach.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

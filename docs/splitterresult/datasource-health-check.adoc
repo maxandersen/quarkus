@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="datasource-health-check_{context}"]
+= Datasource Health Check
+:context: datasource-health-check
+
+If you are using the `quarkus-smallrye-health` extension, `quarkus-agroal` will automatically add a readiness health check
+to validate the datasource.
+
+So when you access the `/health/ready` endpoint of your application you will have information about the datasource validation status.
+If you have multiple datasources, all datasources will be checked and the status will be `DOWN` as soon as there is one datasource validation failure.
+
+This behavior can be disabled via the property `quarkus.datasource.health.enabled`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

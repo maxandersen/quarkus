@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="serving-static-resources_{context}"]
+= Serving Static Resources
+:context: serving-static-resources
+
+To serve static resources you must place them in the `META-INF/resources` directory of your application. This location
+was chosen as it is the standard location for resources in `jar` files as defined by the Servlet spec. Even though
+Quarkus can be used without Servlet following this convention allows existing code that places its resources in this
+location to function correctly.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

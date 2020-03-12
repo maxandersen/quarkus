@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="tls_{context}"]
+= TLS
+:context: tls
+
+In production mode, TLS should be activated between the Quarkus application and Vault to prevent _man-in-the-middle_ attacks.
+
+There are several ways to configure the Quarkus application:
+
+* through the standard `javax.net.ssl.trustStore` system property, which should refer to a JKS truststore containing
+the trusted certificates
+* using property `quarkus.vault.tls.ca-cert`, which should refer to a pem encoded file.
+
+If `quarkus.vault.tls.ca-cert` is not set and the Quarkus application is using the Kubernetes authentication,
+TLS will be active and use the CA certificate bundle located in `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`.
+If you want to disable this behavior (for instance when using a trust store), you need to set it explicitly using:
+`quarkus.vault.tls.use-kubernetes-ca-cert=false`.
+
+The last relevant property is `quarkus.vault.tls.skip-verify`, which allows to communicate with Vault using TLS,
+but without checking the certificate authenticity. This may be convenient in development, but is strongly
+discouraged in production as it is not more secure than talking to Vault in plain HTTP.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

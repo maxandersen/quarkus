@@ -1,0 +1,45 @@
+[id="review-the-generated-metrics_{context}"]
+= Review the generated metrics
+
+To view the metrics, execute `curl -H"Accept: application/json" localhost:8080/metrics/application`
+You will receive a response such as:
+
+[source]
+----
+{
+  "org.acme.microprofile.metrics.PrimeNumberChecker.checksTimer" : {
+    "p50": 217.231273,
+    "p75": 217.231273,
+    "p95": 217.231273,
+    "p98": 217.231273,
+    "p99": 217.231273,
+    "p999": 217.231273,
+    "min": 0.58961,
+    "mean": 112.15909190834819,
+    "max": 217.231273,
+    "stddev": 108.2721053982776,
+    "count": 2,
+    "meanRate": 0.04943519091742238,
+    "oneMinRate": 0.2232140583080189,
+    "fiveMinRate": 0.3559527083952095,
+    "fifteenMinRate": 0.38474303050928976
+  },
+  "org.acme.microprofile.metrics.PrimeNumberChecker.performedChecks" : 2,
+  "org.acme.microprofile.metrics.PrimeNumberChecker.highestPrimeNumberSoFar" : 629521085409773
+}
+----
+
+Let's explain the meaning of each metric:
+
+* `performedChecks`: A counter which is increased by one each time the user asks about a number.
+* `highestPrimeNumberSoFar`: This is a gauge that stores the highest number that was asked about by the user and which was determined to be prime.
+* `checksTimer`: This is a timer, therefore a compound metric that benchmarks how much time the primality tests take. All durations are measured in milliseconds. It consists of these values:
+** `min`: The shortest duration it took to perform a primality test, probably it was performed for a small number.
+** `max`: The longest duration, probably it was with a large prime number.
+** `mean`: The mean value of the measured durations.
+** `stddev`: The standard deviation.
+** `count`: The number of observations (so it will be the same value as `performedChecks`).
+** `p50, p75, p95, p99, p999`: Percentiles of the durations. For example the value in `p95` means that 95 % of the measurements were faster than this duration.
+** `meanRate, oneMinRate, fiveMinRate, fifteenMinRate`: Mean throughput and one-, five-, and fifteen-minute exponentially-weighted moving average throughput.
+
+If you prefer an OpenMetrics export rather than the JSON format, remove the `-H"Accept: application/json"` argument from your command line.

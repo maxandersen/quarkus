@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="building_{context}"]
+= Building
+:context: building
+
+To build a container image for your project, `quarkus.container-image.build=true` needs to be set using any of the ways that Quarkus supports.
+
+[source,subs="attributes+"]
+----
+./mvnw clean package -Dquarkus.container-image.build=true
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

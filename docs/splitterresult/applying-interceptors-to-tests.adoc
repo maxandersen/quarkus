@@ -1,0 +1,45 @@
+ifdef::context[:parent-context: {context}]
+[id="applying-interceptors-to-tests_{context}"]
+= Applying Interceptors to Tests
+:context: applying-interceptors-to-tests
+
+As mentioned above Quarkus tests are actually full CDI beans, and as such you can apply CDI interceptors as you would
+normally. As an example, if you want a test method to run within the context of a transaction you can simply apply the
+`@Transactional` annotation to the method and the transaction interceptor will handle it.
+
+In addition to this you can also create your own test stereotypes. For example we could create a `@TransactionalQuarkusTest`
+as follows:
+
+[source,java]
+----
+@QuarkusTest
+@Stereotype
+@Transactional
+@Retention(RetentionPolicy.RUNTIME)
+@Target(ElementType.TYPE)
+public @interface TransactionalQuarkusTest {
+}
+----
+
+If we then apply this annotation to a test class it will act as if we had applied both the `@QuarkusTest` and
+`@Transactional` annotations, e.g.:
+
+[source,java]
+----
+@TransactionalQuarkusTest
+public class TestStereotypeTestCase {
+
+    @Inject
+    UserTransaction userTransaction;
+
+    @Test
+    public void testUserTransaction() throws Exception {
+        Assertions.assertEquals(Status.STATUS_ACTIVE, userTransaction.getStatus());
+    }
+
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

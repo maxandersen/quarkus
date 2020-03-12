@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="azure-deployment-descriptors_{context}"]
+= Azure Deployment Descriptors
+:context: azure-deployment-descriptors
+
+Templates for Azure Functions deployment descriptors (`host.json`, `function.json`) are within
+the `azure-config` directory.  Edit them as you need to.  Rerun the build when you are ready.
+
+*NOTE*: If you change the `function.json` `path` attribute or if you add a `routePrefix`,
+your jax-rs endpoints won't route correctly.  See <<config-azure-paths>> for more information.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

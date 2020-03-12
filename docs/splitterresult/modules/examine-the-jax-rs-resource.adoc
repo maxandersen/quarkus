@@ -1,0 +1,67 @@
+[id="examine-the-jax-rs-resource_{context}"]
+= Examine the JAX-RS resource
+
+Open the `src/main/java/org/acme/security/oauth2/TokenSecuredResource.java` file and see the following content:
+
+.Basic REST Endpoint
+[source,java]
+----
+package org.acme.security.oauth2;
+
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/secured")
+public class TokenSecuredResource {
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+}
+----
+
+This is a basic REST endpoint that does not have any of the {extension-name} specific features, so let's add some.
+
+We will use the JSR 250 common security annotations, they are described in the link:security[Using Security] guide.
+
+[source,java]
+----
+package org.acme.security.oauth2;
+
+import java.security.Principal;
+
+import javax.annotation.security.PermitAll;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.SecurityContext;
+
+@Path("/secured")
+@ApplicationScoped
+public class TokenSecuredResource {
+
+
+    @GET()
+    @Path("permit-all")
+    @PermitAll // <1>
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello(@Context SecurityContext ctx) { // <2>
+        Principal caller =  ctx.getUserPrincipal(); <3>
+        String name = caller == null ? "anonymous" : caller.getName();
+        String helloReply = String.format("hello + %s, isSecure: %s, authScheme: %s", name, ctx.isSecure(), ctx.getAuthenticationScheme());
+        return helloReply; // <4>
+    }
+}
+----
+[arabic]
+<1> `@PermitAll` indicates that the given endpoint is accessible by any caller, authenticated or not.
+<2> Here we inject the JAX-RS `SecurityContext` to inspect the security state of the call.
+<3> Here we obtain the current request user/caller `Principal`. For an unsecured call this will be null, so we build the user name by checking `caller` against null.
+<4> The reply we build up makes use of the caller name, the `isSecure()` and `getAuthenticationScheme()` states of the request `SecurityContext`.

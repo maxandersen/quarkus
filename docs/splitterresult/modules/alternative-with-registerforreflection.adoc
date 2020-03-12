@@ -1,0 +1,4 @@
+[id="alternative-with-registerforreflection_{context}"]
+= Alternative with @RegisterForReflection
+
+As for applications, you can also use the `@RegisterForReflection` annotation if the class is in your extension and not in a third-party jar.

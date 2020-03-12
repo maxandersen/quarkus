@@ -1,0 +1,4 @@
+[id="container-image-options_{context}"]
+= Container Image Options
+
+link:{generated-dir}/config/quarkus-container-image.adoc[]

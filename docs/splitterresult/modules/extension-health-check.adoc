@@ -1,0 +1,27 @@
+[id="extension-health-check_{context}"]
+= Extension Health Check
+
+Health checks are provided via the `quarkus-smallrye-health` extension. It provides both liveness and readiness checks capabilities.
+
+When writing an extension, it's beneficial to provide health checks for the extension, that can be automatically included without the developer needing to write their own.
+
+In order to provide a health check, you should do the following:
+
+- Import the `quarkus-smallrye-health` extension as an **optional** dependency in your runtime module so it will not impact the size of the application if
+health check is not included.
+- Create your health check following the link:microprofile-health[Quarkus - MicroProfile Health] guide. We advise providing only
+readiness check for an extension (liveness check is designed to express the fact that an application is up and needs to be lightweight).
+- Import the `quarkus-smallrye-health-spi` library in your deployment module.
+- Add a build step in your deployment module that produces a `HealthBuildItem`.
+- Add a way to disable the extension health check via a config item `quarkus.<extension>.health.enabled` that should be enabled by default.
+
+Following is an example from the Agroal extension that provides a `DataSourceHealthCheck` to validate the readiness of a datasource.
+
+[source,java,nowrap-option=""]
+----
+@BuildStep
+HealthBuildItem addHealthCheck(AgroalBuildTimeConfig agroalBuildTimeConfig) {
+    return new HealthBuildItem("io.quarkus.agroal.runtime.health.DataSourceHealthCheck",
+            agroalBuildTimeConfig.healthEnabled, "datasource");
+}
+----

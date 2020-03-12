@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="lets-start-again-with-a-clean-slate_{context}"]
+= Let&#8217;s start again with a clean slate
+:context: lets-start-again-with-a-clean-slate
+
+Let's revert the changes we made to the configuration file and go back to SSL with the following command:
+
+[source]
+----
+git checkout -- src/main/resources/application.properties
+----
+
+And let's build the native executable again:
+
+[source]
+----
+./mvnw clean install -Pnative
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,77 @@
+[id="declarative-approach_{context}"]
+= Declarative approach
+
+The easiest way to define your transaction boundaries is to use the `@Transactional` annotation on your entry method (`javax.transaction.Transactional`).
+
+[source,java]
+----
+@ApplicationScoped
+public class SantaClausService {
+
+    @Inject ChildDAO childDAO;
+    @Inject SantaClausDAO santaDAO;
+
+    @Transactional <1>
+    public void getAGiftFromSanta(Child child, String giftDescription) {
+        // some transaction work
+        Gift gift = childDAO.addToGiftList(child, giftDescription);
+        if (gift == null) {
+            throw new OMGGiftNotRecognizedException(); <2>
+        }
+        else {
+            santaDAO.addToSantaTodoList(gift);
+        }
+    }
+}
+----
+[arabic]
+<1> This annotation defines your transaction boundaries and will wrap this call within a transaction.
+<2> A `RuntimeException` crossing the transaction boundaries will rollback the transaction.
+`@Transactional` can be used to control transaction boundaries on any CDI bean at the method level or at the class level to ensure every method is transactional.
+That includes REST endpoints.
+
+You can control whether and how the transaction is started with parameters on `@Transactional`:
+
+* `@Transactional(REQUIRED)` (default): starts a transaction if none was started, stays with the existing one otherwise.
+* `@Transactional(REQUIRES_NEW)`: starts a transaction if none was started ; if an existing one was started, suspends it and starts a new one for the boundary of that method.
+* `@Transactional(MANDATORY)`: fails if no transaction was started ; works within the existing transaction otherwise.
+* `@Transactional(SUPPORTS)`: if a transaction was started, joins it ; otherwise works with no transaction.
+* `@Transactional(NOT_SUPPORTED)`: if a transaction was started, suspends it and works with no transaction for the boundary of the method ; otherwise works with no transaction.
+* `@Transactional(NEVER)`: if a transaction was started, raises an exception ; otherwise works with no transaction.
+
+`REQUIRED` or `NOT_SUPPORTED` are probably the most useful ones.
+This is how you decide whether a method is to be running within or outside a transaction.
+Make sure to check the JavaDoc for the precise semantic.
+
+The transaction context is propagated to all calls nested in the `@Transactional` method as you would expect (in this example `childDAO.addToGiftList()` and `santaDAO.addToSantaTodoList()`).
+The transaction will commit unless a runtime exception crosses the method boundary.
+You can override whether an exception forces the rollback or not by using `@Transactional(dontRollbackOn=SomeException.class)` (or `rollbackOn`).
+
+You can also programmatically ask for a transaction to be marked for rollback.
+Inject a `TransactionManager` for this.
+
+[source,java]
+----
+@ApplicationScoped
+public class SantaClausService {
+
+    @Inject TransactionManager tm; <1>
+    @Inject ChildDAO childDAO;
+    @Inject SantaClausDAO santaDAO;
+
+    @Transactional
+    public void getAGiftFromSanta(Child child, String giftDescription) throws Exception {
+        // some transaction work
+        Gift gift = childDAO.addToGiftList(child, giftDescription);
+        if (gift == null) {
+            tm.setRollbackOnly(); <2>
+        }
+        else {
+            santaDAO.addToSantaTodoList(gift);
+        }
+    }
+}
+----
+[arabic]
+<1> Inject the `TransactionManager` to be able to activate `setRollbackOnly` semantic.
+<2> Programmatically decide to set the transaction for rollback.

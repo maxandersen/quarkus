@@ -1,0 +1,82 @@
+ifdef::context[:parent-context: {context}]
+[id="build-tool-maven_{context}"]
+= Maven configuration
+:context: build-tool-maven
+
+If you have not used <<project-creation,project scaffolding>>, add the following elements in your `pom.xml`
+
+[source,xml,subs="attributes+"]
+----
+<dependencyManagement>
+    <dependencies>
+        <dependency> <1>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-bom</artifactId>
+            <version>${quarkus.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
+<build>
+    <plugins>
+        <plugin> <2>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-maven-plugin</artifactId>
+            <version>${quarkus.version}</version>
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>build</goal>
+                    </goals>
+                </execution>
+            </executions>
+        </plugin>
+    </plugins>
+</build>
+
+<profiles>
+    <profile> <3>
+        <id>native</id>
+        <properties> <4>
+            <quarkus.package.type>native</quarkus.package.type>
+        </properties>
+        <build>
+            <plugins>
+                <plugin> <5>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>${surefire-plugin.version}</version>
+                    <executions>
+                        <execution>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                            <configuration>
+                                <systemProperties>
+                                    <native.image.path>${project.build.directory}/${project.build.finalName}-runner</native.image.path>
+                                </systemProperties>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </build>
+    </profile>
+</profiles>
+----
+
+[arabic]
+<1> Optionally use a BOM file to omit the version of the different Quarkus dependencies.
+<2> Use the Quarkus Maven plugin that will hook into the build process.
+<3> Use a specific `native` profile for native executable building.
+<4> Enable the `native` package type. The build will therefore produce a native executable.
+<5> If you want to test your native executable with Integration Tests, add the following plugin configuration. Test names `*IT` and annotated `@NativeImageTest` will be run against the native executable. See the link:building-native-image[Native executable guide] for more info.
+
+include::modules/uber-jar-maven.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,43 @@
+ifdef::context[:parent-context: {context}]
+[id="providing-application-level-openapi-annotations_{context}"]
+= Providing Application Level OpenAPI Annotations
+:context: providing-application-level-openapi-annotations
+
+There are some MicroProfile OpenAPI annotations which describe global API information, such as the following:
+
+* API Title
+* API Description
+* Version
+* Contact Information
+* License
+
+All of this information (and more) can be included in your Java code by using appropriate OpenAPI annotations
+on a JAX-RS `Application` class.  Because a JAX-RS `Application` class is not required in Quarkus, you will
+likely have to create one.  It can simply be an empty class that extends `javax.ws.rs.core.Application`.  This
+empty class can then be annotated with various OpenAPI annotations such as `@OpenAPIDefinition`.  For example:
+
+[source,java]
+----
+@OpenAPIDefinition(
+    tags = {
+            @Tag(name="widget", description="Widget operations."),
+            @Tag(name="gasket", description="Operations related to gaskets")
+    },
+    info = @Info(
+        title="Example API",
+        version = "1.0.1",
+        contact = @Contact(
+            name = "Example API Support",
+            url = "http://exampleurl.com/contact",
+            email = "techsupport@example.com"),
+        license = @License(
+            name = "Apache 2.0",
+            url = "http://www.apache.org/licenses/LICENSE-2.0.html"))
+)
+public class ExampleApiApplication extends Application {
+}
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

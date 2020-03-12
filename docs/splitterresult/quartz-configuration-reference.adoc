@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="quartz-configuration-reference_{context}"]
+= Quartz Configuration Reference
+:context: quartz-configuration-reference
+
+link:{generated-dir}/config/quarkus-quartz.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,83 @@
+ifdef::context[:parent-context: {context}]
+[id="send-logs-to-logstash-the-elastic-stack-elk_{context}"]
+= Send logs to Logstash / the Elastic Stack (ELK)
+:context: send-logs-to-logstash-the-elastic-stack-elk
+
+Logstash comes by default with an Input plugin that can understand the GELF format, we will first create a pipeline that enables this plugin.
+
+Create the following file  in `$HOME/pipelines/gelf.conf`:
+
+[source]
+----
+input {
+  gelf {
+    port => 12201
+  }
+}
+output {
+  stdout {}
+  elasticsearch {
+    hosts => ["http://elasticsearch:9200"]
+  }
+}
+----
+
+Finally, launch the components that compose the Elastic Stack:
+
+- Elasticsearch
+- Logstash
+- Kibana
+
+You can do this via the following docker-compose file that you can launch via `docker-compose run -d`:
+
+[source,yaml,subs="attributes"]
+----
+# Launch Elasticsearch
+version: '3.2'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:{es-version}
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    networks:
+      - elk
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash-oss:{es-version}
+    volumes:
+      - source: $HOME/pipelines
+        target: /usr/share/logstash/pipeline
+        type: bind
+    ports:
+      - "12201:12201/udp"
+      - "5000:5000"
+      - "9600:9600"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana-oss:{es-version}
+    ports:
+      - "5601:5601"
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+
+networks:
+  elk:
+    driver: bridge
+
+----
+
+Launch your application, you should see your logs arriving inside the Elastic Stack; you can use Kibana available at http://localhost:5601/ to access them.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

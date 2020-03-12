@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="prepare-the-data_{context}"]
+= Prepare the data
+:context: prepare-the-data
+
+To make it easier to showcase some capabilities of Spring Data JPA on Quarkus, some test data should be inserted into the database
+by adding the following content to a new file named `src/main/resources/import.sql`:
+
+[source,sql]
+----
+INSERT INTO fruit(id, name, color) VALUES (1, 'Cherry', 'Red');
+INSERT INTO fruit(id, name, color) VALUES (2, 'Apple', 'Red');
+INSERT INTO fruit(id, name, color) VALUES (3, 'Banana', 'Yellow');
+INSERT INTO fruit(id, name, color) VALUES (4, 'Avocado', 'Green');
+----
+
+Hibernate ORM will execute these queries on application startup.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

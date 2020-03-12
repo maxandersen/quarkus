@@ -1,0 +1,19 @@
+[id="generating-a-token_{context}"]
+= Generating a token
+
+You need to obtain the token from a standard OAuth2 authentication server (https://www.keycloak.org/[Keycloak] for example) using the token endpoint.
+
+You can find below a curl example of such call for a `client_credential` flow:
+
+[source,shell]
+----
+curl -X POST "http://oauth-server/token?grant_type=client_credentials" \
+-H  "Accept: application/json" -H  "Authorization: Basic Y2xpZW50X2lkOmNsaWVudF9zZWNyZXQ="
+----
+
+It should respond something like that...
+
+[source,json]
+----
+{"access_token":"60acf56d-9daf-49ba-b3be-7a423d9c7288","token_type":"bearer","expires_in":1799,"scope":"READER"}
+----

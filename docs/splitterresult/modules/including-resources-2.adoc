@@ -1,0 +1,21 @@
+[id="including-resources-2_{context}"]
+= Including resources
+
+In the context of an extension, Quarkus eliminates the need for a JSON configuration file by allowing extension authors to specify a `NativeImageResourceBuildItem`:
+
+[source,java]
+----
+public class ResourcesProcessor {
+
+    @BuildStep
+    NativeImageResourceBuildItem nativeImageResourceBuildItem() {
+        return new NativeImageResourceBuildItem("META-INF/extra.properties");
+    }
+
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+For more information about GraalVM resource handling in native executables please refer to https://github.com/oracle/graal/blob/master/substratevm/RESOURCES.md[the GraalVM documentation].
+====

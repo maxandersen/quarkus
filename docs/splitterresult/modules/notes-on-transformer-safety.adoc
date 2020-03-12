@@ -1,0 +1,7 @@
+[id="notes-on-transformer-safety_{context}"]
+= Notes on Transformer Safety
+
+A ClassLoader is said to be 'transformer safe' if it is safe to load classes in the class loader before the transformers
+are ready. Once a class has been loaded it cannot be changed, so if a class is loaded before the transformers have been
+prepared this will prevent the transformation from working. Loading classes in a transformer safe ClassLoader will not
+prevent the transformation, as the loaded class is not used at runtime.

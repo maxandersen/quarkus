@@ -1,0 +1,111 @@
+ifdef::context[:parent-context: {context}]
+[id="using-the-jsonwebtoken-and-claim-injection_{context}"]
+= Using the JsonWebToken and Claim Injection
+:context: using-the-jsonwebtoken-and-claim-injection
+
+Now that we can generate a JWT to access our secured REST endpoints, let's see what more we can do with the `JsonWebToken`
+interface and the JWT claims. The `org.eclipse.microprofile.jwt.JsonWebToken` interface extends the `java.security.Principal`
+interface, and is in fact the type of the object that is returned by the `javax.ws.rs.core.SecurityContext#getUserPrincipal()` call we
+used previously. This means that code that does not use CDI but does have access to the REST container `SecurityContext` can get
+hold of the caller `JsonWebToken` interface by casting the `SecurityContext#getUserPrincipal()`.
+
+The `JsonWebToken` interface defines methods for accessing claims in the underlying JWT. It provides accessors for common
+claims that are required by the {mp-jwt} specification as well as arbitrary claims that may exist in the JWT.
+
+Let's expand our `TokenSecuredResource` with another endpoint /secured/winners. The `winners()` method, some hypothetical lottery
+ winning number generator, whose code is shown in the following list:
+
+.TokenSecuredResource#winners Method Addition
+[source,java]
+----
+package org.acme.security.jwt;
+
+import java.security.Principal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+
+import javax.annotation.security.PermitAll;
+import javax.annotation.security.RolesAllowed;
+import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.SecurityContext;
+
+import org.eclipse.microprofile.jwt.Claims;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+
+
+/**
+ * Version 3 of the TokenSecuredResource
+ */
+@Path("/secured")
+@RequestScoped
+public class TokenSecuredResourceV3 {
+
+    @Inject
+    JsonWebToken jwt;
+
+...
+
+    @GET
+    @Path("winners")
+    @Produces(MediaType.TEXT_PLAIN)
+    @RolesAllowed("Subscriber")
+    public String winners() {
+        int remaining = 6;
+        ArrayList<Integer> numbers = new ArrayList<>();
+
+        // If the JWT contains a birthdate claim, use the day of the month as a pick
+        if (jwt.containsClaim(Claims.birthdate.name())) { // <1>
+            String bdayString = jwt.getClaim(Claims.birthdate.name()); // <2>
+            LocalDate bday = LocalDate.parse(bdayString);
+            numbers.add(bday.getDayOfMonth()); // <3>
+            remaining --;
+        }
+        // Fill remaining picks with random numbers
+        while(remaining > 0) { // <4>
+            int pick = (int) Math.rint(64 * Math.random() + 1);
+            numbers.add(pick);
+            remaining --;
+        }
+        return numbers.toString();
+    }
+}
+----
+
+[arabic]
+<1> Here we use the injected `JsonWebToken` to check for a `birthday` claim.
+<2> If it exists, we obtain the claim value as a `String`, and then convert it to a `LocalDate`.
+<3> The day of month value of the `birthday` claim is inserted as the first winning number pick.
+<4> The remainder of the winning number picks are random numbers.
+
+This illustrates how you can use the JWT to not only provide identity and role based authorization, but as a stateless container
+of information associated with the authenticated caller that can be used to alter you business method logic.
+Add this `winners` method to your `TokenSecuredResource` code, and run the following command, replacing _YOUR_TOKEN_ with
+a new JWT or a long lived JWT you generated previously:
+
+.curl command for /secured/winners
+[source,shell]
+----
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8080/secured/winners; echo
+----
+
+Example output using my generated token is shown in the following example output. Note that the first pick corresponds to the day of month of
+the birthdate claim from the `JwtClaims.json` content.
+
+.Example Output for /secured/winners
+[source,shell]
+----
+$ curl -H "Authorization: Bearer eyJraWQiOiJcL3ByaXZhdGVLZXkucGVtIiwidHlwIjoiSldUIiwiYWxnIjoiUlMyNTYifQ.eyJzdWIiOiJqZG9lLXVzaW5nLWp3dC1yYmFjIiwiYXVkIjoidXNpbmctand0LXJiYWMiLCJ1cG4iOiJqZG9lQHF1YXJrdXMuaW8iLCJiaXJ0aGRhdGUiOiIyMDAxLTA3LTEzIiwiYXV0aF90aW1lIjoxNTUxNjY2MDMzLCJpc3MiOiJodHRwczpcL1wvcXVhcmt1cy5pb1wvdXNpbmctand0LXJiYWMiLCJyb2xlTWFwcGluZ3MiOnsiZ3JvdXAyIjoiR3JvdXAyTWFwcGVkUm9sZSIsImdyb3VwMSI6Ikdyb3VwMU1hcHBlZFJvbGUifSwiZ3JvdXBzIjpbIkVjaG9lciIsIlRlc3RlciIsIlN1YnNjcmliZXIiLCJncm91cDIiXSwicHJlZmVycmVkX3VzZXJuYW1lIjoiamRvZSIsImV4cCI6MTU1MTY2NjMzMywiaWF0IjoxNTUxNjY2MDMzLCJqdGkiOiJhLTEyMyJ9.LqJ5LlCrVIbCcRAus4aNHv7UfvuUgrcEVOwBxwfPY4c-YCaUxK0owxbtP2WtR5__yTFXpdplR6gVJWwv4Hw8c_sP8MRQi_5bdnTqZt3TeJsepx0cm7AIwJCopmpbuNjIgLVLZ_6VP3ZkZ2VK9SDO-9yBMPWWp2bnLILdwfYsOuJbFB_bWxSQYnTioms7NZjVefVY8eqawwfRq75PhB7W2iw-Ni2puVFjnpTiAZeCUCur-zjQ50QG6zSCZpVqPcI5JZ2-KeJKheiglYCYp0cauTdVgXjdlXCGQbAU0xirLxJXNsxg2GZxgV9luGwy1y3BdezwoM2m4mXviuHJP-lziA" http://localhost:8080/secured/winners; echo
+[13, 47, 42, 45, 19, 25]
+----
+
+include::modules/claims-injection.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

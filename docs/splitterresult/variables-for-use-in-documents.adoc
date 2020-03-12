@@ -1,0 +1,37 @@
+ifdef::context[:parent-context: {context}]
+[id="variables-for-use-in-documents_{context}"]
+= Variables for Use in Documents
+:context: variables-for-use-in-documents
+
+The following variables externalize key information that can change over time, and so references
+to such information should be done by using the variable inside of {} curly brackets. The
+complete list of externalized variables for use is given in the following table:
+
+.Variables
+[table,tablepcwidth="100",rowcount="21",header-option="",colcount="3",cols="<m,<m,<2"]
+|===
+| \{quarkus-version} | {quarkus-version} | The current version of the project.
+| \{quarkus-home-url} | {quarkus-home-url} | The location of the project home page.
+| \{quarkus-site-getting-started} | {quarkus-site-getting-started} | The location of the getting started page.
+| \{quarkus-org-url} | {quarkus-org-url} | The location of the project github organization.
+| \{quarkus-base-url} | {quarkus-base-url} | Quarkus GitHub URL common base prefix.
+| \{quarkus-clone-url} | {quarkus-clone-url} | Quarkus URL for git clone referenced by the documentation.
+| \{quarkus-archive-url} | {quarkus-archive-url} | Quarkus URL to master source archive.
+| \{quarkus-blob-url} | {quarkus-blob-url} | Quarkus URL to master blob source tree; used for referencing source files.
+| \{quarkus-tree-url} | {quarkus-tree-url} | Quarkus URL to master source tree root; used for referencing directories.
+| \{quarkus-issues-url} | {quarkus-issues-url} | Quarkus URL to the issues page.
+| \{quarkus-images-url} | {quarkus-images-url} | Quarkus URL to set of container images delivered for Quarkus.
+| \{quarkus-chat-url} | {quarkus-chat-url} | URL of our chat.
+| \{quarkus-mailing-list-subscription-email} | {quarkus-mailing-list-subscription-email} | Email used to subscribe to our mailing list.
+| \{quarkus-mailing-list-index} | {quarkus-mailing-list-index} | Mailing list index page.
+| \{quickstarts-base-url} | {quickstarts-base-url} | Quickstarts URL common base prefix.
+| \{quickstarts-clone-url} | {quickstarts-clone-url} | Quickstarts URL for git clone referenced by the documentation.
+| \{quickstarts-archive-url} | {quickstarts-archive-url} | Quickstarts URL to master source archive.
+| \{quickstarts-blob-url} | {quickstarts-blob-url} | Quickstarts URL to master blob source tree; used for referencing source files.
+| \{quickstarts-tree-url} | {quickstarts-tree-url} | Quickstarts URL to master source tree root; used for referencing directories.
+| \{graalvm-version} | {graalvm-version} | Recommended Graal VM version to use.
+|===
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

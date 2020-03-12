@@ -1,0 +1,17 @@
+[id="expose-your-components-via-cdi_{context}"]
+= Expose your components via CDI
+
+Since CDI is the central programming model when it comes to component composition, frameworks should expose producers that are easily consumable by user applications. +
+For example, Hibernate ORM exposes `EntityManagerFactory` and `EntityManager` beans, the connection pool exposes `DataSource` beans etc.
+An extension must generate these bean definitions at build time.
+
+A very useful pattern of creating such beans but also giving application code the ability to easily override some of the beans with custom implementations, is to use
+the `@DefaultBean` that Quarkus provides. This is best explained with an example.
+
+[id="example-cdi-configuration-using-defaultbean_{context}"]
+== Example CDI configuration using @DefaultBean
+:context: example-cdi-configuration-using-defaultbean
+
+[id="how-to-override-a-bean-defined-by-a-libraryquarkus-extension-that-doesnt-use-defaultbean_{context}"]
+== How to Override a Bean Defined by a Library/Quarkus Extension that doesn&#8217;t use @DefaultBean
+:context: how-to-override-a-bean-defined-by-a-libraryquarkus-extension-that-doesnt-use-defaultbean

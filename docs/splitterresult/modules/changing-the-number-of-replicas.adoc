@@ -1,0 +1,9 @@
+[id="changing-the-number-of-replicas_{context}"]
+= Changing the number of replicas:
+
+To change the number of replicas from 1 to 3:
+
+[source]
+----
+quarkus.kubernetes.replicas=3
+----

@@ -1,0 +1,26 @@
+ifdef::context[:parent-context: {context}]
+[id="using-the-vert-x-web-router_{context}"]
+= Using the Vert.x Web Router
+:context: using-the-vert-x-web-router
+
+You can also register your route directly on the _HTTP routing layer_ by registering routes directly on the `Router` object.
+To retrieve the `Router` instance at startup:
+
+[source,java]
+----
+public void init(@Observes Router router) {
+    router.get("/my-route").handler(rc -> rc.response().end("Hello from my route"));
+}
+----
+
+Check the https://vertx.io/docs/vertx-web/java/#_basic_vert_x_web_concepts[Vert.x Web documentation] to know more about the route registration, options, and available handlers.
+
+[NOTE,textlabel="Note",name="note"]
+====
+`Router` access is provided by the `quarkus-vertx-http` extension.
+If you use `quarkus-resteasy` or `quarkus-vertx-web`, the extension will be added automatically.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

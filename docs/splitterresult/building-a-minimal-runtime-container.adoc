@@ -1,0 +1,42 @@
+ifdef::context[:parent-context: {context}]
+[id="building-a-minimal-runtime-container_{context}"]
+= Building a minimal runtime container
+:context: building-a-minimal-runtime-container
+
+As an alternative to creating an application from the S2I build process one can use chained builds to produce a runner image that is minimal in size and does not contain all the dependencies required to build the application.
+
+The following command will create a chained build that is triggered whenever the quarkus-quickstart-native is built.
+
+[source,shell]
+----
+oc new-build --name=minimal-quarkus-quickstart-native \
+    --docker-image=registry.access.redhat.com/ubi7-dev-preview/ubi-minimal \
+    --source-image=quarkus-quickstart-native \
+    --source-image-path='/home/quarkus/application:.' \
+    --dockerfile=$'FROM registry.access.redhat.com/ubi7-dev-preview/ubi-minimal:latest\nCOPY application /application\nCMD /application\nEXPOSE 8080'
+----
+
+To create a service from the minimal build run the following command:
+
+[source,shell]
+----
+oc new-app minimal-quarkus-quickstart-native
+
+oc expose svc minimal-quarkus-quickstart-native
+----
+
+The end result is an image that is less than 40 MB in size (compressed) and does not contain build dependencies like GraalVM, OpenJDK, Maven, etc.
+
+.Creating build without config.
+[TIP,textlabel="Tip",name="tip"]
+====
+The minimal build is depending on the S2I build since it is using the output (native runnable application) from the S2I build. However, you do not need to create an application with `oc new-app`. Instead you could use `oc new-build` like this:[source,shell,subs="attributes"]
+----
+oc new-build quay.io/quarkus/ubi-quarkus-native-s2i:{graalvm-version}-java8~{quickstarts-clone-url} \
+    --context-dir=getting-started --name=quarkus-quickstart-native
+----Like in previous commands, use `quay.io/quarkus/ubi-quarkus-native-s2i:{graalvm-version}-java11` for building a JDK 11 compatible image.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

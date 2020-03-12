@@ -1,0 +1,4 @@
+[id="list-of-all-configuration-properties_{context}"]
+= List of all configuration properties
+
+All the Quarkus configuration properties are link:all-config[documented and searcheable].

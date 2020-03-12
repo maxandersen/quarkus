@@ -1,0 +1,15 @@
+[id="some-types-of-extensions_{context}"]
+= Some types of extensions
+
+There exist multiple stereotypes of extension, let's list a few.
+
+Bare library running:: This is the less sophisticated extension.
+It consists of a set of patches to make sure a library runs on GraalVM.
+If possible, contribute these patches upstream, not in extensions.
+Second best is to write Substrate VM substitutions, which are patches applied during native image compilation.
+Get a framework running:: A framework at runtime typically reads configuration, scan the classpath and classes for metadata (annotations, getters etc), build a metamodel on top of which it runs, find options via the service loader pattern, prepare invocation calls (reflection), proxy interfaces, etc. +
+These operations should be done at build time and the metamodel be passed to the recorder DSL that will generate classes that will be executed at runtime and boot the framework.
+Get a CDI portable extension running:: The CDI portable extension model is very flexible.
+Too flexible to benefit from the build time boot promoted by Quarkus.
+Most extension we have seen do not make use of these extreme flexibilities capabilities.
+The way to port a CDI extension to Quarkus is to rewrite it as a Quarkus extension which will define the various beans at build time (deployment time in extension parlance).

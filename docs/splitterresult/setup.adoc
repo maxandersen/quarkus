@@ -1,0 +1,102 @@
+ifdef::context[:parent-context: {context}]
+[id="setup_{context}"]
+= Setup
+:context: setup
+
+We assume there is a Vault running from the {base-guide}, and the root token is known.
+The first step consists in activating the Transit Secret Engine, and creating the different keys:
+
+[source,shell,subs="attributes+"]
+----
+docker exec -it dev-vault sh
+export VAULT_TOKEN={root-token}
+
+vault secrets enable transit
+# ==> Success! Enabled the transit secrets engine at: transit/
+
+vault write -f transit/keys/my-encryption-key
+# ==> Success! Data written to: transit/keys/my-encryption-key
+
+vault write transit/keys/my-sign-key type=ecdsa-p256
+# ==> Success! Data written to: transit/keys/my-sign-key
+----
+
+Note that you did not have to provide the key value. You only provide its name, and Vault will generate it for you and
+keep it secured.
+
+Once the keys have been created, we now need to create a policy that provides access for it:
+
+[source,shell,subs="attributes+"]
+----
+cat <<EOF | vault policy write vault-transit-quickstart-policy -
+path "transit/encrypt/my-encryption-key" {
+  capabilities = [ "update" ]
+}
+path "transit/decrypt/my-encryption-key" {
+  capabilities = [ "update" ]
+}
+path "transit/sign/my-sign-key" {
+  capabilities = [ "update"]
+}
+path "transit/verify/my-sign-key" {
+  capabilities = [ "update" ]
+}
+EOF
+# ==> Success! Uploaded policy: vault-transit-quickstart-policy
+----
+
+And finally, let's add the `vault-transit-quickstart-policy` to user `bob` that was created in the {base-guide}:
+
+[source,shell,subs="attributes+"]
+----
+vault write auth/userpass/users/bob password=sinclair policies=vault-quickstart-policy,vault-transit-quickstart-policy
+----
+
+To check that the configuration is correct, try logging in:
+
+[source,shell]
+----
+vault login -method=userpass username=bob password=sinclair
+----
+
+You should see:
+
+[source,shell,subs="attributes+"]
+----
+Success! You are now authenticated. The token information displayed below
+is already stored in the token helper. You do NOT need to run "vault login"
+again. Future Vault requests will automatically use this token.
+
+Key                    Value
+---                    -----
+token                  {client-token}
+token_accessor         OKNipTAgxWbxsrjixASNiwdY
+token_duration         768h
+token_renewable        true
+token_policies         ["default" "vault-quickstart-policy"]
+identity_policies      []
+policies               ["default" "vault-quickstart-policy"]
+token_meta_username    bob
+----
+
+Now set `VAULT_TOKEN` to the `token` above (instead of the root token), and try encrypting some data:
+
+[source,shell,subs="attributes+"]
+----
+export VAULT_TOKEN={client-token}
+# note: "my secret data" in base64 is "bXkgc2VjcmV0IGRhdGEK"
+vault write transit/encrypt/my-encryption-key plaintext=bXkgc2VjcmV0IGRhdGEK
+----
+
+You should see:
+
+[source,shell,subs="attributes+"]
+----
+Key           Value
+---           -----
+ciphertext    vault:v1:vIQxsLANFbcfKofJL55zjoIXV6MqAzvjKUUQLGg5pWTz0W2Qab/B4nEJaQ==
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

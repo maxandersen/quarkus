@@ -1,0 +1,68 @@
+ifdef::context[:parent-context: {context}]
+[id="the-build-file-and-the-dependencies_{context}"]
+= The build file and the dependencies
+:context: the-build-file-and-the-dependencies
+
+Use https://code.quarkus.io/[code.quarkus.io] to generate an application
+with the following extensions, for Maven or Gradle:
+
+* RESTEasy JAX-RS (`quarkus-resteasy`)
+* RESTEasy Jackson (`quarkus-resteasy-jackson`)
+* OptaPlanner (`quarkus-optaplanner`)
+* OptaPlanner Jackson (`quarkus-optaplanner-jackson`)
+
+Alternatively, generate it from the command line with Maven:
+
+[source,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=optaplanner-quickstart \
+    -Dextensions="resteasy, resteasy-jackson, optaplanner, optaplanner-jackson"
+cd optaplanner-quickstart
+----
+
+In Maven, your `pom.xml` file contains these dependencies:
+
+[source,xml,subs="attributes+"]
+----
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-universe-bom</artifactId>
+        <version>{quarkus-version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-resteasy</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-resteasy-jackson</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-optaplanner</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-optaplanner-jackson</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

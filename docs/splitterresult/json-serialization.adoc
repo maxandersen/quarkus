@@ -1,0 +1,72 @@
+ifdef::context[:parent-context: {context}]
+[id="json-serialization_{context}"]
+= JSON serialization
+:context: json-serialization
+
+Quarkus has built-in capabilities to deal with JSON Kafka messages.
+
+Imagine we have a `Fruit` pojo as follows:
+
+[source,java]
+----
+public class Fruit {
+
+    public String name;
+    public int price;
+
+    public Fruit() {
+    }
+
+    public Fruit(String name, int price) {
+        this.name = name;
+        this.price = price;
+    }
+}
+----
+
+And we want to use it to receive messages from Kafka, make some price transformation, and send messages back to Kafka.
+
+[source,java]
+----
+import io.smallrye.reactive.messaging.annotations.Broadcast;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Outgoing;
+
+import javax.enterprise.context.ApplicationScoped;
+
+/**
+* A bean consuming data from the "fruit-in" Kafka topic and applying some price conversion.
+* The result is pushed to the "fruit-out" stream.
+*/
+@ApplicationScoped
+public class FruitProcessor {
+
+    private static final double CONVERSION_RATE = 0.88;
+
+    @Incoming("fruit-in")
+    @Outgoing("fruit-out")
+    @Broadcast
+    public double process(Fruit fruit) {
+        fruit.price = fruit.price * CONVERSION_RATE;
+        return fruit;
+    }
+
+}
+----
+
+To do this, we will need to setup JSON serialization with JSON-B or Jackson.
+
+[NOTE,textlabel="Note",name="note"]
+====
+With JSON serialization correctly configured, you can also use `Publisher<Fruit>` and `Emitter<Fruit>`.
+====
+
+include::modules/serializing-via-json-b.adoc[leveloffset=+1]
+
+include::modules/serializing-via-jackson.adoc[leveloffset=+1]
+
+include::modules/sending-json-server-sent-events-sse.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

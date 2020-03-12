@@ -1,0 +1,138 @@
+ifdef::context[:parent-context: {context}]
+[id="starting-from-a-simple-project-and-two-tests_{context}"]
+= Starting from a simple project and two tests
+:context: starting-from-a-simple-project-and-two-tests
+
+Let's start from an empty application created with the Quarkus Maven plugin:
+
+[source,shell,subs="attributes+"]
+----
+mvn io.quarkus:quarkus-maven-plugin:create \
+    -DprojectGroupId=org.acme \
+    -DprojectArtifactId=tests-with-coverage-quickstart
+cd tests-with-coverage-quickstart
+----
+
+Now we'll be adding all the elements necessary to have an application that is properly covered with tests.
+
+First, an application serving a hello endpoint:
+
+[source,java]
+----
+package org.acme.testcoverage;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+@Path("/hello")
+public class GreetingResource {
+
+    private final GreetingService service;
+
+    @Inject
+    public GreetingResource(GreetingService service) {
+        this.service = service;
+    }
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    @Path("/greeting/{name}")
+    public String greeting(@PathParam("name") String name) {
+        return service.greeting(name);
+    }
+
+    @GET
+    @Produces(MediaType.TEXT_PLAIN)
+    public String hello() {
+        return "hello";
+    }
+}
+----
+
+This endpoint uses a greeting service:
+
+[source,java]
+----
+package org.acme.testcoverage;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class GreetingService {
+
+    public String greeting(String name) {
+        return "hello " + name;
+    }
+
+}
+----
+
+The project will also need some tests. First a simple JUnit:
+
+[source,java]
+----
+package org.acme.testcoverage;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+public class GreetingServiceTest {
+
+    @Test
+    public void testGreetingService() {
+        GreetingService service = new GreetingService();
+        Assertions.assertEquals("hello Quarkus", service.greeting("Quarkus"));
+    }
+}
+----
+
+But also a `@QuarkusTest`:
+
+[source,java]
+----
+package org.acme.testcoverage;
+
+import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
+
+import java.util.UUID;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
+
+@QuarkusTest
+@Tag("integration")
+public class GreetingResourceTest {
+
+    @Test
+    public void testHelloEndpoint() {
+        given()
+          .when().get("/hello")
+          .then()
+             .statusCode(200)
+             .body(is("hello"));
+    }
+
+    @Test
+    public void testGreetingEndpoint() {
+        String uuid = UUID.randomUUID().toString();
+        given()
+          .pathParam("name", uuid)
+          .when().get("/hello/greeting/{name}")
+          .then()
+            .statusCode(200)
+            .body(is("hello " + uuid));
+    }
+}
+----
+
+The first one will be our example of a Unit Test and the second one will be our example of Integration Test.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

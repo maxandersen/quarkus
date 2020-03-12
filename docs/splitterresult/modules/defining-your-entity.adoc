@@ -1,0 +1,57 @@
+[id="defining-your-entity_{context}"]
+= Defining your entity
+
+To define a Panache entity, simply extend `PanacheMongoEntity` and add your columns as public fields.
+You can add the `@MongoEntity` annotation to your entity if you need to customize the name of the collection and/or the database.
+
+[source,java]
+----
+@MongoEntity(collection="ThePerson")
+public class Person extends PanacheMongoEntity {
+    public String name;
+
+    // will be persisted as a 'birth' field in MongoDB
+    @BsonProperty("birth")
+    public LocalDate birthDate;
+
+    public Status status;
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+annotating with `@MongoEntity` is optional, it allows you to configure the name of the collection and the name of the database.
+Here the entity will be stored in the `ThePerson` collection instead of the default `Person` collection.
+====
+
+MongoDB with Panache uses the link:{mongodb-doc-root-url}/bson/pojos/[PojoCodecProvider] to map your entities to a MongoDB `Document`.
+
+You will be allowed to use the following annotations to customize this mapping:
+
+- `@BsonId`: allows you to customize the ID field, see <<custom-ids,Custom IDs>>.
+- `@BsonProperty`: customize the serialized name of the field.
+- `@BsonIgnore`: ignore a field during the serialization.
+
+If you need to write accessors, you can:
+
+[source,java]
+----
+public class Person extends PanacheMongoEntity {
+    public String name;
+    public LocalDate birth;
+    public Status status;
+
+    // return name as uppercase in the model
+    public String getName(){
+        return name.toUpperCase();
+    }
+
+    // store all names in lowercase in the DB
+    public void setName(String name){
+        this.name = name.toLowerCase();
+    }
+}
+----
+
+And thanks to our field access rewrite, when your users read `person.name` they will actually call your `getName()` accessor, and similarly for field writes and the setter.
+This allows for proper encapsulation at runtime as all fields calls will be replaced by the corresponding getter/setter calls.

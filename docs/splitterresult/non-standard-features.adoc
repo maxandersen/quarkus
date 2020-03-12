@@ -1,0 +1,20 @@
+ifdef::context[:parent-context: {context}]
+[id="non-standard-features_{context}"]
+= Non-standard Features
+:context: non-standard-features
+
+include::modules/eager-instantiation-of-beans.adoc[leveloffset=+1]
+
+include::modules/request-context-lifecycle.adoc[leveloffset=+1]
+
+include::modules/qualified-injected-fields.adoc[leveloffset=+1]
+
+include::modules/simplified-constructor-injection.adoc[leveloffset=+1]
+
+include::modules/remove.adoc[leveloffset=+1]
+
+include::modules/default.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,41 @@
+[id="creating-nodes_{context}"]
+= Creating nodes
+
+The `POST` method looks similar.
+It uses transaction functions of the driver:
+
+.src/main/java/org/acme/neo4j/FruitResource.java
+[source,java]
+----
+@POST
+public CompletionStage<Response> create(Fruit fruit) {
+    AsyncSession session = driver.asyncSession();
+    return session
+        .writeTransactionAsync(tx -> tx
+            .runAsync("CREATE (f:Fruit {name: $name}) RETURN f", Values.parameters("name", fruit.name))
+            .thenCompose(fn -> fn.singleAsync())
+        )
+        .thenApply(record -> Fruit.from(record.get("f").asNode()))
+        .thenCompose(persistedFruit -> session.closeAsync().thenApply(signal -> persistedFruit))
+        .thenApply(persistedFruit -> Response
+            .created(URI.create("/fruits/" + persistedFruit.id))
+            .build()
+        );
+}
+----
+
+As you can see, we are now using a Cypher statement with named parameters (The `$name` of the fruit).
+The node is returned, a `Fruit` entity created and then mapped to a `201` created response.
+
+A curl request against this path may look like this:
+
+[source,shell]
+----
+curl -v -X "POST" "http://localhost:8080/fruits" \
+     -H 'Content-Type: application/json; charset=utf-8' \
+     -d $'{
+  "name": "Banana"
+}'
+----
+
+The response contains an URI that shall return single nodes.

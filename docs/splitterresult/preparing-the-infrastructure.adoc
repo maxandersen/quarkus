@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="preparing-the-infrastructure_{context}"]
+= Preparing the infrastructure
+:context: preparing-the-infrastructure
+
+We need a PostgreSQL instance and an Elasticsearch cluster.
+
+Let's use Docker to start one of each:
+
+[source,shell]
+----
+docker run -it --rm=true --name elasticsearch_quarkus_test -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:7.5.0
+----
+
+[source,shell]
+----
+docker run --ulimit memlock=-1:-1 -it --rm=true --memory-swappiness=0 --name postgresql_quarkus_test -e POSTGRES_USER=quarkus_test -e POSTGRES_PASSWORD=quarkus_test -e POSTGRES_DB=quarkus_test -p 5432:5432 postgres:11.3
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

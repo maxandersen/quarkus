@@ -1,0 +1,27 @@
+ifdef::context[:parent-context: {context}]
+[id="debugging_{context}"]
+= Debugging
+:context: debugging
+
+In development mode, Quarkus starts by default with debug mode enabled, listening to port `5005` without suspending the JVM.
+
+This behavior can be changed by giving the `debug` system property one of the following values:
+
+* `false` - the JVM will start with debug mode disabled
+* `true` - The JVM is started in debug mode and will be listening on port `5005`
+* `client` - the JVM will start in client mode and attempt to connect to `localhost:5005`
+* `{port}` - The JVM is started in debug mode and will be listening on `{port}`
+
+An additional system property `suspend` can be used to suspend the JVM, when launched in debug mode. `suspend` supports the following values:
+
+* `y` or `true` - The debug mode JVM launch is suspended
+* `n` or `false` - The debug mode JVM is started without suspending
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You can also run a Quarkus application in debug mode with a suspended JVM using `./gradlew quarkusDev -Dsuspend -Ddebug` which is a shorthand for `./gradlew quarkusDev -Dsuspend=true -Ddebug=true`.Then, attach your debugger to `localhost:5005`.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

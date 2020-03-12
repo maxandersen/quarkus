@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="dealing-with-extensions_{context}"]
+= Dealing with extensions
+:context: dealing-with-extensions
+
+The Quarkus CLI can obtain a list of the available extensions with:
+
+[source,shell]
+----
+$ quarkus list-extensions
+----
+
+To more easily get an overview and only display the extension names:
+
+[source,shell]
+----
+$ quarkus list-extensions -n
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

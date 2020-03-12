@@ -1,0 +1,21 @@
+[id="validation-and-localization_{context}"]
+= Validation and localization
+
+By default, constraint violation messages will be returned in the build system locale.
+
+You can configure this behavior by adding the following configuration in your `application.properties`:
+
+[source,properties]
+----
+# The default locale to use
+quarkus.default-locale=fr-FR
+----
+
+If you are using RESTEasy, in the context of a JAX-RS endpoint, Hibernate Validator will automatically resolve the optimal locale to use from the `Accept-Language` HTTP header,
+provided the supported locales have been properly specified in the `application.properties`:
+
+[source,properties]
+----
+# The list of all the supported locales
+quarkus.locales=en-US,es-ES,fr-FR
+----

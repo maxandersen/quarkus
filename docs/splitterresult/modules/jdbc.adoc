@@ -1,0 +1,24 @@
+[id="jdbc_{context}"]
+= JDBC
+
+The https://github.com/opentracing-contrib/java-jdbc[JDBC instrumentation] will add a span for each JDBC queries done by your application, to enable it, add the following dependency to your pom.xml:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.opentracing.contrib</groupId>
+    <artifactId>opentracing-jdbc</artifactId>
+</dependency>
+----
+
+As it uses a dedicated JDBC driver, you must configure your datasource and Hibernate to use it.
+
+[source,properties]
+----
+# add ':tracing' to your database URL
+quarkus.datasource.url=jdbc:tracing:postgresql://localhost:5432/mydatabase
+# use the 'TracingDriver' instead of the one for your database
+quarkus.datasource.driver=io.opentracing.contrib.jdbc.TracingDriver
+# configure Hibernate dialect
+quarkus.hibernate-orm.dialect=org.hibernate.dialect.PostgreSQLDialect
+----

@@ -1,0 +1,26 @@
+[id="customizing_{context}"]
+= Customizing
+
+All available customization options are available in the link:kubenretes#openshift[Openshift configuration options].
+
+Some examples are provided in the sections below:
+
+[id="exposing-routes_{context}"]
+== Exposing Routes
+:context: exposing-routes
+
+[id="labels_{context}"]
+== Labels
+:context: labels
+
+[id="annotations_{context}"]
+== Annotations
+:context: annotations
+
+[id="environment-variables_{context}"]
+== Environment variables
+:context: environment-variables
+
+[id="mounting-volumes_{context}"]
+== Mounting volumes
+:context: mounting-volumes

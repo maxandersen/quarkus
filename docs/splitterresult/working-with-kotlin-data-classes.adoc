@@ -1,0 +1,178 @@
+ifdef::context[:parent-context: {context}]
+[id="working-with-kotlin-data-classes_{context}"]
+= Working with Kotlin Data classes
+:context: working-with-kotlin-data-classes
+
+Kotlin data classes are a very convenient way of defining data carrier classes, making them a great match to define an entity class.
+
+But this type of class comes with some limitations: all fields needs to be initialized at construction time or be marked as nullable,
+and the generated constructor needs to have as parameters all the fields of the data class.
+
+MongoDB with Panache uses the `PojoCodec`, a MongoDB codec which mandates the presence of a parameterless constructor.
+
+Therefore, if you want to use a data class as an entity class, you need a way to make Kotlin generate an empty constructor.
+To do so, you need to provide default values for all the fields of your classes.
+The following sentence from the Kotlin documentation explains it:
+
+__On the JVM, if the generated class needs to have a parameterless constructor, default values for all properties have to be specified (see Constructors).__
+
+If for whatever reason, the aforementioned solution is deemed unacceptable, there are alternatives.
+
+First, you can create a BSON Codec which will be automatically registered by Quarkus and will be used instead of the `PojoCodec`.
+See this part of the documentation: link:mongodb#simplifying-mongodb-client-usage-using-bson-codec[Using BSON codec].
+
+Another option is to use the `@BsonCreator` annotation to tell the `PojoCodec` to use the Kotlin data class default constructor,
+in this case all constructor parameters have to be annotated with `@BsonProperty`: see link:{mongodb-doc-root-url}/bson/pojos/#supporting-pojos-without-no-args-constructors[Supporting pojos without no args constructor].
+
+This will only work when the entity extends `PanacheMongoEntityBase` and not `PanacheMongoEntity`, as the ID field also needs to be included in the constructor.
+
+An example of a `Person` class defined as a Kotlin data class would look like:
+
+[source,kotlin]
+----
+data class Person @BsonCreator constructor (
+    @BsonId var id: ObjectId,
+    @BsonProperty("name") var name: String,
+    @BsonProperty("birth") var birth: LocalDate,
+    @BsonProperty("status") var status: Status
+): PanacheMongoEntityBase()
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+Here we use `var` but note that `val` can also be used.The `@BsonId` annotation is used instead of `@BsonProperty("_id")` for brevity's sake, but use of either is valid.
+====
+
+The last option is to the use the link:https://kotlinlang.org/docs/reference/compiler-plugins.html#no-arg-compiler-plugin[no-arg] compiler plugin.
+This plugin is configured with a list of annotations, and the end result is the generation of no-args constructor for each class annotated with them.
+
+For MongoDB with Panache, you could use the `@MongoEntity` annotation on your data class for this:
+
+[source,kotlin]
+----
+@MongoEntity
+data class Person (
+    var name: String,
+    var birth: LocalDate,
+    var status: Status
+): PanacheMongoEntity()
+----
+
+[[reactive]]]]
+== Reactive Entities and Repositories
+
+MongoDB with Panache allows using reactive style implementation for both entities and repositories.
+For this, you need to use the Reactive variants when defining your entities : `ReactivePanacheMongoEntity` or `ReactivePanacheMongoEntityBase`,
+and when defining your repositories: `ReactivePanacheMongoRepository` or `ReactivePanacheMongoRepositoryBase`.
+
+.Mutiny
+[TIP,textlabel="Tip",name="tip"]
+====
+The reactive API of the MongoDB with Panache uses Mutiny reactive types, if you're not familiar with them, read the link:getting-started-reactive#mutiny[Getting Started with Reactive guide] first.
+====
+
+The reactive variant of the `Person` class will be:
+
+[source,java]
+----
+public class ReactivePerson extends ReactivePanacheMongoEntity {
+    public String name;
+    public LocalDate birth;
+    public Status status;
+
+    // return name as uppercase in the model
+    public String getName(){
+        return name.toUpperCase();
+    }
+
+    // store all names in lowercase in the DB
+    public void setName(String name){
+        this.name = name.toLowerCase();
+    }
+}
+----
+
+You will have access to the same functionalities of the _imperative_ variant inside the reactive one: bson annotations, custom ID, PanacheQL, ...
+But the methods on your entities or repositories will all return reactive types.
+
+See the equivalent methods from the imperative example with the reactive variant:
+
+[source,java]
+----
+// creating a person
+ReactivePerson person = new ReactivePerson();
+person.name = "Loïc";
+person.birth = LocalDate.of(1910, Month.FEBRUARY, 1);
+person.status = Status.Alive;
+
+// persist it
+Uni<Void> cs1 = person.persist();
+
+person.status = Status.Dead;
+
+// Your must call update() in order to send your entity modifications to MongoDB
+Uni<Void> cs2 = person.update();
+
+// delete it
+Uni<Void> cs3 = person.delete();
+
+// getting a list of all persons
+Uni<List<ReactivePerson>> allPersons = ReactivePerson.listAll();
+
+// finding a specific person by ID
+Uni<ReactivePerson> personById = ReactivePerson.findById(personId);
+
+// finding a specific person by ID via an Optional
+Uni<Optional<ReactivePerson>> optional = ReactivePerson.findByIdOptional(personId);
+personById = optional.map(o -> o.orElseThrow(() -> new NotFoundException()));
+
+// finding all living persons
+Uni<List<ReactivePerson>> livingPersons = ReactivePerson.list("status", Status.Alive);
+
+// counting all persons
+Uni<Long> countAll = ReactivePerson.count();
+
+// counting all living persons
+Uni<Long> countAlive = ReactivePerson.count("status", Status.Alive);
+
+// delete all living persons
+Uni<Long>  deleteCount = ReactivePerson.delete("status", Status.Alive);
+
+// delete all persons
+deleteCount = ReactivePerson.deleteAll();
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+If you use MongoDB with Panache in conjunction with RESTEasy, you can directly return a reactive type inside your JAX-RS resource endpoint as long as you include the `quarkus-resteasy-mutiny` extension.
+====
+
+The same query facility exists for the reactive types, but the `stream()` methods act differently: they return a `Multi` (which implement  a reactive stream `Publisher`) instead of a `Stream`.
+
+It allows more advanced reactive use cases, for example, you can use it to send server-sent events (SSE) via RESTEasy:
+
+[source,java]
+----
+import org.jboss.resteasy.annotations.SseElementType;
+import org.reactivestreams.Publisher;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+
+@GET
+@Path("/stream")
+@Produces(MediaType.SERVER_SENT_EVENTS)
+@SseElementType(MediaType.APPLICATION_JSON)
+public Multi<ReactivePerson> streamPersons() {
+    return ReactivePerson.streamAll();
+}
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+`@SseElementType(MediaType.APPLICATION_JSON)` tells RESTEasy to serialize the object in JSON.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

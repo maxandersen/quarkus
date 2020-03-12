@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="running-native-tests_{context}"]
+= Running native tests
+:context: running-native-tests
+
+Run the native tests using:
+
+[source,shell]
+----
+./gradlew testNative
+----
+
+This task depends on `buildNative`, so it will generate the native image before running the tests.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

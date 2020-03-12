@@ -1,0 +1,88 @@
+ifdef::context[:parent-context: {context}]
+[id="consuming-events_{context}"]
+= Consuming events
+:context: consuming-events
+
+To consume events, use the `io.quarkus.vertx.ConsumeEvent` annotation:
+
+[source,java]
+----
+package org.acme.vertx;
+
+import io.quarkus.vertx.ConsumeEvent;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class GreetingService {
+
+    @ConsumeEvent                           // <1>
+    public String consume(String name) {    // <2>
+        return name.toUpperCase();
+    }
+}
+----
+
+[arabic]
+<1> If not set, the address is the fully qualified name of the bean, for instance, in this snippet it's `org.acme.vertx.GreetingService`.
+<2> The method parameter is the message body. If the method returns _something_ it's the message response.
+
+[IMPORTANT,textlabel="Important",name="important"]
+====
+By default, the code consuming the event must be _non-blocking_, as it's called on the Vert.x event loop.
+If your processing is blocking, use the `blocking` attribute:[source,java]
+----
+@ConsumeEvent(value = "blocking-consumer", blocking = true)
+void consumeBlocking(String message) {
+    // Something blocking
+}
+----
+====
+
+Asynchronous processing is also possible by returning either an `io.smallrye.mutiny.Uni` or a `java.util.concurrent.CompletionStage`:
+
+[source,java]
+----
+package org.acme.vertx;
+
+import io.quarkus.vertx.ConsumeEvent;
+
+import javax.enterprise.context.ApplicationScoped;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import io.smallrye.mutiny.Uni;
+
+@ApplicationScoped
+public class GreetingService {
+
+    @ConsumeEvent
+    public CompletionStage<String> consume(String name) {
+        // return a CompletionStage completed when the processing is finished.
+        // You can also fail the CompletionStage explicitly
+    }
+
+    @ConsumeEvent
+    public Uni<String> process(String name) {
+        // return an Uni completed when the processing is finished.
+        // You can also fail the Uni explicitly
+    }
+}
+----
+
+.Mutiny
+[TIP,textlabel="Tip",name="tip"]
+====
+The previous example uses Mutiny reactive types, if you're not familiar with them, we recommend reading the link:getting-started-reactive#mutiny[Getting Started with Reactive guide].
+====
+
+include::modules/configuring-the-address.adoc[leveloffset=+1]
+
+include::modules/replying.adoc[leveloffset=+1]
+
+include::modules/implementing-fire-and-forget-interactions.adoc[leveloffset=+1]
+
+include::modules/dealing-with-messages.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,56 @@
+[id="platform-specific-memory-reporting_{context}"]
+= Platform Specific Memory Reporting
+
+In order to not incur the performance overhead of running with NVM enabled, we measure the total RSS of an JVM application using tools specific to each platform.
+
+Linux:: The linux https://linux.die.net/man/1/pmap[pmap] and https://linux.die.net/man/1/ps[ps] tools provide a report on the native memory map for a process
+
+[source,shell]
+----
+ $ ps -o pid,rss,command -p <pid>
+
+   PID   RSS COMMAND
+ 11229 12628 ./target/getting-started-1.0-SNAPSHOT-runner
+----
+
+[source,shell]
+----
+ $ pmap -x <pid>
+
+ 13150:   /data/quarkus-application -Xmx100m -Xmn70m
+ Address           Kbytes     RSS   Dirty Mode  Mapping
+ 0000000000400000   55652   30592       0 r-x-- quarkus-application
+ 0000000003c58000       4       4       4 r-x-- quarkus-application
+ 0000000003c59000    5192    4628     748 rwx-- quarkus-application
+ 00000000054c0000     912     156     156 rwx--   [ anon ]
+ ...
+ 00007fcd13400000    1024    1024    1024 rwx--   [ anon ]
+ ...
+ 00007fcd13952000       8       4       0 r-x-- libfreebl3.so
+ ...
+ ---------------- ------- ------- -------
+ total kB         9726508  256092  220900
+----
+
+Each Memory region that has been allocated for the process is listed;
+
+- Address: Start address of virtual address space
+- Kbytes:  Size (kilobytes) of virtual address space reserved for region
+- RSS:     Resident set size (kilobytes).  This is the measure of how much memory space is actually being used
+- Dirty:   dirty pages (both shared and private) in kilobytes
+- Mode:    Access mode for memory region
+- Mapping: Includes application regions and Shared Object (.so) mappings for process
+
+The Total RSS (kB) line reports the total native memory the process is using.
+
+macOS:: On macOS, you can use `ps x -o pid,rss,command -p <PID>` which list the RSS for a given process in KB (1024 bytes).
+
+[source,shell]
+----
+$ ps x -o pid,rss,command -p 57160
+
+  PID    RSS COMMAND
+57160 288548 /Applications/IntelliJ IDEA CE.app/Contents/jdk/Contents/Home/jre/bin/java
+----
+
+Which means IntelliJ IDEA consumes 281,8 MB of resident memory.

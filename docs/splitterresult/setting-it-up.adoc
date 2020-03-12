@@ -1,0 +1,35 @@
+ifdef::context[:parent-context: {context}]
+[id="setting-it-up_{context}"]
+= Setting it up
+:context: setting-it-up
+
+If you are using link:http://smallrye.io/smallrye-mutiny[Mutiny] (the `quarkus-mutiny` extension), you just need to add the
+the `quarkus-smallrye-context-propagation` extension to enable context propagation.
+
+In other words, add the following dependencies to your `pom.xml`:
+
+[source,xml]
+----
+<dependencies>
+    <!-- Mutiny and RestEasy support extensions if not already included -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-mutiny</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-resteasy-mutiny</artifactId>
+    </dependency>
+    <!-- Context Propagation extension -->
+    <dependency>
+        <groupId>io.quarkus</groupId>
+        <artifactId>quarkus-smallrye-context-propagation</artifactId>
+    </dependency>
+</dependencies>
+----
+
+With this, you will get context propagation for ArC, RESTEasy and transactions, if you are using them.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

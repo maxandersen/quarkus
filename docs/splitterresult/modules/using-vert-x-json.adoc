@@ -1,0 +1,43 @@
+[id="using-vert-x-json_{context}"]
+= Using Vert.x JSON
+
+Vert.x API heavily relies on JSON, namely the `io.vertx.core.json.JsonObject` and `io.vertx.core.json.JsonArray` types.
+They are both supported as Quarkus web resource request and response bodies.
+
+Consider these endpoints:
+
+[source,java]
+----
+@Path("/hello")
+@Produces(MediaType.APPLICATION_JSON)
+public class VertxJsonResource {
+
+    @GET
+    @Path("{name}/object")
+    public JsonObject jsonObject(@PathParam String name) {
+        return new JsonObject().put("Hello", name);
+    }
+
+    @GET
+    @Path("{name}/array")
+    public JsonArray jsonArray(@PathParam String name) {
+        return new JsonArray().add("Hello").add(name);
+    }
+}
+----
+
+In your browser, navigate to http://localhost:8080/hello/Quarkus/object. You should see:
+
+[source,text]
+----
+{"Hello":"Quarkus"}
+----
+
+Then, navigate to http://localhost:8080/hello/Quarkus/array:
+
+[source,text]
+----
+["Hello","Quarkus"]
+----
+
+Needless to say, this works equally well when the JSON content is a request body or is wrapped in a `Uni`, `Multi`, `CompletionStage` or `Publisher`.

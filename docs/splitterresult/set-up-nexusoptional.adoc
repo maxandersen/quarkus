@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="set-up-nexusoptional_{context}"]
+= Set up Nexus(Optional)
+:context: set-up-nexusoptional
+
+Nexus is used for caching maven artifacts so that Apache Maven builds are faster.
+
+[source,bash]
+----
+kubectl apply -f k8s/nexus.yaml
+----
+
+Wait for some time to have Nexus initialize and run. You can watch the status via `kubectl get pods -w`, use kbd:[Ctrl+c] to terminate the watch.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,17 @@
+[id="first-locking-using-findbyid_{context}"]
+= First: Locking using findById().
+
+[source,java]
+----
+public class PersonEndpoint {
+
+    @GET
+    @Transactional
+    public Person findByIdForUpdate(Long id){
+        Person p = Person.findById(id, LockModeType.PESSIMISTIC_WRITE);
+        //do something useful, the lock will be released when the transaction ends.
+        return person;
+    }
+
+}
+----

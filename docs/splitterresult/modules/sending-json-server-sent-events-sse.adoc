@@ -1,0 +1,35 @@
+[id="sending-json-server-sent-events-sse_{context}"]
+= Sending JSON Server-Sent Events (SSE)
+
+If you want RESTEasy to send JSON Server-Sent Events, you need to use the `@SseElementType` annotation to define the content type of the events,
+as the method will be annotated with `@Produces(MediaType.SERVER_SENT_EVENTS)`.
+
+The following example shows how to use SSE from a Kafka topic source.
+
+[source,java]
+----
+import io.smallrye.reactive.messaging.annotations.Channel;
+import org.reactivestreams.Publisher;
+
+import javax.inject.Inject;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import org.jboss.resteasy.annotations.SseElementType;
+
+@Path("/fruits")
+public class PriceResource {
+
+    @Inject
+    @Channel("fruit-out") Publisher<Fruit> fruits;
+
+    @GET
+    @Path("/stream")
+    @Produces(MediaType.SERVER_SENT_EVENTS)
+    @SseElementType(MediaType.APPLICATION_JSON)
+    public Publisher<Fruit> stream() {
+        return fruits;
+    }
+}
+----

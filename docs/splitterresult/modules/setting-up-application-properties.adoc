@@ -1,0 +1,16 @@
+[id="setting-up-application-properties_{context}"]
+= Setting up application.properties
+
+For part A of step 1, create a `security-oauth2-quickstart/src/main/resources/application.properties` with the following content:
+
+.application.properties for TokenSecuredResource
+[source,properties]
+----
+quarkus.oauth2.client-id=client_id
+quarkus.oauth2.client-secret=secret
+quarkus.oauth2.introspection-url=http://oauth-server/introspect
+----
+
+You need to specify the introspection URL of your authentication server and the `client-id` / `client-secret` that your application will use to authenticate itself to the authentication server.
+
+The extension will then use this information to validate the token and recover the information associate with it.

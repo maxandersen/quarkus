@@ -1,0 +1,63 @@
+ifdef::context[:parent-context: {context}]
+[id="setting-up-and-configuring-hibernate-orm-with-a-persistence-xml_{context}"]
+= Setting up and configuring Hibernate ORM with a <code>persistence.xml</code>
+:context: setting-up-and-configuring-hibernate-orm-with-a-persistence-xml
+
+Alternatively, you can use a `META-INF/persistence.xml` to setup Hibernate ORM.
+This is useful for:
+
+* migrating existing code
+* when you have relatively complex settings requiring the full flexibility of the configuration
+* or if you like it the good old way
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you have a `persistence.xml`, then you cannot use the `quarkus.hibernate-orm.*` properties
+and only persistence units defined in `persistence.xml` will be taken into account.
+====
+
+Your `pom.xml` dependencies as well as your Java code would be identical to the precedent example. The only
+difference is that you would specify your Hibernate ORM configuration in `META-INF/persistence.xml`:
+
+.Example persistence.xml resource
+[source,xml]
+----
+<persistence xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
+             http://xmlns.jcp.org/xml/ns/persistence/persistence_2_1.xsd"
+             version="2.1">
+
+    <persistence-unit name="CustomerPU" transaction-type="JTA">
+
+        <description>My customer entities</description>
+
+        <properties>
+            <!-- Connection specific -->
+            <property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQL95Dialect"/>
+
+            <property name="hibernate.show_sql" value="true"/>
+            <property name="hibernate.format_sql" value="true"/>
+
+            <!--
+                Optimistically create the tables;
+                will cause background errors being logged if they already exist,
+                but is practical to retain existing data across runs (or create as needed) -->
+            <property name="javax.persistence.schema-generation.database.action" value="drop-and-create"/>
+
+            <property name="javax.persistence.validation.mode" value="NONE"/>
+        </properties>
+
+    </persistence-unit>
+</persistence>
+----
+
+When using the `persistence.xml` configuration you are configuring Hibernate ORM directly,
+so in this case the appropriate reference is the link:https://docs.jboss.org/hibernate/orm/5.4/userguide/html_single/Hibernate_User_Guide.html#configurations[documentation on hibernate.org].
+
+Please remember these are not the same property names as the ones used in the Quarkus `{config-file}`, nor will
+the same defaults be applied.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

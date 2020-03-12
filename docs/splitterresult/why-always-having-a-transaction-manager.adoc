@@ -1,0 +1,32 @@
+ifdef::context[:parent-context: {context}]
+[id="why-always-having-a-transaction-manager_{context}"]
+= Why always having a transaction manager?
+:context: why-always-having-a-transaction-manager
+
+Does it work everywhere I want to?:: Yep, it works in your Quarkus application, in your IDE, in your tests, because all of these are Quarkus applications.
+JTA has some bad press for some people.
+I don't know why.
+Let's just say that this is not your grand'pa's JTA implementation.
+What we have is perfectly embeddable and lean.
+Does it do 2 Phase Commit and slow down my app?:: No, this is an old folk tale.
+Let's assume it essentially comes for free and let you scale to more complex cases involving several datasources as needed.
+I don't need transaction when I do read only operations, it's faster.:: Wrong. +
+First off, just disable the transaction by marking your transaction boundary with `@Transactional(NOT_SUPPORTED)` (or `NEVER` or `SUPPORTS` depending on the semantic you want). +
+Second, it's again fairy tale that not using transaction is faster.
+The answer is, it depends on your DB and how many SQL SELECTs you are making.
+No transaction means the DB does have a single operation transaction context anyways. +
+Third, when you do several SELECTs, it's better to wrap them in a single transaction because they will all be consistent with one another.
+Say your DB represents your car dashboard, you can see the number of kilometers remaining and the fuel gauge level.
+By reading it in one transaction, they will be consistent.
+If you read one and the other from two different transactions, then they can be inconsistent.
+It can be more dramatic if you read data related to rights and access management for example.
+Why do you prefer JTA vs Hibernate's transaction management API:: Managing the transactions manually via `entityManager.getTransaction().begin()` and friends lead to a butt ugly code with tons of try catch finally that people get wrong.
+Transactions are also about JMS and other database access, so one API makes more sense.
+It's a mess because I don't know if my JPA persistence unit is using `JTA` or `Resource-level` Transaction:: It's not a mess in Quarkus :)
+Resource-level was introduced to support JPA in a non managed environment.
+But Quarkus is both lean and a managed environment so we can safely always assume we are in JTA mode.
+The end result is that the difficulties of running Hibernate ORM + CDI + a transaction manager in Java SE mode are solved by Quarkus.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

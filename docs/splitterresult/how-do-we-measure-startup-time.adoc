@@ -1,0 +1,60 @@
+ifdef::context[:parent-context: {context}]
+[id="how-do-we-measure-startup-time_{context}"]
+= How do we measure startup time
+:context: how-do-we-measure-startup-time
+
+Some frameworks use aggressive lazy initialization techniques.
+It is important to measure the startup time to first request to most accurately reflect how long a framework needs to start.
+Otherwise, you will miss the time the framework _actually_ takes to initialize.
+
+Here is how we measure startup time in our tests.
+
+We create a sample application that logs timestamps for certain points in the application lifecycle.
+
+[source,java]
+----
+@Path("/")
+public class GreetingEndpoint {
+
+    private static final String template = "Hello, %s!";
+
+    @GET
+    @Path("/greeting")
+    @Produces("application/json")
+    public Greeting greeting(@QueryParam("name") String name) {
+        System.out.println(new SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date(System.currentTimeMillis())));
+        String suffix = name != null ? name : "World";
+        return new Greeting(String.format(template, suffix));
+    }
+
+    void onStart(@Observes StartupEvent startup) {
+        System.out.println(new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()));
+    }
+}
+----
+
+We start looping in a shell, sending requests to the rest endpoint of the sample application we are testing.
+
+[source,shell]
+----
+$ while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:8080/api/greeting)" != "200" ]]; do sleep .00001; done
+----
+
+In a separate terminal, we start the timing application that we are testing, printing the time the application starts
+
+[source,shell]
+----
+$ date +"%T.%3N" &&  ./target/quarkus-timing-runner
+
+10:57:32.508
+10:57:32.512
+2019-04-05 10:57:32,512 INFO  [io.quarkus] (main) Quarkus 0.11.0 started in 0.002s. Listening on: http://127.0.0.1:8080
+2019-04-05 10:57:32,512 INFO  [io.quarkus] (main) Installed features: [cdi, resteasy, resteasy-jsonb]
+10:57:32.537
+----
+
+The difference between the final timestamp and the first timestamp is the total startup time for the application to serve the first request.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

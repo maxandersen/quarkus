@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="database-clients-details_{context}"]
+= Database Clients details
+:context: database-clients-details
+
+[table,tablepcwidth="100",rowcount="3",header-option="",colcount="3",cols="15,35,50"]
+|===
+| PostgreSQL | `quarkus-reactive-pg-client` | `io.vertx.mutiny.pgclient.PgPool`
+| MySQL | `quarkus-reactive-mysql-client` | `io.vertx.mutiny.mysqlclient.MySQLPool`
+|===
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

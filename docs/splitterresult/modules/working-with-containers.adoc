@@ -1,0 +1,14 @@
+[id="working-with-containers_{context}"]
+= Working with containers
+
+When working with containers, the idea is to bundle both the SunEC library and the certificates in the container and to point your binary to them using the system properties mentioned above.
+
+You can for example modify your `Dockerfile.native` as follows to copy the required files to your final image:
+
+[id="java-8_{context}"]
+== Java 8
+:context: java-8
+
+[id="java-11_{context}"]
+== Java 11
+:context: java-11

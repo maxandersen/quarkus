@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="authentication-sources_{context}"]
+= Authentication sources
+:context: authentication-sources
+
+Quarkus supports several sources to load authentication information from. You need to import at least one of the following extensions
+in order for Quarkus to know how to find the authentication information to check for authorizations:
+
+.Security Extensions
+[table,tablepcwidth="100",rowcount="8",header-option="",colcount="2"]
+|===
+| link:security-properties[quarkus-elytron-security-properties-file] | Provides support for simple properties files that can be used for testing security. This supports both embedding user info in `application.properties` and standalone properties files.
+| link:security-jpa[quarkus-security-jpa] | Provides support for authenticating via JPA.
+| link:security-jdbc[quarkus-elytron-security-jdbc] | Provides support for authenticating via JDBC.
+| link:security-oauth2[quarkus-elytron-security-oauth2] | Provides support for OAuth2 flows using Elytron. This extension will likely be deprecated soon and replaced by a reactive Vert.x version.
+| link:security-jwt[quarkus-smallrye-jwt] | A MicroProfile JWT implementation that provides support for authenticating using Json Web Tokens. This also allows you to inject the token and claims into the application as per the MP JWT spec.
+| link:security-openid-connect[quarkus-oidc] | Provides support for authenticating via an OpenID Connect provider such as Keycloak.
+| link:security-keycloak-authorization[quarkus-keycloak-authorization] | Provides support for a policy enforcer using Keycloak Authorization Services.
+|===
+
+Please see the linked documents above for details on how to setup the various extensions.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

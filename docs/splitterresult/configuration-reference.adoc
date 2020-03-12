@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="configuration-reference_{context}"]
+= Configuration Reference
+:context: configuration-reference
+
+link:{generated-dir}/config/quarkus-dynamodb.adoc[]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

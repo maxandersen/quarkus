@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="starting-and-configuring-the-keycloak-server_{context}"]
+= Starting and Configuring the Keycloak Server
+:context: starting-and-configuring-the-keycloak-server
+
+To start a Keycloak Server you can use Docker and just run the following command:
+
+[source,bash,subs="attributes+"]
+----
+docker run --name keycloak -e KEYCLOAK_USER=admin -e KEYCLOAK_PASSWORD=admin -p 8180:8080 {keycloak-docker-image}
+----
+
+You should be able to access your Keycloak Server at http://localhost:8180/auth[localhost:8180/auth].
+
+Log in as the `admin` user to access the Keycloak Administration Console. Username should be `admin` and password `admin`.
+
+Import the {quickstarts-tree-url}/security-openid-connect-quickstart/config/quarkus-realm.json[realm configuration file] to create a new realm. For more details, see the Keycloak documentation about how to https://www.keycloak.org/docs/latest/server_admin/index.html#_create-realm[create a new realm].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

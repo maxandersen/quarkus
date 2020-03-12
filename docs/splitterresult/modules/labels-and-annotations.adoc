@@ -1,0 +1,26 @@
+[id="labels-and-annotations_{context}"]
+= Labels and Annotations
+
+[id="labels_{context}"]
+== Labels
+:context: labels
+
+[id="custom-labels_{context}"]
+== Custom Labels
+:context: custom-labels
+
+[id="annotations_{context}"]
+== Annotations
+:context: annotations
+
+[id="custom-annotations_{context}"]
+== Custom Annotations
+:context: custom-annotations
+
+[id="environment-variables_{context}"]
+== Environment variables
+:context: environment-variables
+
+[id="mounting-volumes_{context}"]
+== Mounting volumes
+:context: mounting-volumes

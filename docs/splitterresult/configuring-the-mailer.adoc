@@ -1,0 +1,46 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-mailer_{context}"]
+= Configuring the mailer
+:context: configuring-the-mailer
+
+The Quarkus mailer is using SMTP. In the `src/main/resources/application.properties` file, you need to configure the host, port, username, password as well as the other configuration aspect.
+Note that the password can also be configured using system properties and environment variables.
+
+Here is an example using _sendgrid_:
+
+[source]
+----
+quarkus.mailer.from=test@quarkus.io
+quarkus.mailer.host=smtp.sendgrid.net
+quarkus.mailer.port=465
+quarkus.mailer.ssl=true
+quarkus.mailer.username=....
+quarkus.mailer.password=....
+quarkus.mailer.mock=false
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+It is recommended to encrypt any sensitive data, such as the `quarkus.mailer.password`.
+One approach is to save the value into a secure store like HashiCorp Vault, and refer to it from the configuration.
+Assuming for instance that Vault contains key `mail-password` at path `myapps/myapp/myconfig`, then the mailer
+extension can be simply configured as:[source]
+----
+...
+# path within the kv secret engine where is located the application sensitive configuration
+quarkus.vault.secret-config-kv-path=myapps/myapp/myconfig
+
+...
+quarkus.mailer.password=${mail-password}
+----Please note that the password value is evaluated only once, at startup time. If `mail-password` was changed in Vault,
+the only way to get the new value would be to restart the application.
+====
+
+[TIP,textlabel="Tip",name="tip"]
+====
+For more information about the Mailer extension configuration please refer to the <<configuration-reference, Configuration Reference>>.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

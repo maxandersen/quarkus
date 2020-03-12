@@ -1,0 +1,15 @@
+ifdef::context[:parent-context: {context}]
+[id="references_{context}"]
+= References
+:context: references
+
+* link:https://github.com/eclipse/microprofile-jwt-auth/releases/download/1.1.1/microprofile-jwt-auth-spec.html[MP JWT 1.1.1]
+* link:https://github.com/smallrye/smallrye-jwt[Smallrye JWT]
+* link:https://tools.ietf.org/html/rfc7519[JSON Web Token]
+* link:https://tools.ietf.org/html/rfc7515[JSON Web Signature]
+* link:https://tools.ietf.org/html/rfc7516[JSON Web Encryption]
+* link:https://tools.ietf.org/html/rfc7518[JSON Web Algorithms]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

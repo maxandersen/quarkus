@@ -1,0 +1,30 @@
+[id="defining-the-analyzers-used_{context}"]
+= Defining the analyzers used
+
+When we added the Hibernate Search annotations to our entities, we defined the analyzers and normalizers used.
+Typically:
+
+[source,java]
+----
+@FullTextField(analyzer = "english")
+----
+
+[source,java]
+----
+@FullTextField(analyzer = "name")
+----
+
+[source,java]
+----
+@KeywordField(name = "lastName_sort", sortable = Sortable.YES, normalizer = "sort")
+----
+
+We use:
+
+* an analyzer called `name` for person names,
+* an analyzer called `english` for book titles,
+* a normalizer called `sort` for our sort fields
+
+but we haven't set them up yet.
+
+Let's see how you can do it with Hibernate Search.

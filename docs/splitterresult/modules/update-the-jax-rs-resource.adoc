@@ -1,0 +1,49 @@
+[id="update-the-jax-rs-resource_{context}"]
+= Update the JAX-RS resource
+
+Next update `TikaParserResource` to accept and parse PDF and OpenDocument format documents:
+
+[source,java]
+----
+package org.acme.tika;
+
+import java.io.InputStream;
+import java.time.Duration;
+import java.time.Instant;
+
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import io.quarkus.tika.TikaParser;
+import org.jboss.logging.Logger;
+
+@Path("/parse")
+public class TikaParserResource {
+    private static final Logger log = Logger.getLogger(TikaParserResource.class);
+
+    @Inject
+    TikaParser parser;
+
+    @POST
+    @Path("/text")
+    @Consumes({"application/pdf", "application/vnd.oasis.opendocument.text"})
+    @Produces(MediaType.TEXT_PLAIN)
+    public String extractText(InputStream stream) {
+        Instant start = Instant.now();
+
+        String text = parser.getText(stream);
+
+        Instant finish = Instant.now();
+
+        log.info(Duration.between(start, finish).toMillis() + " mls have passed");
+
+        return text;
+    }
+}
+----
+
+As you can see the JAX-RS resource method was renamed to `extractText`, `@GET` annotation was replaced with `POST` and `@Path(/text)` annotation was added, and `@Consumes` annotation shows that PDF and OpenDocument media type formats can now be accepted. An injected `TikaParser` is used to parse the documents and report the extracted text. It also measures how long does it take to parse a given document.

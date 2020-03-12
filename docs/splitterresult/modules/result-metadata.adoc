@@ -1,0 +1,117 @@
+[id="result-metadata_{context}"]
+= Result metadata
+
+A `RowSet` does not only hold your data in memory, it also gives you some information about the data itself, such as:
+
+* the number of rows affected by the query (inserted/deleted/updated/retrieved depending on the query type),
+* the column names.
+
+Let's use this to support removal of fruits in the database:
+
+.src/main/java/org/acme/vertx/Fruit.java
+[source,java]
+----
+public static Uni<Boolean> delete(PgPool client, Long id) {
+    return client.preparedQuery("DELETE FROM fruits WHERE id = $1", Tuple.of(id))
+            .map(pgRowSet -> pgRowSet.rowCount() == 1); // <1>
+}
+----
+[arabic]
+<1> Inspect metadata to determine if a fruit has been actually deleted.
+And to handle the HTTP `DELETE` method in the web resource:
+
+.src/main/java/org/acme/vertx/FruitResource.java
+[source,java]
+----
+@DELETE
+@Path("{id}")
+public Uni<Response> delete(@PathParam Long id) {
+    return Fruit.delete(client, id)
+            .map(deleted -> deleted ? Status.NO_CONTENT : Status.NOT_FOUND)
+            .map(status -> Response.status(status).build());
+}
+----
+
+With `GET`, `POST` and `DELETE` methods implemented, we may now create a minimal web page to try the RESTful application out.
+We will use https://jquery.com/[jQuery] to simplify interactions with the backend:
+
+[source,html]
+----
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>Reactive PostgreSQL Client - Quarkus</title>
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"
+            integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+    <script type="application/javascript" src="fruits.js"></script>
+</head>
+<body>
+
+<h1>Fruits API Testing</h1>
+
+<h2>All fruits</h2>
+<div id="all-fruits"></div>
+
+<h2>Create Fruit</h2>
+<input id="fruit-name" type="text">
+<button id="create-fruit-button" type="button">Create</button>
+<div id="create-fruit"></div>
+
+</body>
+</html>
+----
+
+In the Javascript code, we need a function to refresh the list of fruits when:
+
+* the page is loaded, or
+* a fruit is added, or
+* a fruit is deleted.
+
+[source,javascript]
+----
+function refresh() {
+    $.get('/fruits', function (fruits) {
+        var list = '';
+        (fruits || []).forEach(function (fruit) { // <1>
+            list = list
+                + '<tr>'
+                + '<td>' + fruit.id + '</td>'
+                + '<td>' + fruit.name + '</td>'
+                + '<td><a href="#" onclick="deleteFruit(' + fruit.id + ')">Delete</a></td>'
+                + '</tr>'
+        });
+        if (list.length > 0) {
+            list = ''
+                + '<table><thead><th>Id</th><th>Name</th><th></th></thead>'
+                + list
+                + '</table>';
+        } else {
+            list = "No fruits in database"
+        }
+        $('#all-fruits').html(list);
+    });
+}
+
+function deleteFruit(id) {
+    $.ajax('/fruits/' + id, {method: 'DELETE'}).then(refresh);
+}
+
+$(document).ready(function () {
+
+    $('#create-fruit-button').click(function () {
+        var fruitName = $('#fruit-name').val();
+        $.post({
+            url: '/fruits',
+            contentType: 'application/json',
+            data: JSON.stringify({name: fruitName})
+        }).then(refresh);
+    });
+
+    refresh();
+});
+----
+[arabic]
+<1> The `fruits` parameter is not defined when the database is empty.
+All done!
+Navigate to http://localhost:8080/fruits.html and read/create/delete some fruits.

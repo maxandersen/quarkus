@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="run-the-application-as-a-native_{context}"]
+= Run the application as a native
+:context: run-the-application-as-a-native
+
+You can of course create a native image using instructions similar to link:building-native-image[this] guide.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

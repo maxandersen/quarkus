@@ -1,0 +1,6 @@
+[id="s2i-options_{context}"]
+= S2I  Options
+
+In addition to the generic container image options, the `container-image-s2i` also provides the following options:
+
+link:{generated-dir}/config/quarkus-container-image-s2i.adoc[]

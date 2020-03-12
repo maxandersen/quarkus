@@ -1,0 +1,50 @@
+[id="update-code_{context}"]
+= Update code
+
+In order to show a more practical example of Kotlin usage we will add a simple link:https://kotlinlang.org/docs/reference/data-classes.html[data class] called `Greeting.kt` like so:
+
+[source,kotlin]
+----
+package org.acme.rest
+
+data class Greeting(val message: String = "")
+----
+
+We also update the `GreetingResource.kt` like so:
+
+[source,kotlin]
+----
+import javax.ws.rs.GET
+import javax.ws.rs.Path
+import javax.ws.rs.Produces
+import javax.ws.rs.core.MediaType
+
+@Path("/greeting")
+class GreetingResource {
+
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    fun hello() = Greeting("hello")
+}
+----
+
+With these changes in place the `/greeting` endpoint will reply with a JSON object instead of a simple String.
+
+To make the test pass, we also need to update `GreetingResourceTest.kt` like so:
+
+[source,kotlin]
+----
+@QuarkusTest
+class GreetingResourceTest {
+
+    @Test
+    fun testHelloEndpoint() {
+        given()
+          .`when`().get("/greeting")
+          .then()
+             .statusCode(200)
+             .body("message", equalTo("hello"))
+    }
+
+}
+----

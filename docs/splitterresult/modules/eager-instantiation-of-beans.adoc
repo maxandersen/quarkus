@@ -1,0 +1,10 @@
+[id="eager-instantiation-of-beans_{context}"]
+= Eager Instantiation of Beans
+
+[id="lazy_{context}" id="lazy_by_default"]
+== Lazy By Default
+:context: lazy_by_default
+
+[id="startup-event_{context}"]
+== Startup Event
+:context: startup-event

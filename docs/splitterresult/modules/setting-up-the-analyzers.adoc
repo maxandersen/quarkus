@@ -1,0 +1,38 @@
+[id="setting-up-the-analyzers_{context}"]
+= Setting up the analyzers
+
+It is an easy task, we just need to create an implementation of `ElasticsearchAnalysisConfigurer`
+(and configure Quarkus to use it, more on that later).
+
+To fulfill our requirements, let's create the following implementation:
+
+[source,java]
+----
+package org.acme.hibernate.search.elasticsearch.config;
+
+import org.hibernate.search.backend.elasticsearch.analysis.ElasticsearchAnalysisConfigurationContext;
+import org.hibernate.search.backend.elasticsearch.analysis.ElasticsearchAnalysisConfigurer;
+
+public class AnalysisConfigurer implements ElasticsearchAnalysisConfigurer {
+
+    @Override
+    public void configure(ElasticsearchAnalysisConfigurationContext context) {
+        context.analyzer("name").custom() // <1>
+                .tokenizer("standard")
+                .tokenFilters("asciifolding", "lowercase");
+
+        context.analyzer("english").custom() // <2>
+                .tokenizer("standard")
+                .tokenFilters("asciifolding", "lowercase", "porter_stem");
+
+        context.normalizer("sort").custom() // <3>
+                .tokenFilters("asciifolding", "lowercase");
+    }
+}
+----
+[arabic]
+<1> This is a simple analyzer separating the words on spaces, removing any non-ASCII characters by its ASCII counterpart (and thus removing accents) and putting everything in lowercase.
+It is used in our examples for the author's names.
+<2> We are a bit more aggressive with this one and we include some stemming: we will be able to search for `mystery` and get a result even if the indexed input contains `mysteries`.
+It is definitely too aggressive for person names but it is perfect for the book titles.
+<3> Here is the normalizer used for sorting. Very similar to our first analyzer, except we don't tokenize the words as we want one and only one token.

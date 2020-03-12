@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="centralized-log-management_{context}"]
+= Centralized log management
+:context: centralized-log-management
+
+If you want to send your logs to a centralized tool like Graylog, Logstash or Fluentd, you can follow the link:centralized-log-management[Centralized log management guide].
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

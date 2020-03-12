@@ -1,0 +1,22 @@
+ifdef::context[:parent-context: {context}]
+[id="additional-flags-applied-by-quarkus_{context}"]
+= Additional flags applied by Quarkus
+:context: additional-flags-applied-by-quarkus
+
+When Quarkus invokes GraalVM `native-image` it will apply some additional flags by default.
+
+You might want to know about the following ones in case you're comparing performance properties with other builds.
+
+include::modules/disable-fallback-images.adoc[leveloffset=+1]
+
+include::modules/disable-isolates.adoc[leveloffset=+1]
+
+include::modules/disable-auto-registration-of-all-service-loader-implementations.adoc[leveloffset=+1]
+
+include::modules/better-default-for-garbage-collection-implementation.adoc[leveloffset=+1]
+
+include::modules/others.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

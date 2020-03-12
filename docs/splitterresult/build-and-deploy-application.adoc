@@ -1,0 +1,57 @@
+ifdef::context[:parent-context: {context}]
+[id="build-and-deploy-application_{context}"]
+= Build and deploy application
+:context: build-and-deploy-application
+
+[IMPORTANT,textlabel="Important",name="important"]
+====
+The container image will not be pushed to a remote container registry, and hence the container image url has to be `dev.local`, to make Knative deploy it without trying to pull it from external container registry.
+====
+
+To run Knative Quarkus applications, we need to use the multi stage docker build; to build the Quarkus application container image and use it in Kubernetes application deployment.
+
+The following command start a one time deployment of Quarkus application and runs starts the Knative service after successful container image build.
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you want to deploy a Quarkus JVM image (using HotSpot), then run the following command before running Skaffold:[source,bash]
+----
+cp src/main/docker/Dockerfile.jvm Dockerfile
+----If you want to deploy a Quarkus Native executable image (using GraalVM), then run the following command before running Skaffold:[source,bash]
+----
+cp src/main/docker/Dockerfile.native Dockerfile
+----It is very important to note that the Dockerfile in `src/main/docker` folder has been modified Dockerfiles to support multi stage Docker build.The multi stage Docker build helps in building and containerization of application with single Dockerfile.
+====
+
+[source,bash]
+----
+skaffold run
+----
+
+As it will take a few minutes for the build and deployment to be completed you can watch the status using:
+
+[source,bash]
+----
+watch kubectl get pods
+----
+
+A successful Knative service deployment will show the following pods in the current namespace:
+
+[source,bash]
+----
+NAME                                     READY   STATUS    AGE
+greeter-deployment-5749cc98fc-gs6zr      2/2     Running   10s
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+The deployment name could differ in your environment.
+====
+
+Once the Knative service is successfully running, you can call it using the script `./bin/call.sh`, which should return a response like `hello`. Allowing it to idle for approximately 60-65 seconds - that is without any further requests -, you will see it automatically scales down to zero pods.
+
+include::modules/cleanup.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

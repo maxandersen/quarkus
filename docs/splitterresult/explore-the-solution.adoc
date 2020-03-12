@@ -1,0 +1,13 @@
+ifdef::context[:parent-context: {context}]
+[id="explore-the-solution_{context}"]
+= Explore the Solution
+:context: explore-the-solution
+
+The solution repository located in the `security-jwt-quickstart` {quickstarts-tree-url}/security-jwt-quickstart[directory] contains all of the versions we have
+worked through in this quickstart guide as well as some additional endpoints that illustrate subresources with injection
+of ``JsonWebToken``s and their claims into those using the CDI APIs. We suggest that you check out the quickstart solutions and
+explore the `security-jwt-quickstart` directory to learn more about the {extension-name} extension features.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

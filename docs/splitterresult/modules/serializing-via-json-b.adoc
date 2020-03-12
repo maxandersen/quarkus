@@ -1,0 +1,54 @@
+[id="serializing-via-json-b_{context}"]
+= Serializing via JSON-B
+
+First, you need to include the `quarkus-resteasy-jsonb` extension (if you already use the `quarkus-resteasy-jsonb` extension, this is not needed).
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-resteasy-jsonb</artifactId>
+</dependency>
+----
+
+There is an existing `JsonbSerializer` that can be used to serialize all pojos via JSON-B,
+but the corresponding deserializer is generic, so it needs to be subclassed.
+
+So, let's create a `FruitDeserializer` that extends the generic `JsonbDeserializer`.
+
+[source,java]
+----
+package com.acme.fruit.jsonb;
+
+import io.quarkus.kafka.client.serialization.JsonbDeserializer;
+
+public class FruitDeserializer extends JsonbDeserializer<Fruit> {
+    public FruitDeserializer(){
+        // pass the class to the parent.
+        super(Fruit.class);
+    }
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you don't want to create a deserializer for each of your pojo, you can use the generic `io.vertx.kafka.client.serialization.JsonObjectDeserializer`
+that will deserialize to a `javax.json.JsonObject`. The corresponding serializer can also be used: `io.vertx.kafka.client.serialization.JsonObjectSerializer`.
+====
+
+Finally, configure your streams to use the JSON-B serializer and deserializer.
+
+[source,properties]
+----
+# Configure the Kafka source (we read from it)
+mp.messaging.incoming.fruit-in.connector=smallrye-kafka
+mp.messaging.incoming.fruit-in.topic=fruit-in
+mp.messaging.incoming.fruit-in.value.deserializer=com.acme.fruit.jsonb.FruitDeserializer
+
+# Configure the Kafka sink (we write to it)
+mp.messaging.outgoing.fruit-out.connector=smallrye-kafka
+mp.messaging.outgoing.fruit-out.topic=fruit-out
+mp.messaging.outgoing.fruit-out.value.serializer=io.quarkus.kafka.client.serialization.JsonbSerializer
+----
+
+Now, your Kafka messages will contain a JSON-B serialized representation of your Fruit pojo.

@@ -1,0 +1,21 @@
+ifdef::context[:parent-context: {context}]
+[id="the-legacy-client_{context}"]
+= The legacy client
+:context: the-legacy-client
+
+We don't include the legacy MongoDB client by default. It contains the now retired MongoDB Java API (DB, DBCollection,... )
+and the `com.mongodb.MongoClient` that is now superseded by `com.mongodb.client.MongoClient`.
+
+If you want to use the legacy API, you need to add the following dependency to your `pom.xml`:
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.mongodb</groupId>
+    <artifactId>mongodb-driver-legacy</artifactId>
+</dependency>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,31 @@
+ifdef::context[:parent-context: {context}]
+[id="delay-class-initialization_{context}"]
+= Delay class initialization
+:context: delay-class-initialization
+
+Quarkus simplifies things by allowing extensions authors to simply register a `RuntimeInitializedClassBuildItem`. A simple example of doing so could be:
+
+[source,java]
+----
+public class S3Processor {
+
+    @BuildStep
+    RuntimeInitializedClassBuildItem cryptoConfiguration() {
+        return new RuntimeInitializedClassBuildItem(CryptoConfiguration.class.getCanonicalName());
+    }
+
+}
+----
+
+Using such a construct means that a `--initialize-at-run-time` option will automatically be added to the `native-image` command line.
+
+[NOTE,textlabel="Note",name="note"]
+====
+For more information about `--initialize-at-run-time`, please read https://github.com/oracle/graal/blob/master/substratevm/CLASS-INITIALIZATION.md[the GraalVM documentation].
+====
+
+include::modules/managing-proxy-classes-2.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

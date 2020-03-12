@@ -1,0 +1,12 @@
+ifdef::context[:parent-context: {context}]
+[id="roles-mapping_{context}"]
+= Roles mapping
+:context: roles-mapping
+
+Roles are mapped from one of the claims of the introspection endpoint response. By default, it's the `scope` claim. Roles are obtained by splitting the claim with a space separator. If the claim is an array, no splitting is done, the roles are obtained from the array.
+
+You can customize the name of the claim to use for the roles with the `quarkus.oauth2.role-claim` property.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

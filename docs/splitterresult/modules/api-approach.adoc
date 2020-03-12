@@ -1,0 +1,34 @@
+[id="api-approach_{context}"]
+= API approach
+
+The less easy way is to inject a `UserTransaction` and use the various transaction demarcation methods.
+
+[source,java]
+----
+@ApplicationScoped
+public class SantaClausService {
+
+    @Inject ChildDAO childDAO
+    @Inject SantaClausDAO santaDAO
+    @Inject UserTransaction transaction
+
+    public void getAGiftFromSanta(Child child, String giftDescription) throws Exception {
+        // some transaction work
+        try {
+            transaction.begin();
+            Gift gift = childDAO.addToGiftList(child, giftDescription);
+            santaDAO.addToSantaTodoList(gift);
+            transaction.commit();
+        }
+        catch(SomeException e) {
+            // do something on Tx failure
+            transaction.rollback();
+        }
+    }
+}
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+You cannot use `UserTransaction` in a method having a transaction started by a `@Transactional` call.
+====

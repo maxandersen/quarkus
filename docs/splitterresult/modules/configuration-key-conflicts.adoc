@@ -1,0 +1,22 @@
+[id="configuration-key-conflicts_{context}"]
+= Configuration key conflicts
+
+The MicroProfile Configuration specification defines configuration keys as an arbitrary `.`-delimited string.
+However, structured formats like YAML naively only support a subset of the possible configuration namespace.
+For example, consider the two configuration properties `quarkus.http.cors` and `quarkus.http.cors.methods`.
+One property is the prefix of another, so it may not be immediately evident how to specify both keys in your YAML configuration.
+
+This is solved by using a null key (normally represented by `~`) for any YAML property which is a prefix of another one.  Here's an example:
+
+.An example YAML configuration resolving prefix-related key name conflicts
+[source,yaml]
+----
+quarkus:
+  http:
+    cors:
+      ~: true
+      methods: GET,PUT,POST
+----
+
+In general, null YAML keys are not included in assembly of the configuration property name, allowing them to be used to
+any level for disambiguating configuration keys.

@@ -1,0 +1,24 @@
+[id="additional-interceptor-bindings_{context}"]
+= Additional Interceptor Bindings
+
+In rare cases it might be handy to programmatically register an existing annotation as interceptor binding.
+This is similar to what pure CDI achieves through `BeforeBeanDiscovery#addInterceptorBinding()`.
+Though here we are going to use `InterceptorBindingRegistrarBuildItem` to get it done.
+Note that you can register multiple annotations in one go:
+
+[source,java]
+----
+@BuildStep
+InterceptorBindingRegistrarBuildItem addInterceptorBindings() {
+    InterceptorBindingRegistrarBuildItem additionalBindingsRegistrar = new InterceptorBindingRegistrarBuildItem(new InterceptorBindingRegistrar() {
+        @Override
+        public Collection<DotName> registerAdditionalBindings() {
+            Collection<DotName> result = new HashSet<>();
+            result.add(DotName.createSimple(MyAnnotation.class.getName()));
+            result.add(DotName.createSimple(MyOtherAnnotation.class.getName()));
+            return result;
+        }
+    });
+    return additionalBindingsRegistrar;
+}
+----

@@ -1,0 +1,26 @@
+ifdef::context[:parent-context: {context}]
+[id="live-reload_{context}"]
+= Live reload
+:context: live-reload
+
+Quarkus provides support for live reloading changes made to source code. This support is also available to Kotlin, meaning that developers can update their Kotlin source
+code and immediately see their changes reflected.
+
+To see this feature in action, first execute: `./mvnw compile quarkus:dev`
+
+When executing an HTTP GET request against `http://localhost:8080/greeting`, you see a JSON message with the value `hello` as its `message` field.
+
+Now using your favorite editor or IDE, update `GreetingResource.kt` and change the `hello` method to the following:
+
+[source,kotlin]
+----
+fun hello() = Greeting("hi")
+----
+
+When you now execute an HTTP GET request against `http://localhost:8080/greeting`, you should see a JSON message with the value `hi` as its `message` field.
+
+One thing to note is that the live reload feature is not available when making changes to both Java and Kotlin source that have dependencies on each other. We hope to alleviate this limitation in the future.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

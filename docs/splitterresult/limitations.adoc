@@ -1,0 +1,17 @@
+ifdef::context[:parent-context: {context}]
+[id="limitations_{context}"]
+= Limitations
+:context: limitations
+
+* `@ConversationScoped` is not supported
+* Decorators are not supported
+* Portable Extensions are not supported
+* `BeanManager` - only the following methods are implemented: `getBeans()`, `createCreationalContext()`, `getReference()`, `getInjectableReference()` , `resolve()`, `getContext()`, `fireEvent()`, `getEvent()` and `createInstance()`
+* Specialization is not supported
+* `beans.xml` descriptor content is ignored
+* Passivation and passivating scopes are not supported
+* Interceptor methods on superclasses are not implemented yet
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

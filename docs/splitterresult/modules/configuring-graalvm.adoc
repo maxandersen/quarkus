@@ -1,0 +1,59 @@
+[id="configuring-graalvm_{context}"]
+= Configuring GraalVM
+
+[TIP,textlabel="Tip",name="tip"]
+====
+If you cannot install GraalVM, you can use a multi-stage Docker build to run Maven inside a Docker container that embeds GraalVM. There is an explanation of how to do this at the end of this guide.
+====
+
+Version {graalvm-version} is required. Using the community edition is enough.
+
+[arabic]
+. Install GraalVM if you haven't already. You have a few options for this:
+** Use platform-specific install tools like https://github.com/graalvm/homebrew-tap[homebrew] or https://sdkman.io/jdks#Oracle[sdkman].
+** Download the appropriate Community Edition archive from <https://github.com/graalvm/graalvm-ce-builds/releases>, and unpack it like you would any other JDK.
+. Configure the runtime environment. Set `GRAALVM_HOME` environment variable to the GraalVM installation directory, for example:
++
+[source,shell]
+----
+export GRAALVM_HOME=$HOME/Development/graalvm/
+----
++
+On macOS, point the variable to the `Home` sub-directory:
++
+[source,shell]
+----
+export GRAALVM_HOME=$HOME/Development/graalvm/Contents/Home/
+----
+. Install the `native-image` tool using `gu install`:
++
+[source,shell]
+----
+${GRAALVM_HOME}/bin/gu install native-image
+----
++
+Some previous releases of GraalVM included the `native-image` tool by default.  This is no longer the case; it must be installed as a second step after GraalVM itself is installed. Note: there is an outstanding issue xref:graal-and-catalina[using GraalVM with macOS Catalina].
+. (Optional) Set the `JAVA_HOME` environment variable to the GraalVM installation directory.
++
+[source,shell]
+----
+export JAVA_HOME=${GRAALVM_HOME}
+----
+. (Optional) Add the GraalVM `bin` directory to the path
++
+[source,shell]
+----
+export PATH=${GRAALVM_HOME}/bin:$PATH
+----
+
+.Issues using GraalVM with macOS Catalina
+[id="graal-and-catalina_{context}" NOTE,textlabel="Note",name="note",id="graal-and-catalina"]
+====
+GraalVM binaries are not (yet) notarized for macOS Catalina as reported in this https://github.com/oracle/graal/issues/1724[GraalVM issue]. This means that you may see the following error when using `gu`:[source,shell]
+----
+“gu” cannot be opened because the developer cannot be verified
+----Use the following command to recursively delete the `com.apple.quarantine` extended attribute on the GraalVM install directory as a workaround:[source,shell]
+----
+xattr -r -d com.apple.quarantine $HOME/Development/graalvm/
+----
+====

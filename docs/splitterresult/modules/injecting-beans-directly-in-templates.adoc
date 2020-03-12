@@ -1,0 +1,18 @@
+[id="injecting-beans-directly-in-templates_{context}"]
+= Injecting Beans Directly In Templates
+
+A CDI bean annotated with `@Named` can be referenced in any template through the `inject` namespace:
+
+[source,html]
+----
+{inject:foo.price} <1>
+----
+[arabic]
+<1> First, a bean with name `foo` is found and then used as the base object.
+All expressions using the `inject` namespace are validated during build.
+For the expression `inject:foo.price` the implementation class of the injected bean must either have the `price` property (e.g. a `getPrice()` method) or a matching <<template_extension_methods,template extension method>> must exist.
+
+[NOTE,textlabel="Note",name="note"]
+====
+A `ValueResolver` is also generated for all beans annotated with `@Named` so that it's possible to access its properties without reflection.
+====

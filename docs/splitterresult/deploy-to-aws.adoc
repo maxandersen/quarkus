@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="deploy-to-aws_{context}"]
+= Deploy to AWS
+:context: deploy-to-aws
+
+There are a few steps to get your lambda running on AWS.
+
+include::modules/package-your-deployment.adoc[leveloffset=+1]
+
+include::modules/deploy-your-package.adoc[leveloffset=+1]
+
+include::modules/debugging-aws-deployment-problems.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

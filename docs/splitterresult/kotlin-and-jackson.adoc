@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="kotlin-and-jackson_{context}"]
+= Kotlin and Jackson
+:context: kotlin-and-jackson
+
+If the `com.fasterxml.jackson.module:jackson-module-kotlin` dependency and the `quarkus-jackson` extension (or the `quarkus-resteasy-extension`) have been added to project,
+then Quarkus automatically registers the `KotlinModule` to the `ObjectMapper` bean (see link:rest-json#Jackson[this] guide for more details).
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

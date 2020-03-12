@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="license_{context}"]
+= License
+:context: license
+
+This project is licensed under the Apache Software License 2.0 - see the https://github.com/quarkus-project/quarkus/blob/master/LICENSE.txt[License file] for details.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

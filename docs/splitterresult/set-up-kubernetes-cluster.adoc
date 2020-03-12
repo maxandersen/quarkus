@@ -1,0 +1,19 @@
+ifdef::context[:parent-context: {context}]
+[id="set-up-kubernetes-cluster_{context}"]
+= Set up Kubernetes Cluster
+:context: set-up-kubernetes-cluster
+
+The following script will start minikube and deploy Knative.
+
+[source,bash]
+----
+./bin/start-minikube.sh
+eval $(minikube docker-env) #<1>
+----
+
+[arabic]
+<1> Make the current Docker context to be that of minikube
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

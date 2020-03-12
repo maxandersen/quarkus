@@ -1,0 +1,10 @@
+[id="customizing-the-readiness-probe_{context}"]
+= Customizing the readiness probe:
+
+To set the initial delay of the probe to 20 seconds and the period to 45:
+
+[source]
+----
+quarkus.kubernetes.readiness-probe.initial-delay-seconds=20
+quarkus.kubernetes.readiness-probe.period-seconds=45
+----

@@ -1,0 +1,52 @@
+ifdef::context[:parent-context: {context}]
+[id="serialization-key-value-types-support_{context}"]
+= Serialization (Key Value types support)
+:context: serialization-key-value-types-support
+
+By default the client will support keys and values of the following types: byte[],
+primitive wrappers (eg. Integer, Long, Double etc.), String, Date and Instant. User types require
+some additional steps that are detailed here. Let's say we have the following user classes:
+
+.Author.java
+[source,java]
+----
+public class Author {
+   private final String name;
+   private final String surname;
+
+   public Author(String name, String surname) {
+      this.name = Objects.requireNonNull(name);
+      this.surname = Objects.requireNonNull(surname);
+   }
+   // Getter/Setter/equals/hashCode/toString omitted
+}
+----
+
+.Book.java
+[source,java]
+----
+public class Book {
+   private final String title;
+   private final String description;
+   private final int publicationYear;
+   private final Set<Author> authors;
+
+   public Book(String title, String description, int publicationYear, Set<Author> authors) {
+      this.title = Objects.requireNonNull(title);
+      this.description = Objects.requireNonNull(description);
+      this.publicationYear = publicationYear;
+      this.authors = Objects.requireNonNull(authors);
+   }
+   // Getter/Setter/equals/hashCode/toString omitted
+}
+----
+
+Serialization of user types uses a library based on protobuf, called Protostream.
+
+include::modules/annotation-based-serialization.adoc[leveloffset=+1]
+
+include::modules/user-written-serialization.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

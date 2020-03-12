@@ -1,0 +1,32 @@
+[id="implicit-simple-cache-key_{context}"]
+= Implicit simple cache key
+
+[source,java]
+----
+package org.acme.cache;
+
+import javax.enterprise.context.ApplicationScoped;
+
+import io.quarkus.cache.CacheInvalidate;
+import io.quarkus.cache.CacheInvalidateAll;
+import io.quarkus.cache.CacheResult;
+
+@ApplicationScoped
+public class CachedService {
+
+    @CacheResult(cacheName = "foo")
+    public Object load(Object key) { <1>
+        // Call expensive service here.
+    }
+
+    @CacheInvalidate(cacheName = "foo")
+    public void invalidate(Object key) { <1>
+    }
+
+    @CacheInvalidateAll(cacheName = "foo")
+    public void invalidateAll() {
+    }
+}
+----
+[arabic]
+<1> The cache key is implicit since there's no `@CacheKey` annotation.

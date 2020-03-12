@@ -1,0 +1,39 @@
+ifdef::context[:parent-context: {context}]
+[id="message-body-based-on-qute-templates_{context}"]
+= Message Body Based on Qute Templates
+:context: message-body-based-on-qute-templates
+
+It's also possible to inject a mail template, where the message body is created automatically using link:qute[Qute templates].
+
+[source,java]
+----
+@Inject
+MailTemplate hello; <1>
+
+@GET
+@Path("/mail")
+public CompletionStage<Response> send() {
+    return hello.to("to@acme.org") <2>
+       .subject("Hello from Qute template")
+       // the template looks like: Hello {name}!
+       .data("name", "John") <3>
+       .send() <4>
+       .subscribeAsCompletionStage()
+       .thenApply(x -> Response.accepted().build());
+}
+----
+
+[arabic]
+<1> If there is no `@ResourcePath` qualifier provided, the field name is used to locate the template. In this particular case, we will use the `hello.html` and `hello.txt` templates to create the message body.
+<2> Create a mail template instance and set the recipient.
+<3> Set the data used in the template.
+<4> `MailTemplate.send()` triggers the rendering and, once finished, sends the e-mail via a `Mailer` instance.
+
+[TIP,textlabel="Tip",name="tip"]
+====
+Injected mail templates are validated during build. If there is no matching template in `src/main/resources/templates` the build fails.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

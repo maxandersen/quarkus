@@ -1,0 +1,10 @@
+ifdef::context[:parent-context: {context}]
+[id="why-skaffold_{context}"]
+= Why Skaffold ?
+:context: why-skaffold
+
+As vanilla Kubernetes does not have an easy and developer friendly way to build and deploy application to a local cluster like minikube, without the need to push the image to external container registry. We will be using Skaffold to help us build and deploy the Quarkus application onto Kubernetes.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

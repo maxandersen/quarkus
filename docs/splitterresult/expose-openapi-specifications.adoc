@@ -1,0 +1,84 @@
+ifdef::context[:parent-context: {context}]
+[id="expose-openapi-specifications_{context}"]
+= Expose OpenAPI Specifications
+:context: expose-openapi-specifications
+
+Quarkus proposes a `smallrye-openapi` extension compliant with the https://github.com/eclipse/microprofile-open-api/[Eclipse MicroProfile OpenAPI]
+specification in order to generate your API https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.0.md[OpenAPI v3 specification].
+
+You just need to add the `openapi` extension to your Quarkus application:
+
+[source,shell]
+----
+./mvnw quarkus:add-extension -Dextensions="openapi"
+----
+
+Now, we are ready to run our application:
+
+[source,shell]
+----
+./mvnw compile quarkus:dev
+----
+
+Once your application is started, you can make a request to the default `/openapi` endpoint:
+
+[source,shell]
+----
+$ curl http://localhost:8080/openapi
+openapi: 3.0.1
+info:
+  title: Generated API
+  version: "1.0"
+paths:
+  /fruits:
+    get:
+      responses:
+        200:
+          description: OK
+          content:
+            application/json: {}
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Fruit'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json: {}
+    delete:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Fruit'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json: {}
+components:
+  schemas:
+    Fruit:
+      properties:
+        description:
+          type: string
+        name:
+          type: string
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+If you do not like the default endpoint location `/openapi`, you can change it by adding the following configuration to your `application.properties`:[source,properties]
+----
+quarkus.smallrye-openapi.path=/swagger
+----
+====
+
+Hit `CTRL+C` to stop the application.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

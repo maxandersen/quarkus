@@ -1,0 +1,31 @@
+ifdef::context[:parent-context: {context}]
+[id="create-an-azure-container-registry-instance_{context}"]
+= Create an Azure Container Registry instance
+:context: create-an-azure-container-registry-instance
+
+It is possible to deploy images hosted on Docker Hub, but this location by default leaves images accessible to anyone. To better protect your container images, this guide shows how to host your images on a private instance of the Azure Container Registry service.
+
+First, create an Azure Resource Group:
+
+[source,shell]
+----
+$ az group create --name <resource-group-name> --location eastus
+----
+
+Then you can create the ACR:
+
+[source,shell]
+----
+$ az acr create --resource-group <resource-group-name> --name <registry-name> --sku Basic --admin-enabled true
+----
+
+Finally, authenticate your local Docker installation with this container registry by running:
+
+[source,shell]
+----
+$ az acr login --name <registry-name>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

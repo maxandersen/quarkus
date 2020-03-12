@@ -1,0 +1,6 @@
+[id="ide-support-tips_{context}"]
+= IDE support tips
+
+[id="writing-quarkus-extensions-in-eclipse_{context}"]
+== Writing Quarkus extensions in Eclipse
+:context: writing-quarkus-extensions-in-eclipse

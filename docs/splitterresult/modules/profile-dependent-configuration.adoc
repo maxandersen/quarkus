@@ -1,0 +1,16 @@
+[id="profile-dependent-configuration_{context}"]
+= Profile dependent configuration
+
+Providing profile dependent configuration with YAML is done like with properties.
+Just add the `%profile` wrapped in quotation marks before defining the key-value pairs:
+
+[source,yaml]
+----
+"%dev":
+  quarkus:
+    datasource:
+      url: jdbc:postgresql://localhost:5432/some-database
+      driver: org.postgresql.Driver
+      username: quarkus
+      password: quarkus
+----

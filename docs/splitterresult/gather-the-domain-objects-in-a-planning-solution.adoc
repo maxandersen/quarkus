@@ -1,0 +1,103 @@
+ifdef::context[:parent-context: {context}]
+[id="gather-the-domain-objects-in-a-planning-solution_{context}"]
+= Gather the domain objects in a planning solution
+:context: gather-the-domain-objects-in-a-planning-solution
+
+A `TimeTable` wraps all `Timeslot`, `Room`, and `Lesson` instances of a single dataset.
+Furthermore, because it contains all lessons, each with a specific planning variable state,
+it is a _planning solution_ and it has a score:
+
+* If lessons are still unassigned, then it is an _uninitialized_ solution,
+for example, a solution with the score `-4init/0hard/0soft`.
+* If it breaks hard constraints, then it is an _infeasible_ solution,
+for example, a solution with the score `-2hard/-3soft`.
+* If it adheres to all hard constraints, then it is a _feasible_ solution,
+for example, a solution with the score `0hard/-7soft`.
+
+Create the `src/main/java/org/acme/domain/TimeTable.java` class:
+
+[source,java]
+----
+package org.acme.domain;
+
+import java.util.List;
+
+import org.optaplanner.core.api.domain.solution.PlanningEntityCollectionProperty;
+import org.optaplanner.core.api.domain.solution.PlanningScore;
+import org.optaplanner.core.api.domain.solution.PlanningSolution;
+import org.optaplanner.core.api.domain.solution.drools.ProblemFactCollectionProperty;
+import org.optaplanner.core.api.domain.valuerange.ValueRangeProvider;
+import org.optaplanner.core.api.score.buildin.hardsoft.HardSoftScore;
+
+@PlanningSolution
+public class TimeTable {
+
+    @ProblemFactCollectionProperty
+    @ValueRangeProvider(id = "timeslotRange")
+    private List<Timeslot> timeslotList;
+    @ProblemFactCollectionProperty
+    @ValueRangeProvider(id = "roomRange")
+    private List<Room> roomList;
+    @PlanningEntityCollectionProperty
+    private List<Lesson> lessonList;
+
+    @PlanningScore
+    private HardSoftScore score;
+
+    public TimeTable() {
+    }
+
+    public TimeTable(List<Timeslot> timeslotList, List<Room> roomList, List<Lesson> lessonList) {
+        this.timeslotList = timeslotList;
+        this.roomList = roomList;
+        this.lessonList = lessonList;
+    }
+
+    public List<Timeslot> getTimeslotList() {
+        return timeslotList;
+    }
+
+    public List<Room> getRoomList() {
+        return roomList;
+    }
+
+    public List<Lesson> getLessonList() {
+        return lessonList;
+    }
+
+    public HardSoftScore getScore() {
+        return score;
+    }
+
+}
+----
+
+The `TimeTable` class has an `@PlanningSolution` annotation,
+so OptaPlanner knows that this class contains all of the input and output data.
+
+Specifically, this class is the input of the problem:
+
+* A `timeslotList` field with all time slots
+** This is a list of problem facts, because they do not change during solving.
+* A `roomList` field with all rooms
+** This is a list of problem facts, because they do not change during solving.
+* A `lessonList` field with all lessons
+** This is a list of planning entities, because they change during solving.
+** Of each `Lesson`:
+*** The values of the `timeslot` and `room` fields are typically still `null`, so unassigned.
+They are planning variables.
+*** The other fields, such as `subject`, `teacher` and `studentGroup`, are filled in.
+These fields are problem properties.
+
+However, this class is also the output of the solution:
+
+* A `lessonList` field for which each `Lesson` instance has non-null `timeslot` and `room` fields after solving
+* A `score` field that represents the quality of the output solution, for example, `0hard/-5soft`
+
+include::modules/the-value-range-providers.adoc[leveloffset=+1]
+
+include::modules/the-problem-fact-and-planning-entity-properties.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

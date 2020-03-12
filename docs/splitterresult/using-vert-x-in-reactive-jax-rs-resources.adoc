@@ -1,0 +1,16 @@
+ifdef::context[:parent-context: {context}]
+[id="using-vert-x-in-reactive-jax-rs-resources_{context}"]
+= Using Vert.x in Reactive JAX-RS resources
+:context: using-vert-x-in-reactive-jax-rs-resources
+
+Quarkus web resources support asynchronous processing and streaming results over https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events[server-sent events].
+
+include::modules/asynchronous-processing.adoc[leveloffset=+1]
+
+include::modules/streaming-using-server-sent-events.adoc[leveloffset=+1]
+
+include::modules/using-vert-x-json.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

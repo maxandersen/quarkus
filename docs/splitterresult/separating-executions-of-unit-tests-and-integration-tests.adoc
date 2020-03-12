@@ -1,0 +1,66 @@
+ifdef::context[:parent-context: {context}]
+[id="separating-executions-of-unit-tests-and-integration-tests_{context}"]
+= Separating executions of Unit Tests and Integration Tests
+:context: separating-executions-of-unit-tests-and-integration-tests
+
+You may want to consider that JUnits and QuarkusTests are two different kind of tests and that they deserve to be separated. This way you could run them separately, in different cases or some more often than the others.
+In order to do so, we'll use a feature of JUnit 5 that allows us to tag some tests. Let's tag `GreetingResourceTest.java` and specify that it is an Integration Test:
+
+[source,java]
+----
+import org.junit.jupiter.api.Tag;
+...
+
+@QuarkusTest
+@Tag("integration")
+public class GreetingResourceTest {
+    ...
+}
+----
+
+We're now able to distinguish unit tests and integration tests. Now, let's bind them to different Maven lifecycle phases. Let's use surefire to bind unit tests to the *test* phase and the integration tests to the *integration-test* phase.
+
+[source,xml,subs="attributes+"]
+----
+<project>
+    ...
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire-plugin.version}</version>
+                <configuration>
+                    <excludedGroups>integration</excludedGroups>
+                    <systemProperties>
+                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                    </systemProperties>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>integration-tests</id>
+                        <phase>integration-test</phase>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <excludedGroups>!integration</excludedGroups>
+                            <groups>integration</groups>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+    ...
+</project>
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+This way, the `QuarkusTest` instances will be executed as part of the `integration-test` build phase while the other JUnit tests will still be ran during the `test` phase.
+You can run all the tests with the command `./mvnw clean verify` (and you will notice that two tests are ran in different phases).
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

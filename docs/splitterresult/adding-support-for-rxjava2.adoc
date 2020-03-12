@@ -1,0 +1,36 @@
+ifdef::context[:parent-context: {context}]
+[id="adding-support-for-rxjava2_{context}"]
+= Adding support for RxJava2
+:context: adding-support-for-rxjava2
+
+If you use Reactive Streams Operators (the `quarkus-smallrye-reactive-streams-operators` module),
+you get support for link:https://github.com/ReactiveX/RxJava[RxJava2] context propagation automatically, but if you don't, you
+may want to include the following modules to get RxJava2 support:
+
+[source,xml]
+----
+<dependencies>
+    <!-- Automatic context propagation for RxJava2 -->
+    <dependency>
+        <groupId>io.smallrye</groupId>
+        <artifactId>smallrye-context-propagation-propagators-rxjava2</artifactId>
+    </dependency>
+    <!--
+    Required if you want transactions extended to the end of methods returning
+    an RxJava2 type.
+     -->
+    <dependency>
+        <groupId>io.smallrye.reactive</groupId>
+        <artifactId>smallrye-reactive-converter-rxjava2</artifactId>
+    </dependency>
+    <!-- Required if you return RxJava2 types from your REST endpoints -->
+    <dependency>
+        <groupId>org.jboss.resteasy</groupId>
+        <artifactId>resteasy-rxjava2</artifactId>
+    </dependency>
+</dependencies>
+----
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

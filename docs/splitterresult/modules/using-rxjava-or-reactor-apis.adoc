@@ -1,0 +1,91 @@
+[id="using-rxjava-or-reactor-apis_{context}"]
+= Using RxJava or Reactor APIs
+
+Mutiny provides utilities to convert RxJava 2 and Project Reactor types to `Uni` and `Multi`.
+
+RxJava 2 converters are available in the following dependency:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.smallrye.reactive</groupId>
+    <artifactId>mutiny-rxjava</artifactId>
+</dependency>
+----
+
+So if you have an API returning RxJava 2 types (`Completable`, `Single`, `Maybe`, `Observable`, `Flowable`), you can create `Unis` and `Multis` as follows:
+
+[source,java]
+----
+import io.smallrye.mutiny.converters.multi.MultiRxConverters;
+import io.smallrye.mutiny.converters.uni.UniRxConverters;
+// ...
+Uni<Void> uniFromCompletable = Uni.createFrom().converter(UniRxConverters.fromCompletable(), completable);
+Uni<String> uniFromSingle = Uni.createFrom().converter(UniRxConverters.fromSingle(), single);
+Uni<String> uniFromMaybe = Uni.createFrom().converter(UniRxConverters.fromMaybe(), maybe);
+Uni<String> uniFromEmptyMaybe = Uni.createFrom().converter(UniRxConverters.fromMaybe(), emptyMaybe);
+Uni<String> uniFromObservable = Uni.createFrom().converter(UniRxConverters.fromObservable(), observable);
+Uni<String> uniFromFlowable = Uni.createFrom().converter(UniRxConverters.fromFlowable(), flowable);
+
+Multi<Void> multiFromCompletable = Multi.createFrom().converter(MultiRxConverters.fromCompletable(), completable);
+Multi<String> multiFromSingle = Multi.createFrom().converter(MultiRxConverters.fromSingle(), single);
+Multi<String> multiFromMaybe = Multi.createFrom().converter(MultiRxConverters.fromMaybe(), maybe);
+Multi<String> multiFromEmptyMaybe = Multi.createFrom().converter(MultiRxConverters.fromMaybe(), emptyMaybe);
+Multi<String> multiFromObservable = Multi.createFrom().converter(MultiRxConverters.fromObservable(), observable);
+Multi<String> multiFromFlowable = Multi.createFrom().converter(MultiRxConverters.fromFlowable(), flowable);
+----
+
+You can also transform `Unis` and `Multis` into RxJava types:
+
+[source,java]
+----
+Completable completable = uni.convert().with(UniRxConverters.toCompletable());
+Single<Optional<String>> single = uni.convert().with(UniRxConverters.toSingle());
+Single<String> single2 = uni.convert().with(UniRxConverters.toSingle().failOnNull());
+Maybe<String> maybe = uni.convert().with(UniRxConverters.toMaybe());
+Observable<String> observable = uni.convert().with(UniRxConverters.toObservable());
+Flowable<String> flowable = uni.convert().with(UniRxConverters.toFlowable());
+// ...
+Completable completable = multi.convert().with(MultiRxConverters.toCompletable());
+Single<Optional<String>> single = multi.convert().with(MultiRxConverters.toSingle());
+Single<String> single2 = multi.convert().with(MultiRxConverters
+        .toSingle().onEmptyThrow(() -> new Exception("D'oh!")));
+Maybe<String> maybe = multi.convert().with(MultiRxConverters.toMaybe());
+Observable<String> observable = multi.convert().with(MultiRxConverters.toObservable());
+Flowable<String> flowable = multi.convert().with(MultiRxConverters.toFlowable());
+----
+
+Project Reactor converters are available in the following dependency:
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.smallrye.reactive</groupId>
+    <artifactId>mutiny-reactor</artifactId>
+</dependency>
+----
+
+So if you have an API returning Reactor types (`Mono`, `Flux`), you can create `Unis` and `Multis` as follows:
+
+[source,java]
+----
+import io.smallrye.mutiny.converters.multi.MultiReactorConverters;
+import io.smallrye.mutiny.converters.uni.UniReactorConverters;
+// ...
+Uni<String> uniFromMono = Uni.createFrom().converter(UniReactorConverters.fromMono(), mono);
+Uni<String> uniFromFlux = Uni.createFrom().converter(UniReactorConverters.fromFlux(), flux);
+
+Multi<String> multiFromMono = Multi.createFrom().converter(MultiReactorConverters.fromMono(), mono);
+Multi<String> multiFromFlux = Multi.createFrom().converter(MultiReactorConverters.fromFlux(), flux);
+----
+
+You can also transform `Unis` and `Multis` into Reactor types:
+
+[source,java]
+----
+Mono<String> mono = uni.convert().with(UniReactorConverters.toMono());
+Flux<String> flux = uni.convert().with(UniReactorConverters.toFlux());
+
+Mono<String> mono2 = multi.convert().with(MultiReactorConverters.toMono());
+Flux<String> flux2 = multi.convert().with(MultiReactorConverters.toFlux());
+----

@@ -1,0 +1,9 @@
+[id="controller-method-return-types_{context}"]
+= Controller method return types
+
+The following method return types are supported:
+
+* Primitive types
+* String (which will be used as a literal, no Spring MVC view support is provided)
+* POJO classes which will be serialized via JSON
+* `org.springframework.http.ResponseEntity`

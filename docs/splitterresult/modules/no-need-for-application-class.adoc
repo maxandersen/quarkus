@@ -1,0 +1,4 @@
+[id="no-need-for-application-class_{context}"]
+= No Need for <code>Application</code> Class
+
+Configuration via an application-supplied subclass of `Application` is supported, but not required.

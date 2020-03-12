@@ -1,0 +1,64 @@
+ifdef::context[:parent-context: {context}]
+[id="database-schema-and-seed-data_{context}"]
+= Database schema and seed data
+:context: database-schema-and-seed-data
+
+Before we implement the REST endpoint and data management code, we need to setup the database schema.
+It would also be convenient to have some data inserted upfront.
+
+For production we would recommend to use something like the link:flyway[Flyway database migration tool].
+But for development we can simply drop and create the tables on startup, and then insert a few fruits.
+
+.src/main/java/org/acme/vertx/FruitResource.java
+[source,java]
+----
+    @Inject
+    @ConfigProperty(name = "myapp.schema.create", defaultValue = "true") // <1>
+    boolean schemaCreate;
+
+    @PostConstruct
+    void config() {
+        if (schemaCreate) {
+            initdb();
+        }
+    }
+
+    private void initdb() {
+        // TODO
+    }
+}
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+You may override the default value of the `myapp.schema.create` property in the `application.properties` file.
+====
+
+Almost ready!
+To initialize the DB in development mode, we will use the client simple `query` method.
+It returns a `Uni` and thus can be composed to execute queries sequentially:
+
+[source,java]
+----
+ client.query("DROP TABLE IF EXISTS fruits")
+    .flatMap(r -> client.query("CREATE TABLE fruits (id SERIAL PRIMARY KEY, name TEXT NOT NULL)"))
+    .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Orange')"))
+    .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Pear')"))
+    .flatMap(r -> client.query("INSERT INTO fruits (name) VALUES ('Apple')"))
+    .await().indefinitely();
+----
+
+[NOTE,textlabel="Note",name="note"]
+====
+Wondering why we need block until the latest query is completed?
+This code is part of a `@PostConstruct` method and Quarkus invokes it synchronously.
+As a consequence, returning prematurely could lead to serving requests while the database is not ready yet.
+====
+
+That's it!
+So far we have seen how to configure a pooled client and execute simple queries.
+We are now ready to develop the data management code and implement our RESTful endpoint.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

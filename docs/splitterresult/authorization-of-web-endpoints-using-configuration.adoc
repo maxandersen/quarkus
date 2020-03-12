@@ -1,0 +1,59 @@
+ifdef::context[:parent-context: {context}]
+[id="authorization-of-web-endpoints-using-configuration_{context}"]
+= Authorization of Web Endpoints using configuration
+:context: authorization-of-web-endpoints-using-configuration
+
+Quarkus has an integrated plugable web security layer. If security is enabled all HTTP requests will have a permission
+check performed to make sure they are permitted to continue.
+
+[NOTE,textlabel="Note",name="note"]
+====
+Configuration authorization checks are executed before any annotation-based authorization check is done, so both
+checks have to pass for a request to be allowed.
+====
+
+The default implementation allows you to define permissions using config in `application.properties`. An example
+config is shown below:
+
+[source,properties]
+----
+
+quarkus.http.auth.policy.role-policy1.roles-allowed=user,admin                      <1>
+
+quarkus.http.auth.permission.roles1.paths=/roles-secured/*,/other/*,/api/*          <2>
+quarkus.http.auth.permission.roles1.policy=role-policy1
+
+quarkus.http.auth.permission.permit1.paths=/public/*                                <3>
+quarkus.http.auth.permission.permit1.policy=permit
+quarkus.http.auth.permission.permit1.methods=GET
+
+quarkus.http.auth.permission.deny1.paths=/forbidden                                 <4>
+quarkus.http.auth.permission.deny1.policy=deny
+----
+
+[arabic]
+<1> This defines a role based policy that allows users with the `user` and `admin` roles. This is referenced by later rules
+<2> This is a permission set that references the previously defined policy. `roles1` is an arbitrary name, you can call the permission sets whatever you want.
+<3> This permission references the default `permit` built in policy to allow `GET` methods to `/public`. This is actually a no-op in this example, as this request would have been allowed anyway.
+<4> This permission references the built in `deny` build in policy `/forbidden`. This is an exact path match as it does not end with *.
+
+Permissions are defined in config using permission sets. These are arbitrarily named permission grouping. Each permission
+set must specify a policy that is used to control access. There are three built in policies: `deny`, `permit` and `authenticated`,
+which permit all, deny all and only allow authenticated users respectively.
+
+It is also possible to define role based policies, as shown in the example. These policies will only allow users with the
+specified roles to access the resources.
+
+include::modules/matching-on-paths-methods.adoc[leveloffset=+1]
+
+include::modules/matching-path-but-not-method.adoc[leveloffset=+1]
+
+include::modules/matching-multiple-paths-longest-wins.adoc[leveloffset=+1]
+
+include::modules/matching-multiple-paths-most-specific-method-wins.adoc[leveloffset=+1]
+
+include::modules/matching-multiple-paths-and-methods-both-win.adoc[leveloffset=+1]
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

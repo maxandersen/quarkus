@@ -1,0 +1,40 @@
+[id="general-remarks_{context}"]
+= General remarks
+
+The result of a statement consists usually of one or more `org.neo4j.driver.Record`.
+Those records contain arbitrary values, supported by the driver.
+If you return a node of the graph, it will be a `org.neo4j.driver.types.Node`.
+
+We add the following method to the `Fruit`, as a convenient way to create them:
+
+[source,java]
+----
+public static Fruit from(Node node) {
+    return new Fruit(node.id(), node.get("name").asString());
+}
+----
+
+Add a `FruitResource` skeleton like this and `@Inject` a `org.neo4j.driver.Driver` instance:
+
+.src/main/java/org/acme/neo4j/FruitResource.java
+[source,java]
+----
+package org.acme.neo4j;
+
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+
+import org.neo4j.driver.Driver;
+
+@Path("fruits")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class FruitResource {
+
+    @Inject
+    Driver driver;
+}
+----

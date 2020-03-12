@@ -1,0 +1,77 @@
+[id="registering-for-reflection_{context}"]
+= Registering for reflection
+
+When building a native executable, GraalVM operates with a closed world assumption.
+It analyzes the call tree and removes all the classes/methods/fields that are not used directly.
+
+The elements used via reflection are not part of the call tree so they are dead code eliminated (if not called directly in other cases).
+To include these elements in your native executable, you need to register them for reflection explicitly.
+
+This is a very common case as JSON libraries typically use reflection to serialize the objects to JSON:
+
+[source,java]
+----
+    public class Person {
+        private String first;
+        private String last;
+
+        public String getFirst() {
+            return first;
+        }
+
+        public void setFirst(String first) {
+            this.first = first;
+        }
+
+        public String getLast() {
+            return last;
+        }
+
+        public void setValue(String last) {
+            this.last = last;
+        }
+    }
+
+    @Path("/person")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public class PersonResource {
+
+        private final Jsonb jsonb;
+
+        public PersonResource() {
+            jsonb = JsonbBuilder.create(new JsonbConfig());
+        }
+
+        @GET
+        public Response list() {
+            return Response.ok(jsonb.fromJson("{\"first\":  \"foo\", \"last\":  \"bar\"}", Person.class)).build();
+        }
+    }
+----
+
+If we were to use the code above, we would get an exception like the following when using the native executable:
+
+[source]
+----
+Exception handling request to /person: org.jboss.resteasy.spi.UnhandledException: javax.json.bind.JsonbException: Can't create instance of a class: class org.acme.jsonb.Person, No default constructor found
+----
+
+or if you are using Jackson:
+
+[source]
+----
+com.fasterxml.jackson.databind.exc.InvalidDefinitionException: No serializer found for class org.acme.jsonb.Person and no properties discovered to create BeanSerializer (to avoid exception, disable SerializationFeature.FAIL_ON_EMPTY_BEANS)
+----
+
+An even nastier possible outcome could be for no exception to be thrown, but instead the JSON result would be completely empty.
+
+There are two different ways to fix this type of issues.
+
+[id="using-the-registerforreflection-annotation_{context}"]
+== Using the @RegisterForReflection annotation
+:context: using-the-registerforreflection-annotation
+
+[id="using-a-configuration-file_{context}"]
+== Using a configuration file
+:context: using-a-configuration-file

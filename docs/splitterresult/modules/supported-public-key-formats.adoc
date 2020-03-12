@@ -1,0 +1,11 @@
+[id="supported-public-key-formats_{context}"]
+= Supported Public Key Formats
+
+Public Keys may be formatted in any of the following formats, specified in order of
+precedence:
+
+- Public Key Cryptography Standards #8 (PKCS#8) PEM
+- JSON Web Key (JWK)
+- JSON Web Key Set (JWKS)
+- JSON Web Key (JWK) Base64 URL encoded
+- JSON Web Key Set (JWKS) Base64 URL encoded

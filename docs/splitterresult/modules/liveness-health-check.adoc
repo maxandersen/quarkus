@@ -1,0 +1,28 @@
+[id="liveness-health-check_{context}"]
+= Liveness health check
+
+Here is an example of the liveness check:
+
+[source]
+----
+curl -i http://aggregator:8080/health/live
+
+HTTP/1.1 503 Service Unavailable
+content-type: application/json; charset=UTF-8
+content-length: 225
+
+{
+    "status": "DOWN",
+    "checks": [
+        {
+            "name": "Kafka Streams state health check",
+            "status": "DOWN",
+            "data": {
+                "state": "CREATED"
+            }
+        }
+    ]
+}
+----
+
+The `state` is coming from the `KafkaStreams.State` enum.

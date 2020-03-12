@@ -1,0 +1,19 @@
+[id="encrypt-the-claims_{context}"]
+= Encrypt the claims
+
+The claims can be encrypted immediately or after the `JSON Web Encryption` headers have been set the same way as they can be signed.
+The only minor difference is that encrypting the claims always requires a `jwe()` `JwtEncryptionBuilder` transition:
+
+[source,java]
+----
+import io.smallrye.jwt.build.Jwt;
+...
+
+// Encrypt the claims using the public key loaded from the location set with a 'smallrye.jwt.encrypt.key-location' property.
+String jwt1 = Jwt.claims("/tokenClaims.json").jwe().encrypt();
+
+// Set the headers and encrypt the claims with an RSA public key loaded in the code (the implementation of this method is omitted).
+String jwt2 = Jwt.claims("/tokenClaims.json").jwe().header("custom-header", "custom-value").encrypt(getPublicKey());
+----
+
+Note the `alg` (key management algorithm) header is set to `RSA-OAEP-256` (it will be changed to `RSA-OAEP` in a future version of smallrye-jwt) and the `enc` (content encryption header) is set to `A256GCM` by default.

@@ -1,0 +1,10 @@
+[id="package-your-deployment_{context}"]
+= Package your deployment.
+
+[source,subs="attributes+"]
+----
+sam package --template-file sam.jvm.yaml --output-template-file packaged.yaml --s3-bucket <YOUR_S3_BUCKET>
+----
+
+Type the simple name of your S3 bucket you created during.  If you've built a native executable, replace
+`sam.jvm.yaml` with `sam.native.yaml`.

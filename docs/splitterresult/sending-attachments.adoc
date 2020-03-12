@@ -1,0 +1,25 @@
+ifdef::context[:parent-context: {context}]
+[id="sending-attachments_{context}"]
+= Sending attachments
+:context: sending-attachments
+
+To send attachment, just use the `addAttachment` methods on the `io.quarkus.mailer.Mail` instance:
+
+[source,java]
+----
+@GET
+@Path("/attachment")
+public Response sendEmailWithAttachment() {
+    mailer.send(Mail.withText("to@acme.org", "An email from quarkus with attachment",
+            "This is my body")
+            .addAttachment("my-file.txt",
+                "content of my file".getBytes(), "text/plain"));
+    return Response.accepted().build();
+}
+----
+
+Attachments can be created from raw bytes (as shown in the snippet) or files.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

@@ -1,0 +1,78 @@
+ifdef::context[:parent-context: {context}]
+[id="hello-world-example_{context}"]
+= Hello World Example
+:context: hello-world-example
+
+In this example, we'd like to demonstrate the basic workflow when working with Qute templates.
+Let's start with a simple hello world example.
+We will always need some *template contents*:
+
+.hello.html
+[source,html]
+----
+<html>
+  <p>Hello {name}! <1>
+</html>
+----
+
+[arabic]
+<1> `{name}` is a value expression that is evaluated when the template is rendered.
+
+Then, we will need to parse the contents into a *template definition* Java object.
+A template definition is an instance of `io.quarkus.qute.Template`.
+
+If using Qute "standalone" you'll need to create an instance of `io.quarkus.qute.Engine` first.
+The `Engine` represents a central point for template management with dedicated configuration.
+Let's use the convenient builder:
+
+[source,java]
+----
+Engine engine = Engine.builder().addDefaults().build();
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+In Quarkus, there is a preconfigured `Engine` available for injection - see <<quarkus_integration>>.
+====
+
+If we have an `Engine` instance we could parse the template contents:
+
+[source,java]
+----
+Template helloTemplate = engine.parse(helloHtmlContent);
+----
+
+[TIP,textlabel="Tip",name="tip"]
+====
+In Quarkus, you can simply inject the template definition. The template is automatically parsed and cached - see <<quarkus_integration>>.
+====
+
+Finally, we will create a *template instance*, set the data and render the output:
+
+[source,java]
+----
+// Renders <html><p>Hello Jim!</p></html>
+helloTemplate.data("name", "Jim").render(); <1>
+----
+
+[arabic]
+<1> `Template.data(String, Object)` is a convenient method that creates a template instance and sets the data in one step.
+
+So the workflow is simple:
+
+[arabic]
+. Create template contents (`hello.html`),
+. Parse template definition (`io.quarkus.qute.Template`),
+. Create template instance (`io.quarkus.qute.TemplateInstance`),
+. Render output.
+
+The `Engine` is able to cache the definitions so that it's not necessary to parse the contents again and again.
+
+[NOTE,textlabel="Note",name="note"]
+====
+In Quarkus, the caching is done automatically.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

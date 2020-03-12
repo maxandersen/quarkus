@@ -1,0 +1,17 @@
+[id="how-to-expose-configuration_{context}"]
+= How to expose configuration
+
+Quarkus simplifies the most common usages.
+This means that its defaults might be different than the library it integrates.
+
+To make the simple experience easiest, unify the configuration in `application.properties` via MicroProfile Config.
+Avoid library specific configuration files, or at least make them optional: e.g. `persistence.xml` for Hibernate ORM is optional.
+
+Extensions should see the configuration holistically as a Quarkus application instead of focusing on the library experience.
+For example `quarkus.database.url` and friends are shared between extensions as defining a database access is a shared task (instead of a `hibernate.` property for example).
+The most useful configuration options should be exposed as `quarkus.[extension].` instead of the natural namespace of the library.
+Less common properties can live in the library namespace.
+
+To fully enable the close world assumptions that Quarkus can optimize best, it is better to consider configuration options as build time settled vs overridable at runtime.
+Of course properties like host, port, password should be overridable at runtime.
+But many properties like enable caching or setting the JDBC driver can safely require a rebuild of the application.

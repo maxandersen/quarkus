@@ -1,0 +1,11 @@
+ifdef::context[:parent-context: {context}]
+[id="stand-up-a-config-server_{context}"]
+= Stand up a Config Server
+:context: stand-up-a-config-server
+
+To stand up the Config Server required for this guide, please follow the instructions outlined https://github.com/spring-guides/gs-centralized-configuration#stand-up-a-config-server[here].
+The end result of that process is a running Config Server that will provide the `Hello world` value for a configuration property named `message` when the application querying the server is named `a-bootiful-client`.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

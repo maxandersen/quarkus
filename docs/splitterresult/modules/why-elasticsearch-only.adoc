@@ -1,0 +1,9 @@
+[id="why-elasticsearch-only_{context}"]
+= Why Elasticsearch only?
+
+Hibernate Search supports both a Lucene backend and an Elasticsearch backend.
+
+In the context of Quarkus and to build microservices, we thought the latter would make more sense.
+Thus we focused our efforts on it.
+
+We don't have plans to support the Lucene backend in Quarkus for now.

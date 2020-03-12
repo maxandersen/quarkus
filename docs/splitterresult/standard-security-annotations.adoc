@@ -1,0 +1,66 @@
+ifdef::context[:parent-context: {context}]
+[id="standard-security-annotations_{context}"]
+= Authorization in REST endpoints and CDI beans using annotations
+:context: standard-security-annotations
+
+Quarkus comes with built-in security to allow for Role-Based Access Control (link:https://en.wikipedia.org/wiki/Role-based_access_control[RBAC])
+based on the common security annotations `@RolesAllowed`, `@DenyAll`, `@PermitAll` on REST endpoints and CDI beans.
+An example of an endpoint that makes use of both JAX-RS and Common Security annotations to describe and secure its endpoints is given in <<subject-example>>. Quarkus also provides
+the `io.quarkus.security.Authenticated` annotation that will permit any authenticated user to access the resource
+(equivalent to `@RolesAllowed("*")`).
+
+.SubjectExposingResource Example
+[id="subject-example_{context}" source,java,id="subject-example"]
+----
+import java.security.Principal;
+
+import javax.annotation.security.DenyAll;
+import javax.annotation.security.PermitAll;
+import javax.annotation.security.RolesAllowed;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.SecurityContext;
+
+@Path("subject")
+public class SubjectExposingResource {
+
+    @GET
+    @Path("secured")
+    @RolesAllowed("Tester") <1>
+    public String getSubjectSecured(@Context SecurityContext sec) {
+        Principal user = sec.getUserPrincipal(); <2>
+        String name = user != null ? user.getName() : "anonymous";
+        return name;
+    }
+
+    @GET
+    @Path("unsecured")
+    @PermitAll<3>
+    public String getSubjectUnsecured(@Context SecurityContext sec) {
+        Principal user = sec.getUserPrincipal(); <4>
+        String name = user != null ? user.getName() : "anonymous";
+        return name;
+    }
+
+    @GET
+    @Path("denied")
+    @DenyAll<5>
+    public String getSubjectDenied(@Context SecurityContext sec) {
+        Principal user = sec.getUserPrincipal();
+        String name = user != null ? user.getName() : "anonymous";
+        return name;
+    }
+}
+----
+
+[arabic]
+<1> This `/subject/secured` endpoint requires an authenticated user that has been granted the role "Tester" through the use of the `@RolesAllowed("Tester")` annotation.
+<2> The endpoint obtains the user principal from the JAX-RS SecurityContext. This will be non-null for a secured endpoint.
+<3> The `/subject/unsecured` endpoint allows for unauthenticated access by specifying the `@PermitAll` annotation.
+<4> This call to obtain the user principal will return null if the caller is unauthenticated, non-null if the caller is authenticated.
+<5> The `/subject/denied` endpoint disallows any access regardless of whether the call is authenticated by specifying the `@DenyAll` annotation.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

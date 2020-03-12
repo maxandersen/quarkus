@@ -1,0 +1,13 @@
+[id="introduction_{context}"]
+= Introduction
+
+Analysis is a big part of full text search: it defines how text will be processed when indexing or building search queries.
+
+The role of analyzers is to split the text into tokens (~ words) and filter them (making it all lowercase and removing accents for instance).
+
+Normalizers are a special type of analyzers that keeps the input as a single token.
+It is especially useful for sorting or indexing keywords.
+
+There are a lot of bundled analyzers but you can also develop your own for your own specific purposes.
+
+You can learn more about the Elasticsearch analysis framework in the https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis.html[Analysis section of the Elasticsearch documentation].

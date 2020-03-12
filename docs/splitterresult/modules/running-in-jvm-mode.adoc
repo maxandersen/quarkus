@@ -1,0 +1,18 @@
+[id="running-in-jvm-mode_{context}"]
+= Running in JVM Mode
+
+When you're done playing with "dev-mode" you can run it as a standard Java application.
+
+First compile it:
+
+[source,bash]
+----
+./mvnw package
+----
+
+Then run it:
+
+[source,bash]
+----
+java -jar ./target/security-openid-connect-web-authentication-quickstart-runner.jar
+----

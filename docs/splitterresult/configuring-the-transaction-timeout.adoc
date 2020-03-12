@@ -1,0 +1,14 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-transaction-timeout_{context}"]
+= Configuring the transaction timeout
+:context: configuring-the-transaction-timeout
+
+You can configure the default transaction timeout, the timeout that applies to all transactions managed by the transaction manager, via the property `quarkus.transaction-manager.default-transaction-timeout`, specified as a duration.
+
+link:duration-format-note.adoc[]
+
+The default value is 60 seconds.
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

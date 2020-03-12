@@ -1,0 +1,40 @@
+ifdef::context[:parent-context: {context}]
+[id="configuring-the-amqp-connector_{context}"]
+= Configuring the AMQP connector
+:context: configuring-the-amqp-connector
+
+We need to configure the AMQP connector. This is done in the `application.properties` file.
+The keys are structured as follows:
+
+`mp.messaging.[outgoing|incoming].{channel-name}.property=value`
+
+The `channel-name` segment must match the value set in the `@Incoming` and `@Outgoing` annotation:
+* `generated-price` -> sink in which we write the prices
+* `prices` -> source in which we read the prices
+
+[source]
+----
+# Configures the AMQP broker credentials.
+amqp-username=quarkus
+amqp-password=quarkus
+
+# Configure the AMQP connector to write to the `prices` address
+mp.messaging.outgoing.generated-price.connector=smallrye-amqp
+mp.messaging.outgoing.generated-price.address=prices
+mp.messaging.outgoing.generated-price.durable=true
+
+# Configure the AMQP connector to read from the `prices` queue
+mp.messaging.incoming.prices.connector=smallrye-amqp
+mp.messaging.incoming.prices.durable=true
+----
+
+More details about this configuration is available in the https://smallrye.io/smallrye-reactive-messaging/#_interacting_using_amqp[SmallRye Reactive Messaging AMQP connector] documentation.
+
+[NOTE,textlabel="Note",name="note"]
+====
+What about `my-data-stream`? This is an in-memory stream, not connected to a message broker.
+====
+
+
+ifdef::parent-context[:context: {parent-context}]
+ifndef::parent-context[:!context:]

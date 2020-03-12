@@ -1,0 +1,20 @@
+[id="overriding_{context}"]
+= Overriding
+
+The extension also allows application code to override either of  `io.fabric8.kubernetes.client.Config` or `io.fabric8.kubernetes.client.KubernetesClient` which are
+normally provided by the extension by simply declaring custom versions of those beans.
+
+An example of this can be seen in the following snippet:
+
+[source,java]
+----
+@ApplicationScoped
+public class KubernetesClientProducer {
+
+    @Produces
+    public KubernetesClient kubernetesClient() {
+        // here you would create a custom client
+        return new DefaultKubernetesClient();
+    }
+}
+----

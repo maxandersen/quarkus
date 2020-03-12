@@ -1,0 +1,14 @@
+[id="configuring-the-address_{context}"]
+= Configuring the address
+
+The `@ConsumeEvent` annotation can be configured to set the address:
+
+[source,java]
+----
+@ConsumeEvent("greeting")               // <1>
+public String consume(String name) {
+    return name.toUpperCase();
+}
+----
+[arabic]
+<1> Receive the messages sent to the `greeting` address
