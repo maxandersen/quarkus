@@ -12,8 +12,6 @@ jobs:
       MAVEN_OPTS: -Xmx2048m -XX:MaxMetaspaceSize=1000m
     steps:
       - uses: actions/checkout@v2
-        with:
-          ref: main
       - name: Reclaim Disk Space
         run: .github/ci-prerequisites.sh
       - name: Set up JDK 8
