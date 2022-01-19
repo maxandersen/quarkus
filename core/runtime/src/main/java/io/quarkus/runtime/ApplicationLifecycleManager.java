@@ -188,17 +188,20 @@ public class ApplicationLifecycleManager {
                         applicationLogger.warn("You can try to kill it with 'taskkill /PID <pid>' or via the Task Manager.");
                     } else if (IS_MAC) {
                         applicationLogger
-                                .warnf("Use 'netstat -anv | grep %d' to identify the process occupying the port.", port);
+                                .warnf("Use 'netstat -anv | grep \"%d\\| pid \"' to identify the process occupying the port.",
+                                        port);
                         if (sslPort != null)
                             applicationLogger
-                                    .warnf("Use 'netstat -anv | grep %d' to identify the process occupying the port.", sslPort);
+                                    .warnf("Use 'netstat -anv | grep \"%d\\| pid \"' to identify the process occupying the port.",
+                                            sslPort);
                         applicationLogger.warn("You can try to kill it with 'kill -9 <pid>'.");
                     } else {
                         applicationLogger
-                                .warnf("Use 'netstat -anop | grep %d' to identify the process occupying the port.", port);
+                                .warnf("Use 'netstat -anop | grep \"%d\\| pid \"' to identify the process occupying the port.",
+                                        port);
                         if (sslPort != null)
                             applicationLogger
-                                    .warnf("Use 'netstat -anop | grep %d' to identify the process occupying the port.",
+                                    .warnf("Use 'netstat -anop | grep \"%d\\| pid \"' to identify the process occupying the port.",
                                             sslPort);
                         applicationLogger.warn("You can try to kill it with 'kill -9 <pid>'.");
                     }
