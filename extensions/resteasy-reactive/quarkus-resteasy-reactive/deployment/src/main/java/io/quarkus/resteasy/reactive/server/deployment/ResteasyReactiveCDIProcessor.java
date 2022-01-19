@@ -13,6 +13,7 @@ import org.jboss.jandex.DotName;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
 import org.jboss.resteasy.reactive.common.processor.scanning.ResourceScanningResult;
 import org.jboss.resteasy.reactive.server.injection.ContextProducers;
+import org.jboss.resteasy.reactive.server.processor.util.ResteasyReactiveServerDotNames;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AutoInjectAnnotationBuildItem;
@@ -21,6 +22,7 @@ import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.resteasy.reactive.common.deployment.ResourceScanningResultBuildItem;
 import io.quarkus.resteasy.reactive.server.runtime.QuarkusContextProducers;
 import io.quarkus.resteasy.reactive.spi.DynamicFeatureBuildItem;
@@ -84,6 +86,7 @@ public class ResteasyReactiveCDIProcessor {
 
     @BuildStep
     void additionalBeans(List<DynamicFeatureBuildItem> additionalDynamicFeatures,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClassBuildItemBuildProducer,
             List<JaxrsFeatureBuildItem> featureBuildItems,
             BuildProducer<AdditionalBeanBuildItem> additionalBean) {
 
@@ -91,11 +94,17 @@ public class ResteasyReactiveCDIProcessor {
         for (DynamicFeatureBuildItem dynamicFeature : additionalDynamicFeatures) {
             if (dynamicFeature.isRegisterAsBean()) {
                 additionalProviders.addBeanClass(dynamicFeature.getClassName());
+            } else {
+                reflectiveClassBuildItemBuildProducer
+                        .produce(new ReflectiveClassBuildItem(true, false, false, dynamicFeature.getClassName()));
             }
         }
-        for (JaxrsFeatureBuildItem dynamicFeature : featureBuildItems) {
-            if (dynamicFeature.isRegisterAsBean()) {
-                additionalProviders.addBeanClass(dynamicFeature.getClassName());
+        for (JaxrsFeatureBuildItem feature : featureBuildItems) {
+            if (feature.isRegisterAsBean()) {
+                additionalProviders.addBeanClass(feature.getClassName());
+            } else {
+                reflectiveClassBuildItemBuildProducer
+                        .produce(new ReflectiveClassBuildItem(true, false, false, feature.getClassName()));
             }
         }
         additionalBean.produce(additionalProviders.setUnremovable().setDefaultScope(DotNames.SINGLETON).build());

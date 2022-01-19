@@ -7,8 +7,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
 import org.hamcrest.Matchers;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -19,14 +17,14 @@ import io.restassured.http.ContentType;
 public class ConsumesXMLTestCase {
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(Bar.class, FooResource.class));
 
     @Test
     public void testConsumesXML() {
         RestAssured.given()
-                .body(new Bar("open", "bar"))
                 .contentType(ContentType.XML)
+                .body(new Bar("open", "bar"))
                 .when().post("/foo")
                 .then()
                 .log().ifValidationFails()

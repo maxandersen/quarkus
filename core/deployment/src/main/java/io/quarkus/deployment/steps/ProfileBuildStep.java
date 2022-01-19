@@ -6,7 +6,6 @@ import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.runtime.LaunchMode;
 
 public class ProfileBuildStep {
-
     @BuildStep
     RunTimeConfigurationDefaultBuildItem defaultProfile(LaunchModeBuildItem launchModeBuildItem) {
         return new RunTimeConfigurationDefaultBuildItem("quarkus.profile",

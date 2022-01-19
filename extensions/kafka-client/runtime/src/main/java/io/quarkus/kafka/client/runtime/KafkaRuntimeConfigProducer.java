@@ -4,13 +4,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import javax.enterprise.inject.Produces;
-import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.eclipse.microprofile.config.Config;
 
 import io.quarkus.arc.DefaultBean;
 import io.quarkus.runtime.ApplicationConfig;
+import io.smallrye.common.annotation.Identifier;
 
 @Singleton
 public class KafkaRuntimeConfigProducer {
@@ -23,7 +23,7 @@ public class KafkaRuntimeConfigProducer {
     @Produces
     @DefaultBean
     @Singleton
-    @Named("default-kafka-broker") // TODO Should use @Identifier soon
+    @Identifier("default-kafka-broker")
     public Map<String, Object> createKafkaRuntimeConfig(Config config, ApplicationConfig app) {
         Map<String, Object> result = new HashMap<>();
 
@@ -32,13 +32,15 @@ public class KafkaRuntimeConfigProducer {
             if (!propertyNameLowerCase.startsWith(CONFIG_PREFIX)) {
                 continue;
             }
+            // Replace _ by . - This is because Kafka properties tend to use . and env variables use _ for every special
+            // character. So, replace _ with .
             String effectivePropertyName = propertyNameLowerCase.substring(CONFIG_PREFIX.length() + 1).toLowerCase()
-                    .replaceAll("[^a-z0-9.]", ".");
+                    .replace("_", ".");
             String value = config.getOptionalValue(propertyName, String.class).orElse("");
             result.put(effectivePropertyName, value);
         }
 
-        if (!result.containsKey(GROUP_ID) && app.name.isPresent()) {
+        if (!result.isEmpty() && !result.containsKey(GROUP_ID) && app.name.isPresent()) {
             result.put(GROUP_ID, app.name.get());
         }
 

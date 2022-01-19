@@ -772,6 +772,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #persist(Stream)
      * @see #persist(Object,Object...)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void persist(Iterable<?> entities) {
         INSTANCE.persist(entities);
     }
@@ -784,6 +785,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #persist(Iterable)
      * @see #persist(Object,Object...)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void persist(Stream<?> entities) {
         INSTANCE.persist(entities);
     }
@@ -796,6 +798,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #persist(Stream)
      * @see #persist(Iterable)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void persist(Object firstEntity, Object... entities) {
         INSTANCE.persist(firstEntity, entities);
     }
@@ -808,6 +811,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Stream)
      * @see #update(Object,Object...)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void update(Iterable<?> entities) {
         INSTANCE.update(entities);
     }
@@ -820,6 +824,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Iterable)
      * @see #update(Object,Object...)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void update(Stream<?> entities) {
         INSTANCE.update(entities);
     }
@@ -832,6 +837,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #update(Stream)
      * @see #update(Iterable)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void update(Object firstEntity, Object... entities) {
         INSTANCE.update(firstEntity, entities);
     }
@@ -844,6 +850,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Stream)
      * @see #persistOrUpdate(Object,Object...)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void persistOrUpdate(Iterable<?> entities) {
         INSTANCE.persistOrUpdate(entities);
     }
@@ -856,6 +863,7 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Iterable)
      * @see #persistOrUpdate(Object,Object...)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void persistOrUpdate(Stream<?> entities) {
         INSTANCE.persistOrUpdate(entities);
     }
@@ -868,56 +876,60 @@ public abstract class PanacheMongoEntityBase {
      * @see #persistOrUpdate(Stream)
      * @see #persistOrUpdate(Iterable)
      */
+    @GenerateBridge(callSuperMethod = true)
     public static void persistOrUpdate(Object firstEntity, Object... entities) {
         INSTANCE.persistOrUpdate(firstEntity, entities);
     }
 
     /**
      * Update all entities of this type by the given update document, with optional indexed parameters.
-     * The returned {@link PanacheUpdate} object will allow to restrict on which document the update should be applied.
+     * The returned {@link io.quarkus.mongodb.panache.common.PanacheUpdate} object will allow to restrict on which document the
+     * update should be applied.
      *
      * @param update the update document, if it didn't contain any update operator, we add <code>$set</code>..
      *        It can also be expressed as a {@link io.quarkus.mongodb.panache query string}.
      * @param params optional sequence of indexed parameters
-     * @return a new {@link PanacheUpdate} instance for the given update document
+     * @return a new {@link io.quarkus.mongodb.panache.common.PanacheUpdate} instance for the given update document
      * @see #update(String, Map)
      * @see #update(String, Parameters)
      */
     @GenerateBridge
-    public static PanacheUpdate update(String update, Object... params) {
+    public static io.quarkus.mongodb.panache.common.PanacheUpdate update(String update, Object... params) {
         throw INSTANCE.implementationInjectionMissing();
     }
 
     /**
      * Update all entities of this type by the given update document, with named parameters.
-     * The returned {@link PanacheUpdate} object will allow to restrict on which document the update should be applied.
+     * The returned {@link io.quarkus.mongodb.panache.common.PanacheUpdate} object will allow to restrict on which document the
+     * update should be applied.
      *
      * @param update the update document, if it didn't contain any update operator, we add <code>$set</code>.
      *        It can also be expressed as a {@link io.quarkus.mongodb.panache query string}.
      * @param params {@link Map} of named parameters
-     * @return a new {@link PanacheUpdate} instance for the given update document
+     * @return a new {@link io.quarkus.mongodb.panache.common.PanacheUpdate} instance for the given update document
      * @see #update(String, Object...)
      * @see #update(String, Parameters)
      *
      */
     @GenerateBridge
-    public static PanacheUpdate update(String update, Map<String, Object> params) {
+    public static io.quarkus.mongodb.panache.common.PanacheUpdate update(String update, Map<String, Object> params) {
         throw INSTANCE.implementationInjectionMissing();
     }
 
     /**
      * Update all entities of this type by the given update document, with named parameters.
-     * The returned {@link PanacheUpdate} object will allow to restrict on which document the update should be applied.
+     * The returned {@link io.quarkus.mongodb.panache.common.PanacheUpdate} object will allow to restrict on which document the
+     * update should be applied.
      *
      * @param update the update document, if it didn't contain any update operator, we add <code>$set</code>.
      *        It can also be expressed as a {@link io.quarkus.mongodb.panache query string}.
      * @param params {@link Parameters} of named parameters
-     * @return a new {@link PanacheUpdate} instance for the given update document
+     * @return a new {@link io.quarkus.mongodb.panache.common.PanacheUpdate} instance for the given update document
      * @see #update(String, Object...)
      * @see #update(String, Map)
      */
     @GenerateBridge
-    public static PanacheUpdate update(String update, Parameters params) {
+    public static io.quarkus.mongodb.panache.common.PanacheUpdate update(String update, Parameters params) {
         throw INSTANCE.implementationInjectionMissing();
     }
 

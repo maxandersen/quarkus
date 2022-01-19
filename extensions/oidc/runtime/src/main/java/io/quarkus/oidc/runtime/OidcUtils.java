@@ -12,30 +12,51 @@ import java.util.regex.Pattern;
 
 import org.eclipse.microprofile.jwt.Claims;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.logging.Logger;
 import org.jose4j.jwt.JwtClaims;
 import org.jose4j.jwt.consumer.InvalidJwtException;
 
+import io.quarkus.oidc.AccessTokenCredential;
+import io.quarkus.oidc.AuthorizationCodeTokens;
 import io.quarkus.oidc.OIDCException;
 import io.quarkus.oidc.OidcTenantConfig;
+import io.quarkus.oidc.OidcTenantConfig.Authentication;
+import io.quarkus.oidc.RefreshToken;
+import io.quarkus.oidc.TokenIntrospection;
+import io.quarkus.oidc.TokenStateManager;
 import io.quarkus.oidc.UserInfo;
+import io.quarkus.oidc.runtime.providers.KnownOidcProviders;
 import io.quarkus.security.AuthenticationFailedException;
-import io.quarkus.security.ForbiddenException;
 import io.quarkus.security.credential.TokenCredential;
 import io.quarkus.security.identity.AuthenticationRequestContext;
 import io.quarkus.security.runtime.QuarkusSecurityIdentity;
+import io.quarkus.security.runtime.QuarkusSecurityIdentity.Builder;
+import io.smallrye.mutiny.Uni;
+import io.vertx.core.http.impl.ServerCookie;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.RoutingContext;
 
 public final class OidcUtils {
-    static final String CONFIG_METADATA_ATTRIBUTE = "configuration-metadata";
-    static final String USER_INFO_ATTRIBUTE = "userinfo";
-    static final String TENANT_ID_ATTRIBUTE = "tenant-id";
+    private static final Logger LOG = Logger.getLogger(OidcUtils.class);
+
+    public static final String CONFIG_METADATA_ATTRIBUTE = "configuration-metadata";
+    public static final String USER_INFO_ATTRIBUTE = "userinfo";
+    public static final String INTROSPECTION_ATTRIBUTE = "introspection";
+    public static final String TENANT_ID_ATTRIBUTE = "tenant-id";
+    public static final String DEFAULT_TENANT_ID = "Default";
+    public static final String SESSION_COOKIE_NAME = "q_session";
+    public static final String STATE_COOKIE_NAME = "q_auth";
+    public static final String POST_LOGOUT_COOKIE_NAME = "q_post_logout";
+    static final Uni<Void> VOID_UNI = Uni.createFrom().voidItem();
+    static final BlockingTaskRunner<Void> deleteTokensRequestContext = new BlockingTaskRunner<Void>();
+
     /**
      * This pattern uses a positive lookahead to split an expression around the forward slashes
      * ignoring those which are located inside a pair of the double quotes.
      */
     private static final Pattern CLAIM_PATH_PATTERN = Pattern.compile("\\/(?=(?:(?:[^\"]*\"){2})*[^\"]*$)");
+    public static final String QUARKUS_IDENTITY_EXPIRE_TIME = "quarkus.identity.expire-time";
 
     private OidcUtils() {
 
@@ -69,20 +90,20 @@ public final class OidcUtils {
     public static List<String> findRoles(String clientId, OidcTenantConfig.Roles rolesConfig, JsonObject json) {
         // If the user configured a specific path - check and enforce a claim at this path exists
         if (rolesConfig.getRoleClaimPath().isPresent()) {
-            return findClaimWithRoles(rolesConfig, rolesConfig.getRoleClaimPath().get(), json, true);
+            return findClaimWithRoles(rolesConfig, rolesConfig.getRoleClaimPath().get(), json);
         }
 
         // Check 'groups' next
-        List<String> groups = findClaimWithRoles(rolesConfig, Claims.groups.name(), json, false);
+        List<String> groups = findClaimWithRoles(rolesConfig, Claims.groups.name(), json);
         if (!groups.isEmpty()) {
             return groups;
         } else {
             // Finally, check if this token has been issued by Keycloak.
             // Return an empty or populated list of realm and resource access roles
             List<String> allRoles = new LinkedList<>();
-            allRoles.addAll(findClaimWithRoles(rolesConfig, "realm_access/roles", json, false));
+            allRoles.addAll(findClaimWithRoles(rolesConfig, "realm_access/roles", json));
             if (clientId != null) {
-                allRoles.addAll(findClaimWithRoles(rolesConfig, "resource_access/" + clientId + "/roles", json, false));
+                allRoles.addAll(findClaimWithRoles(rolesConfig, "resource_access/" + clientId + "/roles", json));
             }
 
             return allRoles;
@@ -91,8 +112,8 @@ public final class OidcUtils {
     }
 
     private static List<String> findClaimWithRoles(OidcTenantConfig.Roles rolesConfig, String claimPath,
-            JsonObject json, boolean mustExist) {
-        Object claimValue = findClaimValue(claimPath, json, splitClaimPath(claimPath), 0, mustExist);
+            JsonObject json) {
+        Object claimValue = findClaimValue(claimPath, json, splitClaimPath(claimPath), 0);
 
         if (claimValue instanceof JsonArray) {
             return convertJsonArrayToList((JsonArray) claimValue);
@@ -108,18 +129,16 @@ public final class OidcUtils {
         return claimPath.indexOf('/') > 0 ? CLAIM_PATH_PATTERN.split(claimPath) : new String[] { claimPath };
     }
 
-    private static Object findClaimValue(String claimPath, JsonObject json, String[] pathArray, int step, boolean mustExist) {
+    private static Object findClaimValue(String claimPath, JsonObject json, String[] pathArray, int step) {
         Object claimValue = json.getValue(pathArray[step].replace("\"", ""));
         if (claimValue == null) {
-            if (mustExist) {
-                throw new OIDCException("No claim exists at the path " + claimPath + " at the path segment " + pathArray[step]);
-            }
+            LOG.debugf("No claim exists at the path '%s' at the path segment '%s'", claimPath, pathArray[step]);
         } else if (step + 1 < pathArray.length) {
             if (claimValue instanceof JsonObject) {
                 int nextStep = step + 1;
-                return findClaimValue(claimPath, (JsonObject) claimValue, pathArray, nextStep, mustExist);
+                return findClaimValue(claimPath, (JsonObject) claimValue, pathArray, nextStep);
             } else {
-                throw new OIDCException("Claim value at the path " + claimPath + " is not a json object");
+                LOG.debugf("Claim value at the path '%s' is not a json object", claimPath);
             }
         }
 
@@ -136,12 +155,19 @@ public final class OidcUtils {
 
     static QuarkusSecurityIdentity validateAndCreateIdentity(
             RoutingContext vertxContext, TokenCredential credential,
-            TenantConfigContext resolvedContext, JsonObject tokenJson, JsonObject rolesJson, JsonObject userInfo) {
+            TenantConfigContext resolvedContext, JsonObject tokenJson, JsonObject rolesJson, UserInfo userInfo,
+            TokenIntrospection introspectionResult) {
 
         OidcTenantConfig config = resolvedContext.oidcConfig;
         QuarkusSecurityIdentity.Builder builder = QuarkusSecurityIdentity.builder();
         builder.addCredential(credential);
-
+        AuthorizationCodeTokens codeTokens = vertxContext != null ? vertxContext.get(AuthorizationCodeTokens.class.getName())
+                : null;
+        if (codeTokens != null) {
+            RefreshToken refreshTokenCredential = new RefreshToken(codeTokens.getRefreshToken());
+            builder.addCredential(refreshTokenCredential);
+            builder.addCredential(new AccessTokenCredential(codeTokens.getAccessToken(), refreshTokenCredential));
+        }
         JsonWebToken jwtPrincipal;
         try {
             JwtClaims jwtClaims = JwtClaims.parse(tokenJson.encode());
@@ -151,9 +177,12 @@ public final class OidcUtils {
         } catch (InvalidJwtException e) {
             throw new AuthenticationFailedException(e);
         }
+        builder.addAttribute(QUARKUS_IDENTITY_EXPIRE_TIME, jwtPrincipal.getExpirationTime());
         builder.setPrincipal(jwtPrincipal);
+        setRoutingContextAttribute(builder, vertxContext);
         setSecurityIdentityRoles(builder, config, rolesJson);
         setSecurityIdentityUserInfo(builder, userInfo);
+        setSecurityIdentityIntrospecton(builder, introspectionResult);
         setSecurityIdentityConfigMetadata(builder, resolvedContext);
         setBlockinApiAttribute(builder, vertxContext);
         setTenantIdAttribute(builder, config);
@@ -162,13 +191,9 @@ public final class OidcUtils {
 
     public static void setSecurityIdentityRoles(QuarkusSecurityIdentity.Builder builder, OidcTenantConfig config,
             JsonObject rolesJson) {
-        try {
-            String clientId = config.getClientId().isPresent() ? config.getClientId().get() : null;
-            for (String role : findRoles(clientId, config.getRoles(), rolesJson)) {
-                builder.addRole(role);
-            }
-        } catch (Exception e) {
-            throw new ForbiddenException(e);
+        String clientId = config.getClientId().isPresent() ? config.getClientId().get() : null;
+        for (String role : findRoles(clientId, config.getRoles(), rolesJson)) {
+            builder.addRole(role);
         }
     }
 
@@ -183,9 +208,19 @@ public final class OidcUtils {
         builder.addAttribute(TENANT_ID_ATTRIBUTE, config.tenantId.orElse("Default"));
     }
 
-    public static void setSecurityIdentityUserInfo(QuarkusSecurityIdentity.Builder builder, JsonObject userInfo) {
+    public static void setRoutingContextAttribute(QuarkusSecurityIdentity.Builder builder, RoutingContext routingContext) {
+        builder.addAttribute(RoutingContext.class.getName(), routingContext);
+    }
+
+    public static void setSecurityIdentityUserInfo(QuarkusSecurityIdentity.Builder builder, UserInfo userInfo) {
         if (userInfo != null) {
-            builder.addAttribute(USER_INFO_ATTRIBUTE, new UserInfo(userInfo.encode()));
+            builder.addAttribute(USER_INFO_ATTRIBUTE, userInfo);
+        }
+    }
+
+    public static void setSecurityIdentityIntrospecton(Builder builder, TokenIntrospection introspectionResult) {
+        if (introspectionResult != null) {
+            builder.addAttribute(INTROSPECTION_ATTRIBUTE, introspectionResult);
         }
     }
 
@@ -206,5 +241,127 @@ public final class OidcUtils {
                 throw new OIDCException("Refresh token can only be used with the refresh token grant");
             }
         }
+    }
+
+    static Uni<Void> removeSessionCookie(RoutingContext context, OidcTenantConfig oidcConfig, String cookieName,
+            TokenStateManager tokenStateManager) {
+        String cookieValue = removeCookie(context, oidcConfig, cookieName);
+        if (cookieValue != null) {
+            return tokenStateManager.deleteTokens(context, oidcConfig, cookieValue,
+                    deleteTokensRequestContext);
+        } else {
+            return VOID_UNI;
+        }
+    }
+
+    static String removeCookie(RoutingContext context, OidcTenantConfig oidcConfig, String cookieName) {
+        ServerCookie cookie = (ServerCookie) context.cookieMap().get(cookieName);
+        String cookieValue = null;
+        if (cookie != null) {
+            cookieValue = cookie.getValue();
+            removeCookie(context, cookie, oidcConfig);
+        }
+        return cookieValue;
+    }
+
+    static void removeCookie(RoutingContext context, ServerCookie cookie, OidcTenantConfig oidcConfig) {
+        if (cookie != null) {
+            cookie.setValue("");
+            cookie.setMaxAge(0);
+            Authentication auth = oidcConfig.getAuthentication();
+            setCookiePath(context, auth, cookie);
+            if (auth.cookieDomain.isPresent()) {
+                cookie.setDomain(auth.cookieDomain.get());
+            }
+        }
+    }
+
+    static void setCookiePath(RoutingContext context, Authentication auth, ServerCookie cookie) {
+        if (auth.cookiePathHeader.isPresent() && context.request().headers().contains(auth.cookiePathHeader.get())) {
+            cookie.setPath(context.request().getHeader(auth.cookiePathHeader.get()));
+        } else {
+            cookie.setPath(auth.getCookiePath());
+        }
+    }
+
+    /**
+     * Merge the current tenant and well-known OpenId Connect provider configurations.
+     * Initialized properties take priority over uninitialized properties.
+     *
+     * Initialized properties in the current tenant configuration take priority
+     * over the same initialized properties in the well-known OpenId Connect provider configuration.
+     * 
+     * Tenant id property of the current tenant must be set before the merge operation.
+     * 
+     * @param tenant current tenant configuration
+     * @param provider well-known OpenId Connect provider configuration
+     * @return merged configuration
+     */
+    static OidcTenantConfig mergeTenantConfig(OidcTenantConfig tenant, OidcTenantConfig provider) {
+        if (tenant.tenantId.isEmpty()) {
+            // OidcRecorder sets it before the merge operation
+            throw new IllegalStateException();
+        }
+        // root properties
+        if (tenant.authServerUrl.isEmpty()) {
+            tenant.authServerUrl = provider.authServerUrl;
+        }
+        if (tenant.applicationType.isEmpty()) {
+            tenant.applicationType = provider.applicationType;
+        }
+        if (tenant.discoveryEnabled.isEmpty()) {
+            tenant.discoveryEnabled = provider.discoveryEnabled;
+        }
+        if (tenant.authorizationPath.isEmpty()) {
+            tenant.authorizationPath = provider.authorizationPath;
+        }
+        if (tenant.jwksPath.isEmpty()) {
+            tenant.jwksPath = provider.jwksPath;
+        }
+        if (tenant.tokenPath.isEmpty()) {
+            tenant.tokenPath = provider.tokenPath;
+        }
+        if (tenant.userInfoPath.isEmpty()) {
+            tenant.userInfoPath = provider.userInfoPath;
+        }
+
+        // authentication
+        if (tenant.authentication.idTokenRequired.isEmpty()) {
+            tenant.authentication.idTokenRequired = provider.authentication.idTokenRequired;
+        }
+        if (tenant.authentication.userInfoRequired.isEmpty()) {
+            tenant.authentication.userInfoRequired = provider.authentication.userInfoRequired;
+        }
+        if (tenant.authentication.scopes.isEmpty()) {
+            tenant.authentication.scopes = provider.authentication.scopes;
+        }
+
+        // credentials
+        if (tenant.credentials.clientSecret.method.isEmpty()) {
+            tenant.credentials.clientSecret.method = provider.credentials.clientSecret.method;
+        }
+        if (tenant.credentials.jwt.audience.isEmpty()) {
+            tenant.credentials.jwt.audience = provider.credentials.jwt.audience;
+        }
+        if (tenant.credentials.jwt.signatureAlgorithm.isEmpty()) {
+            tenant.credentials.jwt.signatureAlgorithm = provider.credentials.jwt.signatureAlgorithm;
+        }
+
+        // token
+        if (tenant.token.issuer.isEmpty()) {
+            tenant.token.issuer = provider.token.issuer;
+        }
+
+        return tenant;
+    }
+
+    static OidcTenantConfig resolveProviderConfig(OidcTenantConfig oidcTenantConfig) {
+        if (oidcTenantConfig != null && oidcTenantConfig.provider.isPresent()) {
+            return OidcUtils.mergeTenantConfig(oidcTenantConfig,
+                    KnownOidcProviders.provider(oidcTenantConfig.provider.get()));
+        } else {
+            return oidcTenantConfig;
+        }
+
     }
 }

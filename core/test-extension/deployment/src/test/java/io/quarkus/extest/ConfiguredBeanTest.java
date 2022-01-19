@@ -1,6 +1,12 @@
 package io.quarkus.extest;
 
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -12,36 +18,47 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import javax.inject.Inject;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
+import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import io.quarkus.extest.runtime.config.AnotherPrefixConfig;
 import io.quarkus.extest.runtime.config.MyEnum;
 import io.quarkus.extest.runtime.config.NestedConfig;
 import io.quarkus.extest.runtime.config.ObjectOfValue;
 import io.quarkus.extest.runtime.config.ObjectValueOf;
+import io.quarkus.extest.runtime.config.OverrideBuildTimeConfigSource;
+import io.quarkus.extest.runtime.config.PrefixConfig;
 import io.quarkus.extest.runtime.config.TestBuildAndRunTimeConfig;
 import io.quarkus.extest.runtime.config.TestRunTimeConfig;
+import io.quarkus.extest.runtime.config.named.PrefixNamedConfig;
 import io.quarkus.test.QuarkusUnitTest;
 import io.restassured.RestAssured;
+import io.smallrye.config.ConfigValue;
+import io.smallrye.config.SmallRyeConfig;
 
 /**
  * Test driver for the test-extension
  */
 public class ConfiguredBeanTest {
     @RegisterExtension
-    static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+            .withApplicationRoot((jar) -> jar
                     .addClasses(ConfiguredBean.class)
+                    // Don't change this to types, because of classloader class cast exception.
+                    .addAsServiceProvider("org.eclipse.microprofile.config.spi.ConfigSource",
+                            "io.quarkus.extest.runtime.config.OverrideBuildTimeConfigSource")
                     .addAsResource("application.properties"));
 
+    @Inject
+    SmallRyeConfig config;
     @Inject
     ConfiguredBean configuredBean;
 
@@ -263,7 +280,7 @@ public class ConfiguredBeanTest {
         Assertions.assertFalse(configuredBean.getRunTimeConfig().objectBoolean);
         Assertions.assertEquals(2, configuredBean.getRunTimeConfig().primitiveInteger);
         Assertions.assertEquals(9, configuredBean.getRunTimeConfig().objectInteger);
-        List<Integer> oneToNine = IntStream.range(1, 10).mapToObj(Integer::new).collect(Collectors.toList());
+        List<Integer> oneToNine = IntStream.range(1, 10).mapToObj(Integer::valueOf).collect(Collectors.toList());
         Assertions.assertEquals(oneToNine, configuredBean.getRunTimeConfig().oneToNine);
         List<Integer> mapValues = new ArrayList<>(Arrays.asList(1, 2));
         List<Integer> actualMapValues = new ArrayList<>(configuredBean.getRunTimeConfig().mapOfNumbers.values());
@@ -290,5 +307,97 @@ public class ConfiguredBeanTest {
         Assertions.assertTrue(map.containsKey("inner-key"));
         Assertions.assertFalse(map.containsKey("outer-key"));
         Assertions.assertEquals("1234", map.get("inner-key"));
+    }
+
+    @Inject
+    TestBuildAndRunTimeConfig buildAndRunTimeConfig;
+
+    @Test
+    public void buildTimeDefaults() {
+        // Source is only initialized twice (one for static init and another one for runtime)
+        Assertions.assertEquals(2, OverrideBuildTimeConfigSource.counter.get());
+        // Test that build configRoot are not overridden by properties set in static or runtime init
+        Assertions.assertEquals(1234567891L, buildAndRunTimeConfig.allValues.longPrimitive);
+
+        ConfigValue value = config.getConfigValue("quarkus.btrt.all-values.long-primitive");
+        Assertions.assertEquals("1234567891", value.getValue());
+        Assertions.assertEquals("PropertiesConfigSource[source=Build time config]", value.getConfigSourceName());
+        Assertions.assertEquals(Integer.MAX_VALUE, value.getConfigSourceOrdinal());
+    }
+
+    @Test
+    public void testBuiltTimeNamedMapWithProfiles() {
+        Map<String, Map<String, String>> mapMap = configuredBean.getBuildTimeConfig().mapMap;
+        Assertions.assertEquals("1234", mapMap.get("main-profile").get("property"));
+        Assertions.assertEquals("5678", mapMap.get("test-profile").get("property"));
+    }
+
+    @Test
+    public void testConfigDefaultValuesSourceOrdinal() {
+        Optional<ConfigSource> source = config.getConfigSource("PropertiesConfigSource[source=Specified default values]");
+        assertTrue(source.isPresent());
+        ConfigSource defaultValues = source.get();
+        assertEquals(Integer.MIN_VALUE + 100, defaultValues.getOrdinal());
+
+        ConfigSource applicationProperties = null;
+        for (ConfigSource configSource : config.getConfigSources()) {
+            if (configSource.getName().contains("application.properties")) {
+                applicationProperties = configSource;
+                break;
+            }
+        }
+        assertNotNull(applicationProperties);
+        assertEquals(1000, applicationProperties.getOrdinal());
+
+        assertEquals("1234", defaultValues.getValue("%test.my.prop"));
+        assertNull(defaultValues.getValue("my.prop"));
+        assertEquals("1234", applicationProperties.getValue("my.prop"));
+    }
+
+    @Test
+    public void testProfileDefaultValuesSource() {
+        Optional<ConfigSource> source = config.getConfigSource("PropertiesConfigSource[source=Specified default values]");
+        assertTrue(source.isPresent());
+        ConfigSource defaultValues = source.get();
+
+        assertEquals("1234", defaultValues.getValue("%prod.my.prop"));
+        assertEquals("5678", defaultValues.getValue("%dev.my.prop"));
+        assertEquals("1234", defaultValues.getValue("%test.my.prop"));
+        assertEquals("1234", config.getValue("my.prop", String.class));
+    }
+
+    @Test
+    void prefixConfig() {
+        PrefixConfig prefixConfig = configuredBean.getPrefixConfig();
+        assertNotNull(prefixConfig);
+        assertEquals("1234", prefixConfig.prop);
+        assertEquals("1234", prefixConfig.map.get("prop"));
+        assertEquals("nested-1234", prefixConfig.nested.nestedValue);
+        assertEquals("nested-1234", prefixConfig.nested.oov.getPart1());
+        assertEquals("nested-5678", prefixConfig.nested.oov.getPart2());
+
+        PrefixNamedConfig prefixNamedConfig = configuredBean.getPrefixNamedConfig();
+        assertNotNull(prefixNamedConfig);
+        assertEquals("1234", prefixNamedConfig.prop);
+        assertEquals("1234", prefixNamedConfig.map.get("prop"));
+        assertEquals("nested-1234", prefixNamedConfig.nested.nestedValue);
+        assertEquals("nested-1234", prefixNamedConfig.nested.oov.getPart1());
+        assertEquals("nested-5678", prefixNamedConfig.nested.oov.getPart2());
+
+        AnotherPrefixConfig anotherPrefixConfig = configuredBean.getAnotherPrefixConfig();
+        assertNotNull(anotherPrefixConfig);
+        assertEquals("5678", anotherPrefixConfig.prop);
+        assertEquals("5678", anotherPrefixConfig.map.get("prop"));
+
+        ConfigSource defaultValues = null;
+        for (ConfigSource configSource : config.getConfigSources()) {
+            if (configSource.getName().contains("PropertiesConfigSource[source=Specified default values]")) {
+                defaultValues = configSource;
+                break;
+            }
+        }
+        assertNotNull(defaultValues);
+        // java.version should not be recorded
+        assertFalse(defaultValues.getPropertyNames().contains("java.version"));
     }
 }

@@ -1,12 +1,21 @@
 package io.quarkus.arc.processor;
 
+import io.quarkus.arc.All;
 import io.quarkus.arc.AlternativePriority;
+import io.quarkus.arc.ArcInvocationContext;
 import io.quarkus.arc.DefaultBean;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InjectableInstance;
+import io.quarkus.arc.InstanceHandle;
+import io.quarkus.arc.NoClassInterceptors;
+import io.quarkus.arc.Unremovable;
+import io.quarkus.arc.VetoedProducer;
 import io.quarkus.arc.impl.ComputingCache;
+import io.quarkus.arc.impl.Identified;
 import java.io.Serializable;
+import java.lang.annotation.Inherited;
 import java.lang.annotation.Repeatable;
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
@@ -64,6 +73,7 @@ public final class DotNames {
     public static final DotName DISPOSES = create(Disposes.class);
     public static final DotName QUALIFIER = create(Qualifier.class);
     public static final DotName REPEATABLE = create(Repeatable.class);
+    public static final DotName INHERITED = create(Inherited.class);
     public static final DotName NONBINDING = create(Nonbinding.class);
     public static final DotName INJECT = create(Inject.class);
     public static final DotName POST_CONSTRUCT = create(PostConstruct.class);
@@ -78,6 +88,7 @@ public final class DotNames {
     public static final DotName AROUND_INVOKE = create(AroundInvoke.class);
     public static final DotName AROUND_CONSTRUCT = create(AroundConstruct.class);
     public static final DotName PRIORITY = create(Priority.class);
+    public static final DotName ARC_PRIORITY = create(io.quarkus.arc.Priority.class);
     public static final DotName DEFAULT = create(Default.class);
     public static final DotName ANY = create(Any.class);
     public static final DotName BEAN = create(Bean.class);
@@ -106,9 +117,17 @@ public final class DotNames {
     public static final DotName INITIALIZED = create(Initialized.class);
     public static final DotName TRANSIENT_REFERENCE = create(TransientReference.class);
     public static final DotName INVOCATION_CONTEXT = create(InvocationContext.class);
+    public static final DotName ARC_INVOCATION_CONTEXT = create(ArcInvocationContext.class);
     public static final DotName DECORATOR = create(Decorator.class);
     public static final DotName DELEGATE = create(Delegate.class);
     public static final DotName SERIALIZABLE = create(Serializable.class);
+    public static final DotName UNREMOVABLE = create(Unremovable.class);
+    public static final DotName VETOED_PRODUCER = create(VetoedProducer.class);
+    public static final DotName LIST = create(List.class);
+    public static final DotName ALL = create(All.class);
+    public static final DotName IDENTIFIED = create(Identified.class);
+    public static final DotName INSTANCE_HANDLE = create(InstanceHandle.class);
+    public static final DotName NO_CLASS_INTERCEPTORS = create(NoClassInterceptors.class);
 
     public static final DotName BOOLEAN = create(Boolean.class);
     public static final DotName BYTE = create(Byte.class);
@@ -216,7 +235,7 @@ public final class DotNames {
         if (index == -1) {
             return "";
         }
-        return name.substring(0, index).replace(".", "/") + "/";
+        return name.substring(0, index).replace('.', '/') + '/';
     }
 
 }

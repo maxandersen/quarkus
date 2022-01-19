@@ -5,6 +5,8 @@ import java.time.Duration;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
+import io.quarkus.runtime.annotations.ConvertWith;
+import io.quarkus.runtime.configuration.NormalizeRootHttpPathConverter;
 import io.vertx.core.http.ClientAuth;
 
 @ConfigRoot(name = "http", phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED)
@@ -14,6 +16,7 @@ public class HttpBuildTimeConfig {
      * The HTTP root path. All web content will be served relative to this root path.
      */
     @ConfigItem(defaultValue = "/")
+    @ConvertWith(NormalizeRootHttpPathConverter.class)
     public String rootPath;
 
     public AuthConfig auth;
@@ -43,33 +46,11 @@ public class HttpBuildTimeConfig {
      * Non-application endpoints will be served from the specified path.
      * * `${quarkus.http.root-path}` -> Setting this path to the same value as HTTP root path disables
      * this root path. All extension-provided endpoints will be served from `${quarkus.http.root-path}`.
-     * 
+     *
      * @asciidoclet
      */
     @ConfigItem(defaultValue = "q")
     public String nonApplicationRootPath;
-
-    /**
-     * Provide redirect endpoints for extension-provided endpoints existing prior to Quarkus 1.11.
-     * This will trigger HTTP 301 Redirects for the following:
-     *
-     * * `/graphql-ui`
-     * * `/health`
-     * * `/health-ui`
-     * * `/metrics`
-     * * `/openapi`
-     * * `/swagger-ui`
-     *
-     * Default is `true` for Quarkus 1.11.x to facilitate transition to name-spaced URIs using
-     * `${quarkus.http.non-application-root-path}`.
-     *
-     * Quarkus 1.13 will change the default to `false`,
-     * and the config item will be removed in Quarkus 2.0.
-     *
-     * @asciidoclet
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean redirectToNonApplicationRootPath;
 
     /**
      * The REST Assured client timeout for testing.

@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Properties;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.model.Build;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.DependencyManagement;
@@ -31,6 +32,7 @@ import org.apache.maven.shared.invoker.PrintStreamLogger;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.jboss.logmanager.LogManager;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.base.Charsets;
@@ -311,10 +313,6 @@ public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
         assertThat(new File(testDir, "gradle/wrapper")).isDirectory();
         assertThat(new File(testDir, "src/main/kotlin")).isDirectory();
 
-        File gradleProperties = new File(testDir, "gradle.properties");
-        assertThat(gradleProperties).isFile();
-        check(gradleProperties, "org.gradle.logging.level=INFO");
-
         check(new File(testDir, "src/main/kotlin/org/acme/MyResource.kt"), "package org.acme");
 
         assertThat(FileUtils.readFileToString(new File(testDir, "build.gradle"), "UTF-8"))
@@ -357,6 +355,112 @@ public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
 
         assertThat(model.getDependencies().stream().anyMatch(d -> d.getArtifactId().equalsIgnoreCase("commons-io")
                 && d.getVersion().equalsIgnoreCase("2.5"))).isTrue();
+    }
+
+    @Test
+    public void testProjectGenerationFromScratchWithAppConfigParameter() throws MavenInvocationException, IOException {
+        testDir = initEmptyProject("projects/project-generation-with-config-param");
+        assertThat(testDir).isDirectory();
+        invoker = initInvoker(testDir);
+
+        Properties properties = new Properties();
+        properties.put("projectGroupId", "org.acme");
+        properties.put("projectArtifactId", "acme");
+        properties.put("projectVersion", "1.0.0-SNAPSHOT");
+
+        List<String> configs = Arrays.asList("custom.app.config1=val1",
+                "custom.app.config2=val2", "lib.config=val3");
+        properties.put("appConfig", StringUtils.join(configs, ", "));
+
+        InvocationResult result = setup(properties);
+
+        assertThat(result.getExitCode()).isZero();
+
+        // As the directory is not empty (log) navigate to the artifactID directory
+        testDir = new File(testDir, "acme");
+
+        assertThat(new File(testDir, "pom.xml")).isFile();
+        assertThat(new File(testDir, "src/main/java")).isDirectory();
+
+        String file = Files
+                .asCharSource(new File(testDir, "src/main/resources/application.properties"), Charsets.UTF_8)
+                .read();
+        configs.forEach(conf -> Assertions.assertTrue(file.contains(conf)));
+
+    }
+
+    @Test
+    public void testProjectGenerationFromScratchWithJava11() throws MavenInvocationException, IOException {
+        testDir = initEmptyProject("projects/project-generation-with-java11");
+        assertThat(testDir).isDirectory();
+        invoker = initInvoker(testDir);
+
+        Properties properties = new Properties();
+        properties.put("javaVersion", "11");
+
+        InvocationResult result = setup(properties);
+        assertThat(result.getExitCode()).isZero();
+
+        testDir = new File(testDir, "code-with-quarkus");
+        assertThat(new File(testDir, "pom.xml")).isFile();
+        assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
+                .contains("maven.compiler.release>11<");
+    }
+
+    @Test
+    public void testProjectGenerationFromScratchWithJava17() throws MavenInvocationException, IOException {
+        testDir = initEmptyProject("projects/project-generation-with-java17");
+        assertThat(testDir).isDirectory();
+        invoker = initInvoker(testDir);
+
+        Properties properties = new Properties();
+        properties.put("javaVersion", "17");
+
+        InvocationResult result = setup(properties);
+        assertThat(result.getExitCode()).isZero();
+
+        testDir = new File(testDir, "code-with-quarkus");
+        assertThat(new File(testDir, "pom.xml")).isFile();
+        assertThat(FileUtils.readFileToString(new File(testDir, "pom.xml"), "UTF-8"))
+                .contains("maven.compiler.release>17<");
+    }
+
+    @Test
+    public void testProjectGenerationFromScratchWithGradleJava11() throws MavenInvocationException, IOException {
+        testDir = initEmptyProject("projects/project-generation-with-gradle-java11");
+        assertThat(testDir).isDirectory();
+        invoker = initInvoker(testDir);
+
+        Properties properties = new Properties();
+        properties.put("javaVersion", "11");
+        properties.put("buildTool", "gradle");
+
+        InvocationResult result = setup(properties);
+        assertThat(result.getExitCode()).isZero();
+
+        testDir = new File(testDir, "code-with-quarkus");
+        assertThat(new File(testDir, "build.gradle")).isFile();
+        assertThat(FileUtils.readFileToString(new File(testDir, "build.gradle"), "UTF-8"))
+                .contains("sourceCompatibility = JavaVersion.VERSION_11");
+    }
+
+    @Test
+    public void testProjectGenerationFromScratchWithGradleJava17() throws MavenInvocationException, IOException {
+        testDir = initEmptyProject("projects/project-generation-with-gradle-java17");
+        assertThat(testDir).isDirectory();
+        invoker = initInvoker(testDir);
+
+        Properties properties = new Properties();
+        properties.put("javaVersion", "17");
+        properties.put("buildTool", "gradle");
+
+        InvocationResult result = setup(properties);
+        assertThat(result.getExitCode()).isZero();
+
+        testDir = new File(testDir, "code-with-quarkus");
+        assertThat(new File(testDir, "build.gradle")).isFile();
+        assertThat(FileUtils.readFileToString(new File(testDir, "build.gradle"), "UTF-8"))
+                .contains("sourceCompatibility = JavaVersion.VERSION_17");
     }
 
     /**
@@ -419,7 +523,8 @@ public class CreateProjectMojoIT extends QuarkusPlatformAwareMojoTestBase {
 
         String resp = DevModeTestUtils.getHttpResponse();
 
-        assertThat(resp).containsIgnoringCase("ready").containsIgnoringCase("application").containsIgnoringCase("org.acme")
+        assertThat(resp).containsIgnoringCase("Congratulations!").containsIgnoringCase("application")
+                .containsIgnoringCase("org.acme")
                 .containsIgnoringCase("1.0.0-SNAPSHOT");
 
         String greeting = DevModeTestUtils.getHttpResponse("/hello");

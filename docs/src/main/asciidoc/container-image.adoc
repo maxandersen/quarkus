@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Container Images
+= Container Images
 
 include::./attributes.adoc[]
 
@@ -12,6 +12,7 @@ Quarkus provides extensions for building (and pushing) container images. Current
 - <<#jib,Jib>>
 - <<#docker,Docker>>
 - <<#s2i,S2I>>
+- <<#buildpack,Buildpack>>
 
 == Container Image extensions
 
@@ -30,7 +31,7 @@ To use this feature, add the following extension to your project:
 ./mvnw quarkus:add-extension -Dextensions="container-image-jib"
 ----
 
-NOTE: In situations where all that is needed to build a container image and no push to a registry is necessary (essentially by having set `quarkus.container-image.build=true` and left `quarkus.container-image.push` unset - it defaults to `false`), then this extension creates a container image and registers
+WARNING: In situations where all that is needed to build a container image and no push to a registry is necessary (essentially by having set `quarkus.container-image.build=true` and left `quarkus.container-image.push` unset - it defaults to `false`), then this extension creates a container image and registers
 it with the Docker daemon. This means that although Docker isn't used to build the image, it is nevertheless necessary. Also note that using this mode, the built container image *will*
 show up when executing `docker images`.
 
@@ -40,6 +41,32 @@ There are cases when additional files (other than ones produced by the Quarkus b
 To support these cases, Quarkus copies any file under `src/main/jib` into the built container image (which is essentially the same
 idea that the Jib Maven and Gradle plugins support).
 For example, the presence of `src/main/jib/foo/bar` would result in  `/foo/bar` being added into the container filesystem.
+
+==== JVM Debugging
+
+There are cases where the built container image may need to have Java debugging conditionally enabled at runtime.
+There are a few ways to achieve this, but they all rely on the fact that in the `container-image-jib` you can control the entrypoint to use for the container image.
+By default, the container-image is created with a minimal `java -jar ...` style entrypoint, but that can be changed using the `quarkus.jib.jvm-entrypoint` configuration option.
+
+If the base image has not been changed (and therefore `fabric8/java-alpine-openjdk11-jre` is used) then you leverage that image's built-in `run-java.sh` script (more details about it can be found link:https://hub.docker.com/r/fabric8/java-alpine-openjdk11-jre#startup-script-run-javash[here]])
+by adding the following entries to `application.properties`:
+
+[source,properties]
+----
+quarkus.jib.jvm-entrypoint=/deployments/run-java.sh #this is the location of the script in the container image
+quarkus.jib.environment-variables."JAVA_APP_DIR"=/work #this is needed so the script knows where the Quarkus jar is
+----
+
+When running the container, the `JAVA_DEBUG` environment variable can then be used to control whether or not the application will be listening on the debug port.
+
+An example launch command is:
+
+[source,bash]
+----
+docker run --rm -p 8080:8080 -p 5005:5005 -e JAVA_DEBUG=true quarkus/getting-started:1.0.0-SNAPSHOT
+----
+
+If you are using a different base image or would like to use a custom launch script, then see the previous section on how to add the script to the container image and set the `quarkus.jib.jvm-entrypoint` in `application.properties` to the location of that script.
 
 [#docker]
 === Docker
@@ -71,6 +98,38 @@ To use this feature, add the following extension to your project.
 S2I builds require creating a `BuildConfig` and two `ImageStream` resources, one for the builder image and one for the output image.
 The creation of such objects is being taken care of by the Quarkus Kubernetes extension.
 
+
+[#buildpack]
+=== Buildpack
+
+The extension `quarkus-container-image-buildpack` is using the buildpacks in order to perfrom container image builds. 
+Under the hood buildpacks will use a docker daemon for the actual build. While buildpacks support alternatives to docker, this extension will only work with docker.
+
+Additionally, the user will have to configure which build image to use (no default image is provided). For example:
+
+[source,properties]
+----
+quarkus.buildpack.jvm-builder-image=<jvm builder image>
+----
+
+or for native:
+
+
+[source,properties]
+----
+quarkus.buildpack.jvm-builder-image=<native builder image>
+----
+
+
+
+To use this feature, add the following extension to your project.
+
+[source,bash]
+----
+./mvnw quarkus:add-extension -Dextensions="container-image-buildpack"
+----
+
+
 == Building
 
 To build a container image for your project, `quarkus.container-image.build=true` needs to be set using any of the ways that Quarkus supports.
@@ -79,6 +138,8 @@ To build a container image for your project, `quarkus.container-image.build=true
 ----
 ./mvnw clean package -Dquarkus.container-image.build=true
 ----
+
+NOTE: If you ever want to build a native container image and already have an existing native image you can set `-Dquarkus.native.reuse-existing=true` and the native image build will not be re-run.
 
 == Pushing
 
@@ -93,7 +154,7 @@ NOTE: If no registry is set (using `quarkus.container-image.registry`) then `doc
 
 == Selecting among multiple extensions
 
-It does not make sense to use multiple extension as part of the same build. When multiple container image extensions are present, an error will be raised to inform the user. The user can either remove the uneeded extensions or select one using `application.properties`.
+It does not make sense to use multiple extension as part of the same build. When multiple container image extensions are present, an error will be raised to inform the user. The user can either remove the unneeded extensions or select one using `application.properties`.
 
 For example, if both `container-image-docker` and `container-image-s2i` are present and the user needs to use `container-image-docker`:
 
@@ -124,7 +185,7 @@ makes available the `CI_REGISTRY_IMAGE` environment variable
 quarkus.container-image.image=${CI_REGISTRY_IMAGE}
 ----
 
-NOTE: See link:config.adoc#combine-property-env-var[this] for more information on how to combine properties with environment variables.
+NOTE: See xref:config.adoc#combine-property-env-var[this] for more information on how to combine properties with environment variables.
 
 === Jib Options
 

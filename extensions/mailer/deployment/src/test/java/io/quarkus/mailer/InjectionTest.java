@@ -1,21 +1,21 @@
 package io.quarkus.mailer;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.concurrent.CompletionStage;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.mailer.MailTemplate.MailTemplateInstance;
-import io.quarkus.qute.api.CheckedTemplate;
-import io.quarkus.qute.api.ResourcePath;
+import io.quarkus.qute.CheckedTemplate;
+import io.quarkus.qute.Location;
 import io.quarkus.test.QuarkusUnitTest;
 import io.smallrye.mutiny.Uni;
 import io.vertx.ext.mail.MailClient;
@@ -26,7 +26,7 @@ public class InjectionTest {
     @SuppressWarnings("unused")
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(BeanUsingBareMailClient.class, BeanUsingBlockingMailer.class,
                             BeanUsingReactiveMailer.class, MailTemplates.class)
                     .addAsResource("mock-config.properties", "application.properties")
@@ -51,9 +51,6 @@ public class InjectionTest {
     BeanUsingReactiveMailer beanUsingReactiveMailer;
 
     @Inject
-    BeanUsingLegacyReactiveMailer beanUsingLegacyReactiveMailer;
-
-    @Inject
     BeanUsingBlockingMailer beanUsingBlockingMailer;
 
     @Inject
@@ -65,10 +62,10 @@ public class InjectionTest {
         beanUsingBare.verify();
         beanUsingBlockingMailer.verify();
         beanUsingReactiveMailer.verify().toCompletableFuture().join();
-        beanUsingLegacyReactiveMailer.verify().toCompletableFuture().join();
         templates.send1();
         templates.send2().await();
         templates.sendNative().await();
+        assertEquals("<html>Me</html>", MailTemplates.Templates.testNative("Me").templateInstance().render());
     }
 
     @ApplicationScoped
@@ -106,17 +103,6 @@ public class InjectionTest {
     }
 
     @ApplicationScoped
-    static class BeanUsingLegacyReactiveMailer {
-
-        @Inject
-        ReactiveMailer mailer;
-
-        CompletionStage<Void> verify() {
-            return mailer.send(Mail.withText("quarkus@quarkus.io", "test mailer", "reactive test!"));
-        }
-    }
-
-    @ApplicationScoped
     static class BeanUsingBlockingMailer {
 
         @Inject
@@ -138,7 +124,7 @@ public class InjectionTest {
         @Inject
         MailTemplate test1;
 
-        @ResourcePath("mails/test2")
+        @Location("mails/test2")
         MailTemplate testMail;
 
         Uni<Void> send1() {

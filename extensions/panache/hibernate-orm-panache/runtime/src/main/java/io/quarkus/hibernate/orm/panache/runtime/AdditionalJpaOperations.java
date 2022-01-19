@@ -35,7 +35,7 @@ public class AdditionalJpaOperations {
         EntityManager em = jpaOperations.getEntityManager();
         Query jpaQuery = em.createQuery(sort != null ? findQuery + toOrderBy(sort) : findQuery);
         JpaOperations.bindParameters(jpaQuery, params);
-        return new CustomCountPanacheQuery(em, jpaQuery, findQuery, countQuery, params);
+        return new CustomCountPanacheQuery(em, jpaQuery, countQuery, params);
     }
 
     public static PanacheQuery<?> find(AbstractJpaOperations<?> jpaOperations, Class<?> entityClass, String query,
@@ -50,7 +50,7 @@ public class AdditionalJpaOperations {
         EntityManager em = jpaOperations.getEntityManager();
         Query jpaQuery = em.createQuery(sort != null ? findQuery + toOrderBy(sort) : findQuery);
         JpaOperations.bindParameters(jpaQuery, params);
-        return new CustomCountPanacheQuery(em, jpaQuery, findQuery, countQuery, params);
+        return new CustomCountPanacheQuery(em, jpaQuery, countQuery, params);
     }
 
     public static long deleteAllWithCascade(AbstractJpaOperations<?> jpaOperations, Class<?> entityClass) {
@@ -88,9 +88,8 @@ public class AdditionalJpaOperations {
         boolean doCascade = Arrays.stream(propertyCascadeStyles)
                 .anyMatch(cascadeStyle -> cascadeStyle.doCascade(CascadingActions.DELETE));
         boolean hasElementCollection = declaredAttributes.stream()
-                .filter(attribute -> attribute.getPersistentAttributeType()
-                        .equals(Attribute.PersistentAttributeType.ELEMENT_COLLECTION))
-                .count() > 0;
+                .anyMatch(attribute -> attribute.getPersistentAttributeType()
+                        .equals(Attribute.PersistentAttributeType.ELEMENT_COLLECTION));
         return doCascade || hasElementCollection;
 
     }

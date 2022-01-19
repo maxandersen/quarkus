@@ -7,9 +7,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
+import org.apache.commons.lang3.RandomStringUtils;
 import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.pkg.NativeConfig;
@@ -22,18 +24,19 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
 
     final NativeConfig nativeConfig;
     protected final NativeConfig.ContainerRuntime containerRuntime;
-    private final String[] baseContainerRuntimeArgs;
+    String[] baseContainerRuntimeArgs;
     protected final String outputPath;
+    private final String containerName;
 
     public NativeImageBuildContainerRunner(NativeConfig nativeConfig, Path outputDir) {
         this.nativeConfig = nativeConfig;
         containerRuntime = nativeConfig.containerRuntime.orElseGet(NativeImageBuildContainerRunner::detectContainerRuntime);
         log.infof("Using %s to run the native image builder", containerRuntime.getExecutableName());
 
-        this.baseContainerRuntimeArgs = new String[] { "--env", "LANG=C" };
+        this.baseContainerRuntimeArgs = new String[] { "--env", "LANG=C", "--rm" };
 
         outputPath = outputDir == null ? null : outputDir.toAbsolutePath().toString();
-
+        containerName = "build-native-" + RandomStringUtils.random(5, true, false);
     }
 
     @Override
@@ -67,7 +70,41 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
 
     @Override
     protected String[] getBuildCommand(List<String> args) {
-        return buildCommand("run", getContainerRuntimeBuildArgs(), args);
+        List<String> containerRuntimeBuildArgs = getContainerRuntimeBuildArgs();
+        List<String> effectiveContainerRuntimeBuildArgs = new ArrayList<>(containerRuntimeBuildArgs.size() + 2);
+        effectiveContainerRuntimeBuildArgs.addAll(containerRuntimeBuildArgs);
+        effectiveContainerRuntimeBuildArgs.add("--name");
+        effectiveContainerRuntimeBuildArgs.add(containerName);
+        return buildCommand("run", effectiveContainerRuntimeBuildArgs, args);
+    }
+
+    @Override
+    protected void objcopy(String... args) {
+        final List<String> containerRuntimeBuildArgs = getContainerRuntimeBuildArgs();
+        Collections.addAll(containerRuntimeBuildArgs, "--entrypoint", "/bin/bash");
+        final ArrayList<String> objcopyCommand = new ArrayList<>(2);
+        objcopyCommand.add("-c");
+        objcopyCommand.add("objcopy " + String.join(" ", args));
+        final String[] command = buildCommand("run", containerRuntimeBuildArgs, objcopyCommand);
+        runCommand(command, null, null);
+    }
+
+    @Override
+    public void addShutdownHook(Process process) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (process.isAlive()) {
+                try {
+                    Process removeProcess = new ProcessBuilder(
+                            List.of(containerRuntime.getExecutableName(), "rm", "-f", containerName))
+                                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                                    .start();
+                    removeProcess.waitFor(2, TimeUnit.SECONDS);
+                } catch (IOException | InterruptedException e) {
+                    log.debug("Unable to stop running container", e);
+                }
+            }
+        }));
     }
 
     protected List<String> getContainerRuntimeBuildArgs() {
@@ -94,7 +131,7 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
      *         executable exists in the environment or if the docker executable is an alias to podman
      * @throws IllegalStateException if no container runtime was found to build the image
      */
-    private static NativeConfig.ContainerRuntime detectContainerRuntime() {
+    public static NativeConfig.ContainerRuntime detectContainerRuntime() {
         // Docker version 19.03.14, build 5eb3275d40
         String dockerVersionOutput = getVersionOutputFor(NativeConfig.ContainerRuntime.DOCKER);
         boolean dockerAvailable = dockerVersionOutput.contains("Docker version");
@@ -111,7 +148,8 @@ public abstract class NativeImageBuildContainerRunner extends NativeImageBuildRu
         } else if (podmanAvailable) {
             return NativeConfig.ContainerRuntime.PODMAN;
         } else {
-            throw new IllegalStateException("No container runtime was found to run the native image builder");
+            throw new IllegalStateException("No container runtime was found to run the native image builder. "
+                    + "Make sure you have Docker or Podman installed in your environment.");
         }
     }
 

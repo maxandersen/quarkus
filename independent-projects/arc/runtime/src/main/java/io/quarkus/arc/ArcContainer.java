@@ -2,7 +2,7 @@ package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
@@ -34,7 +34,7 @@ public interface ArcContainer {
      * @param scopeType
      * @return the matching context objects, never null
      */
-    Collection<InjectableContext> getContexts(Class<? extends Annotation> scopeType);
+    List<InjectableContext> getContexts(Class<? extends Annotation> scopeType);
 
     /**
      * 
@@ -138,7 +138,7 @@ public interface ArcContainer {
      * Returns true if Arc container is running.
      * This can be used as a quick check to determine CDI availability in Quarkus.
      *
-     * @return true is {@link ArcContainer} is running, false otherwise
+     * @return true if {@link ArcContainer} is running, false otherwise
      */
     boolean isRunning();
 

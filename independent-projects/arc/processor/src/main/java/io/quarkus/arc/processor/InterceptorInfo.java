@@ -36,22 +36,12 @@ public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorI
 
     private final MethodInfo preDestroy;
 
-    private final int priority;
-
-    /**
-     *
-     * @param target
-     * @param beanDeployment
-     * @param bindings
-     * @param injections
-     */
     InterceptorInfo(AnnotationTarget target, BeanDeployment beanDeployment, Set<AnnotationInstance> bindings,
             List<Injection> injections, int priority) {
         super(target, beanDeployment, BuiltinScope.DEPENDENT.getInfo(),
                 Collections.singleton(Type.create(target.asClass().name(), Kind.CLASS)), new HashSet<>(), injections,
-                null, null, null, Collections.emptyList(), null, false);
+                null, null, false, Collections.emptyList(), null, false, null, priority);
         this.bindings = bindings;
-        this.priority = priority;
         List<MethodInfo> aroundInvokes = new ArrayList<>();
         List<MethodInfo> aroundConstructs = new ArrayList<>();
         List<MethodInfo> postConstructs = new ArrayList<>();
@@ -93,7 +83,8 @@ public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorI
 
     private MethodInfo validateSignature(MethodInfo method) {
         List<Type> parameters = method.parameters();
-        if (parameters.size() != 1 || !parameters.get(0).name().equals(DotNames.INVOCATION_CONTEXT)) {
+        if (parameters.size() != 1 || !(parameters.get(0).name().equals(DotNames.INVOCATION_CONTEXT)
+                || parameters.get(0).name().equals(DotNames.ARC_INVOCATION_CONTEXT))) {
             throw new IllegalStateException(
                     "An interceptor method must accept exactly one parameter of type javax.interceptor.InvocationContext: "
                             + method + " declared on " + method.declaringClass());
@@ -111,23 +102,19 @@ public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorI
         return bindings;
     }
 
-    public int getPriority() {
-        return priority;
-    }
-
-    MethodInfo getAroundInvoke() {
+    public MethodInfo getAroundInvoke() {
         return aroundInvoke;
     }
 
-    MethodInfo getAroundConstruct() {
+    public MethodInfo getAroundConstruct() {
         return aroundConstruct;
     }
 
-    MethodInfo getPostConstruct() {
+    public MethodInfo getPostConstruct() {
         return postConstruct;
     }
 
-    MethodInfo getPreDestroy() {
+    public MethodInfo getPreDestroy() {
         return preDestroy;
     }
 

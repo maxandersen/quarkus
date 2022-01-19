@@ -1,11 +1,10 @@
 package io.quarkus.micrometer.deployment.binder;
 
 import static io.restassured.RestAssured.when;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
-import org.hamcrest.Matchers;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -15,7 +14,7 @@ import io.quarkus.test.QuarkusDevModeTest;
 public class HttpDevModeConfigTest {
     @RegisterExtension
     static final QuarkusDevModeTest test = new QuarkusDevModeTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClass(HelloResource.class)
                     .add(new StringAsset("quarkus.micrometer.binder-enabled-default=false\n" +
                             "quarkus.micrometer.binder.http-client.enabled=true\n" +
@@ -24,13 +23,14 @@ public class HttpDevModeConfigTest {
                             "quarkus.micrometer.binder.vertx.enabled=true\n"), "application.properties"));
 
     @Test
-    public void testHttpConfigInDevMode() throws Exception {
+    public void test() throws Exception {
 
         when().get("/hello/one").then().statusCode(200);
         when().get("/hello/two").then().statusCode(200);
         when().get("/hello/three").then().statusCode(200);
         when().get("/q/metrics").then().statusCode(200)
-                .body(Matchers.containsString("/hello/{message}"));
+                .body(containsString("/hello/{message}"))
+                .body(not(containsString("/goodbye/{message}")));
 
         test.modifyResourceFile("application.properties",
                 s -> s.replace("quarkus.micrometer.binder.http-server.ignore-patterns=/http",
@@ -40,7 +40,7 @@ public class HttpDevModeConfigTest {
         when().get("/hello/two").then().statusCode(200);
         when().get("/hello/three").then().statusCode(200);
         when().get("/q/metrics").then().statusCode(200)
-                .body(Matchers.containsString("/goodbye/{message}"));
+                .body(containsString("/goodbye/{message}"));
     }
 
 }

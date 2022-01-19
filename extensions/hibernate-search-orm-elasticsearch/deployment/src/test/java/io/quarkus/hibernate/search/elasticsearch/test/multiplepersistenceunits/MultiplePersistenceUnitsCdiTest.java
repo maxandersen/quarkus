@@ -8,8 +8,6 @@ import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.CDI;
 import javax.inject.Inject;
 import javax.persistence.EntityManager;
-import javax.transaction.NotSupportedException;
-import javax.transaction.SystemException;
 import javax.transaction.UserTransaction;
 
 import org.hibernate.search.mapper.orm.Search;
@@ -17,8 +15,6 @@ import org.hibernate.search.mapper.orm.entity.SearchIndexedEntity;
 import org.hibernate.search.mapper.orm.mapping.SearchMapping;
 import org.hibernate.search.mapper.orm.session.SearchSession;
 import org.hibernate.search.util.common.SearchException;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -27,13 +23,15 @@ import io.quarkus.hibernate.search.elasticsearch.test.multiplepersistenceunits.d
 import io.quarkus.hibernate.search.elasticsearch.test.multiplepersistenceunits.pu1.PU1Entity;
 import io.quarkus.hibernate.search.elasticsearch.test.multiplepersistenceunits.pu2.PU2Entity;
 import io.quarkus.hibernate.search.elasticsearch.test.multiplepersistenceunits.pu3.PU3Entity;
+import io.quarkus.hibernate.search.elasticsearch.test.util.TransactionUtils;
 import io.quarkus.test.QuarkusUnitTest;
 
 public class MultiplePersistenceUnitsCdiTest {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
+                    .addClass(TransactionUtils.class)
                     .addPackage(DefaultPUEntity.class.getPackage())
                     .addPackage(PU1Entity.class.getPackage())
                     .addPackage(PU2Entity.class.getPackage())
@@ -123,8 +121,8 @@ public class MultiplePersistenceUnitsCdiTest {
     @ActivateRequestContext
     public void testPU2Session() {
         PU2Entity entity = new PU2Entity("someText");
-        inTransaction(() -> pu1Session.toEntityManager().persist(entity));
-        inTransaction(() -> assertThat(pu1Session.search(PU2Entity.class)
+        inTransaction(() -> pu2Session.toEntityManager().persist(entity));
+        inTransaction(() -> assertThat(pu2Session.search(PU2Entity.class)
                 .where(f -> f.matchAll())
                 .fetchHits(20))
                         .hasSize(1)
@@ -160,16 +158,6 @@ public class MultiplePersistenceUnitsCdiTest {
     }
 
     private void inTransaction(Runnable runnable) {
-        try {
-            transaction.begin();
-            try {
-                runnable.run();
-                transaction.commit();
-            } catch (Exception e) {
-                transaction.rollback();
-            }
-        } catch (SystemException | NotSupportedException e) {
-            throw new IllegalStateException("Transaction exception", e);
-        }
+        TransactionUtils.inTransaction(transaction, runnable);
     }
 }

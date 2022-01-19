@@ -1,7 +1,9 @@
 package io.quarkus.kubernetes.deployment;
 
 import static io.quarkus.kubernetes.deployment.Constants.KNATIVE;
-import static io.quarkus.kubernetes.deployment.Constants.SERVICE;
+import static io.quarkus.kubernetes.deployment.Constants.KNATIVE_SERVICE;
+import static io.quarkus.kubernetes.deployment.Constants.KNATIVE_SERVICE_GROUP;
+import static io.quarkus.kubernetes.deployment.Constants.KNATIVE_SERVICE_VERSION;
 import static io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem.DEFAULT_PRIORITY;
 
 import java.util.ArrayList;
@@ -47,6 +49,7 @@ import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.kubernetes.spi.ConfiguratorBuildItem;
+import io.quarkus.kubernetes.spi.CustomProjectRootBuildItem;
 import io.quarkus.kubernetes.spi.DecoratorBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesAnnotationBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
@@ -56,6 +59,7 @@ import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesLabelBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
+import io.quarkus.kubernetes.spi.KubernetesResourceMetadataBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBindingBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
 
@@ -65,10 +69,20 @@ public class KnativeProcessor {
     private static final String LATEST_REVISION = "latest";
 
     @BuildStep
-    public void checkKnative(BuildProducer<KubernetesDeploymentTargetBuildItem> deploymentTargets) {
+    public void checkKnative(ApplicationInfoBuildItem applicationInfo, KnativeConfig config,
+            BuildProducer<KubernetesDeploymentTargetBuildItem> deploymentTargets,
+            BuildProducer<KubernetesResourceMetadataBuildItem> resourceMeta) {
         List<String> targets = KubernetesConfigUtil.getUserSpecifiedDeploymentTargets();
+        boolean knativeEnabled = targets.contains(KNATIVE);
         deploymentTargets.produce(
-                new KubernetesDeploymentTargetBuildItem(KNATIVE, SERVICE, KNATIVE_PRIORITY, targets.contains(KNATIVE)));
+                new KubernetesDeploymentTargetBuildItem(KNATIVE, KNATIVE_SERVICE, KNATIVE_SERVICE_GROUP,
+                        KNATIVE_SERVICE_VERSION, KNATIVE_PRIORITY,
+                        knativeEnabled));
+        if (knativeEnabled) {
+            String name = ResourceNameUtil.getResourceName(config, applicationInfo);
+            resourceMeta.produce(new KubernetesResourceMetadataBuildItem(KNATIVE, KNATIVE_SERVICE_GROUP,
+                    KNATIVE_SERVICE_VERSION, KNATIVE_SERVICE, name));
+        }
     }
 
     @BuildStep
@@ -112,12 +126,14 @@ public class KnativeProcessor {
             Optional<KubernetesHealthLivenessPathBuildItem> livenessPath,
             Optional<KubernetesHealthReadinessPathBuildItem> readinessPath,
             List<KubernetesRoleBuildItem> roles,
-            List<KubernetesRoleBindingBuildItem> roleBindings) {
+            List<KubernetesRoleBindingBuildItem> roleBindings,
+            Optional<CustomProjectRootBuildItem> customProjectRoot) {
 
         List<DecoratorBuildItem> result = new ArrayList<>();
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
-        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
+        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, customProjectRoot, outputTarget,
+                packageConfig);
         result.addAll(KubernetesCommonHelper.createDecorators(project, KNATIVE, name, config,
                 metricsConfiguration, annotations,
                 labels, command,
@@ -229,6 +245,10 @@ public class KnativeProcessor {
         config.getSidecars().entrySet().forEach(e -> {
             result.add(new DecoratorBuildItem(KNATIVE, new AddSidecarToRevisionDecorator(name, ContainerConverter.convert(e))));
         });
+
+        if (!roleBindings.isEmpty()) {
+            result.add(new DecoratorBuildItem(new ApplyServiceAccountNameToRevisionSpecDecorator()));
+        }
 
         return result;
     }

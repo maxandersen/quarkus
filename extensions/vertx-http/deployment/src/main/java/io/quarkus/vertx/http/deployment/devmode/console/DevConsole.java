@@ -1,28 +1,34 @@
 package io.quarkus.vertx.http.deployment.devmode.console;
 
 import java.io.IOException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Scanner;
+import java.util.TreeMap;
 import java.util.function.BiFunction;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jboss.logging.Logger;
 import org.yaml.snakeyaml.Yaml;
 
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.quarkus.builder.Version;
 import io.quarkus.devconsole.runtime.spi.FlashScopeUtil;
+import io.quarkus.maven.dependency.GACTV;
 import io.quarkus.qute.Engine;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
+import io.smallrye.common.classloader.ClassPathUtils;
 import io.vertx.core.Handler;
+import io.vertx.core.http.HttpHeaders;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -30,6 +36,8 @@ import io.vertx.ext.web.RoutingContext;
  * and has access to build time stuff
  */
 public class DevConsole implements Handler<RoutingContext> {
+
+    private static final Logger log = Logger.getLogger(DevConsole.class);
 
     static final ThreadLocal<String> currentExtension = new ThreadLocal<>();
     private static final Comparator<Map<String, Object>> EXTENSION_COMPARATOR = Comparator
@@ -41,6 +49,7 @@ public class DevConsole implements Handler<RoutingContext> {
     final Map<String, Object> globalData = new HashMap<>();
 
     final Config config = ConfigProvider.getConfig();
+    final String devRootAppend;
 
     DevConsole(Engine engine, String httpRootPath, String frameworkRootPath) {
         this.engine = engine;
@@ -49,34 +58,60 @@ public class DevConsole implements Handler<RoutingContext> {
         this.globalData.put("frameworkRootPath", frameworkRootPath);
 
         // This includes the dev segment, but does not include a trailing slash (for append)
-        this.globalData.put("devRootAppend", frameworkRootPath + "dev");
+        this.devRootAppend = frameworkRootPath + "dev";
+        this.globalData.put("devRootAppend", devRootAppend);
 
         this.globalData.put("quarkusVersion", Version.getVersion());
         this.globalData.put("applicationName", config.getOptionalValue("quarkus.application.name", String.class).orElse(""));
         this.globalData.put("applicationVersion",
                 config.getOptionalValue("quarkus.application.version", String.class).orElse(""));
+    }
 
-        try {
-            Enumeration<URL> extensionDescriptors = getClass().getClassLoader()
-                    .getResources("/META-INF/quarkus-extension.yaml");
-            Yaml yaml = new Yaml();
-            while (extensionDescriptors.hasMoreElements()) {
-                URL extensionDescriptor = extensionDescriptors.nextElement();
-                String desc = readURL(extensionDescriptor);
-                Map<String, Object> loaded = yaml.load(desc);
-                String artifactId = (String) loaded.get("artifact-id");
-                String groupId = (String) loaded.get("group-id");
-                String namespace = groupId + "." + artifactId;
-                extensions.put(namespace, loaded);
+    private void initLazyState() {
+        if (extensions.isEmpty()) {
+            synchronized (extensions) {
+                if (extensions.isEmpty()) {
+                    try {
+                        final Yaml yaml = new Yaml();
+                        ClassPathUtils.consumeAsPaths("/META-INF/quarkus-extension.yaml", p -> {
+                            try {
+                                final String desc;
+                                try (Scanner scanner = new Scanner(Files.newBufferedReader(p, StandardCharsets.UTF_8))) {
+                                    scanner.useDelimiter("\\A");
+                                    desc = scanner.hasNext() ? scanner.next() : null;
+                                }
+                                if (desc == null) {
+                                    // should be an exception?
+                                    return;
+                                }
+                                final Map<String, Object> metadata = yaml.load(desc);
+                                extensions.put(getExtensionNamespace(metadata), metadata);
+                            } catch (IOException | RuntimeException e) {
+                                // don't abort, just log, to prevent a single extension from breaking entire dev ui
+                                log.error("Failed to process extension descriptor " + p.toUri(), e);
+                            }
+                        });
+                        this.globalData.put("configKeyMap", getConfigKeyMap());
+                    } catch (IOException x) {
+                        throw new RuntimeException(x);
+                    }
+                }
             }
-        } catch (IOException x) {
-            throw new RuntimeException(x);
         }
     }
 
     @Override
     public void handle(RoutingContext ctx) {
-        String path = ctx.normalisedPath().substring(ctx.mountPoint().length());
+        initLazyState();
+        // Redirect /q/dev to /q/dev/
+        if (ctx.normalizedPath().length() == devRootAppend.length()) {
+            ctx.response().setStatusCode(302);
+            ctx.response().headers().set(HttpHeaders.LOCATION, devRootAppend + "/");
+            ctx.response().end();
+            return;
+        }
+
+        String path = ctx.normalizedPath().substring(ctx.mountPoint().length() + 1);
         if (path.isEmpty() || path.equals("/")) {
             sendMainPage(ctx);
         } else {
@@ -93,6 +128,7 @@ public class DevConsole implements Handler<RoutingContext> {
                 ctx.response().setStatusCode(200).headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=UTF-8");
                 TemplateInstance devTemplateInstance = devTemplate
                         .data("currentExtensionName", extName)
+                        .data("query-string", ctx.request().query())
                         .data("flash", FlashScopeUtil.getFlash(ctx))
                         .data("currentRequest", ctx.request());
                 renderTemplate(ctx, devTemplateInstance);
@@ -100,6 +136,22 @@ public class DevConsole implements Handler<RoutingContext> {
                 ctx.next();
             }
         }
+    }
+
+    private Map<String, List<String>> getConfigKeyMap() {
+        Map<String, List<String>> ckm = new TreeMap<>();
+        Collection<Map<String, Object>> values = this.extensions.values();
+        for (Map<String, Object> extension : values) {
+            if (extension.containsKey("metadata")) {
+                Map<String, Object> metadata = (Map<String, Object>) extension.get("metadata");
+                if (metadata.containsKey("config")) {
+                    List<String> configKeys = (List<String>) metadata.get("config");
+                    String name = (String) extension.get("name");
+                    ckm.put(name, configKeys);
+                }
+            }
+        }
+        return ckm;
     }
 
     private String getExtensionName(String namespace) {
@@ -128,26 +180,29 @@ public class DevConsole implements Handler<RoutingContext> {
         });
     }
 
-    public void sendMainPage(RoutingContext event) {
+    private void sendMainPage(RoutingContext event) {
         Template devTemplate = engine.getTemplate("index");
         List<Map<String, Object>> actionableExtensions = new ArrayList<>();
         List<Map<String, Object>> nonActionableExtensions = new ArrayList<>();
-        for (Map<String, Object> loaded : this.extensions.values()) {
+        for (Entry<String, Map<String, Object>> entry : this.extensions.entrySet()) {
+            final String namespace = entry.getKey();
+            final Map<String, Object> loaded = entry.getValue();
             @SuppressWarnings("unchecked")
-            Map<String, Object> metadata = (Map<String, Object>) loaded.get("metadata");
-            String artifactId = (String) loaded.get("artifact-id");
-            String groupId = (String) loaded.get("group-id");
-            currentExtension.set(groupId + "." + artifactId); // needed because the template of the extension is going to be read
-            Template simpleTemplate = engine.getTemplate(groupId + "." + artifactId + "/embedded.html");
+            final Map<String, Object> metadata = (Map<String, Object>) loaded.get("metadata");
+            currentExtension.set(namespace); // needed because the template of the extension is going to be read
+            Template simpleTemplate = engine.getTemplate(namespace + "/embedded.html");
             boolean hasConsoleEntry = simpleTemplate != null;
             boolean hasGuide = metadata.containsKey("guide");
+            boolean hasConfig = metadata.containsKey("config");
+            boolean isUnlisted = metadata.containsKey("unlisted")
+                    && (metadata.get("unlisted").equals(true) || metadata.get("unlisted").equals("true"));
             loaded.put("hasConsoleEntry", hasConsoleEntry);
             loaded.put("hasGuide", hasGuide);
-            if (hasConsoleEntry || hasGuide) {
+            if (!isUnlisted || hasConsoleEntry || hasGuide || hasConfig) {
                 if (hasConsoleEntry) {
                     Map<String, Object> data = new HashMap<>();
                     data.putAll(globalData);
-                    data.put("urlbase", groupId + "." + artifactId);
+                    data.put("urlbase", namespace);
                     String result = simpleTemplate.render(data);
                     loaded.put("_dev", result);
                     actionableExtensions.add(loaded);
@@ -163,12 +218,23 @@ public class DevConsole implements Handler<RoutingContext> {
         renderTemplate(event, instance);
     }
 
-    private static String readURL(URL url) throws IOException {
-        try (Scanner scanner = new Scanner(url.openStream(),
-                StandardCharsets.UTF_8.toString())) {
-            scanner.useDelimiter("\\A");
-            return scanner.hasNext() ? scanner.next() : null;
+    private static String getExtensionNamespace(Map<String, Object> metadata) {
+        final String groupId;
+        final String artifactId;
+        final String artifact = (String) metadata.get("artifact");
+        if (artifact == null) {
+            // trying quarkus 1.x format
+            groupId = (String) metadata.get("group-id");
+            artifactId = (String) metadata.get("artifact-id");
+            if (artifactId == null || groupId == null) {
+                throw new RuntimeException(
+                        "Failed to locate 'artifact' or 'group-id' and 'artifact-id' among metadata keys " + metadata.keySet());
+            }
+        } else {
+            final GACTV coords = GACTV.fromString(artifact);
+            groupId = coords.getGroupId();
+            artifactId = coords.getArtifactId();
         }
+        return groupId + "." + artifactId;
     }
-
 }

@@ -16,14 +16,19 @@ then
   echo ''
   mvn -q -e clean package -f "${PRG_PATH}/devtools/bom-descriptor-json" -Denforcer.skip $*
 else
-  read -n1 -p 'Did you build the entire project? [y/n] ' ANSWER
+  read -n1 -p 'Build the entire project with relocations? [y/n] ' ANSWER
   echo ''
-  if [ "${ANSWER}" != y ]
+  if [ "${ANSWER}" == y ]
   then
     echo ''
-    echo 'Building entire project...'
+    echo 'Building entire project with relocations...'
     echo ''
-    mvn -q -e -Dquickly -T0.8C -f "${PRG_PATH}" $*
+    mvn -q -e -Dquickly -Dno-test-modules -Prelocations -T0.8C -f "${PRG_PATH}" $*
+  else
+    echo ''
+    echo 'Aborted!'
+    echo ''
+    exit 1
   fi
 fi
 
@@ -49,7 +54,9 @@ echo ''
 # get all "artifact-id" values from the generated json file
 # pipefail is switched off briefly so that a better error can be logged when nothing is found
 set +o pipefail
-ARTIFACT_IDS=$(cd "${PRG_PATH}" && grep '^    "artifact"' devtools/bom-descriptor-json/target/*.json | grep -Eo 'quarkus-[a-z0-9-]+' | sort)
+# note: quarkus-amazon-common was removed from this repo without a relocation
+ARTIFACT_IDS=$(cd "${PRG_PATH}" && grep '^    "artifact"' devtools/bom-descriptor-json/target/quarkus-bom-quarkus-platform-descriptor-*.json \
+    | grep -Eo 'quarkus-[a-z0-9-]+' | grep -v quarkus-amazon-common | sort)
 set -o pipefail
 if [ -z "${ARTIFACT_IDS}" ]
 then
@@ -102,3 +109,13 @@ echo 'Sanity check...'
 echo ''
 # sanity check; make sure nothing stupid was added like non-existing deps
 mvn dependency:resolve validate -Dsilent -q -f "${PRG_PATH}" -pl devtools/bom-descriptor-json,docs $*
+
+# CI only: verify that no pom.xml was touched (if changes are found, committer forgot to run script or to add changes)
+if [ "${CI:-}" == true ] && [ $(git status -s -u no '*pom.xml' | wc -l) -ne 0 ]
+then
+  echo -e '\033[0;31mError:\033[0m Dependencies to extension artifacts are outdated!' 1>&2
+  echo -e '\033[0;31mError:\033[0m Run ./update-extension-dependencies.sh and add the modified pom.xml files to your commit.' 1>&2
+  echo -e '\033[0;31mError:\033[0m Diff is:' 1>&2
+  git --no-pager diff '*pom.xml' 1>&2
+  exit 1
+fi

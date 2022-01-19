@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Assertions;
 
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.hibernate.reactive.panache.PanacheQuery;
+import io.quarkus.hibernate.reactive.panache.common.runtime.ReactiveTransactional;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Parameters;
 import io.quarkus.panache.common.Sort;
@@ -40,10 +41,11 @@ public class TestEndpoint {
     @Inject
     MockablePersonRepository mockablePersonRepository;
 
+    @ReactiveTransactional
     @GET
     @Path("model")
     public Uni<String> testModel() {
-        return Panache.withTransaction(() -> Person.findAll().list()
+        return Person.findAll().list()
                 .flatMap(persons -> {
                     Assertions.assertEquals(0, persons.size());
 
@@ -119,6 +121,12 @@ public class TestEndpoint {
                                 Assertions.assertEquals(person, personResult);
 
                                 return Person.find("name = ?1", "stef").list();
+                            }).flatMap(persons -> {
+                                Assertions.assertEquals(1, persons.size());
+                                Assertions.assertEquals(person, persons.get(0));
+
+                                // full form
+                                return Person.find("FROM Person2 WHERE name = ?1", "stef").list();
                             }).flatMap(persons -> {
                                 Assertions.assertEquals(1, persons.size());
                                 Assertions.assertEquals(person, persons.get(0));
@@ -216,7 +224,10 @@ public class TestEndpoint {
                                 return assertThrows(PanacheQueryException.class,
                                         () -> Person.find("#Person.namedQueryNotFound").list(),
                                         "singleResult should have thrown");
-                            }).flatMap(v -> NamedQueryEntity.list("#NamedQueryMappedSuperClass.getAll"))
+                            }).flatMap(v -> assertThrows(IllegalArgumentException.class,
+                                    () -> Person.list("#Person.getByName", Sort.by("name"), Parameters.with("name", "stef")),
+                                    "Should have thrown sort exception"))
+                            .flatMap(v -> NamedQueryEntity.list("#NamedQueryMappedSuperClass.getAll"))
                             .flatMap(v -> NamedQueryEntity.list("#NamedQueryEntity.getAll"))
                             .flatMap(v -> NamedQueryWith2QueriesEntity.list("#NamedQueryWith2QueriesEntity.getAll1"))
                             .flatMap(v -> NamedQueryWith2QueriesEntity.list("#NamedQueryWith2QueriesEntity.getAll2"))
@@ -288,6 +299,32 @@ public class TestEndpoint {
                                 Assertions.assertEquals(1, count);
 
                                 return Person.delete("name", "stef");
+                            }).flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return makeSavedPerson();
+                            });
+                }).flatMap(person -> {
+
+                    // full form
+                    return Dog.delete("FROM Dog WHERE owner = :owner", Parameters.with("owner", person))
+                            .flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return Person.delete("FROM Person2 WHERE name = ?1", "stef");
+                            }).flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return makeSavedPerson();
+                            });
+                }).flatMap(person -> {
+
+                    // full form
+                    return Dog.delete("DELETE FROM Dog WHERE owner = :owner", Parameters.with("owner", person))
+                            .flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return Person.delete("DELETE FROM Person2 WHERE name = ?1", "stef");
                             }).map(count -> {
                                 Assertions.assertEquals(1, count);
 
@@ -375,11 +412,11 @@ public class TestEndpoint {
                     //                            () -> person2.persistAndFlush(),
                     //                            "Should have failed");
                 }).flatMap(v -> Person.deleteAll())
-                .map(v -> "OK"));
+                .map(v -> "OK");
     }
 
     private <T> Uni<List<T>> collect(Multi<T> stream) {
-        return stream.collectItems().asList();
+        return stream.collect().asList();
     }
 
     private Uni<Void> testUpdate() {
@@ -652,8 +689,7 @@ public class TestEndpoint {
         person.status = Status.LIVING;
         person.address = new Address("stef street");
         return person.address.persist()
-                .flatMap(v -> person.persist())
-                .map(v -> person);
+                .flatMap(v -> person.persist());
     }
 
     private Uni<Person> makeSavedPersonDao(String suffix) {
@@ -662,8 +698,7 @@ public class TestEndpoint {
         person.status = Status.LIVING;
         person.address = new Address("stef street");
         return addressDao.persist(person.address)
-                .flatMap(v -> personDao.persist(person))
-                .map(v -> person);
+                .flatMap(v -> personDao.persist(person));
     }
 
     private Uni<Person> makeSavedPerson() {
@@ -673,7 +708,7 @@ public class TestEndpoint {
             Dog dog = new Dog("octave", "dalmatian");
             dog.owner = person;
             person.dogs.add(dog);
-            return dog.persist().map(v -> person);
+            return dog.persist().map(d -> person);
         });
     }
 
@@ -684,7 +719,7 @@ public class TestEndpoint {
             Dog dog = new Dog("octave", "dalmatian");
             dog.owner = person;
             person.dogs.add(dog);
-            return dog.persist().map(v -> person);
+            return dog.persist().map(d -> person);
         });
     }
 
@@ -696,7 +731,6 @@ public class TestEndpoint {
 
         assertFalse(person1.isPersistent());
         assertFalse(person2.isPersistent());
-
         Uni<Void> persist;
         switch (persistTest) {
             case Iterable:
@@ -726,7 +760,6 @@ public class TestEndpoint {
 
         assertFalse(personDao.isPersistent(person1));
         assertFalse(personDao.isPersistent(person2));
-
         Uni<Void> persist;
         switch (persistTest) {
             case Iterable:
@@ -759,10 +792,11 @@ public class TestEndpoint {
     @Inject
     NamedQueryWith2QueriesRepository namedQueryWith2QueriesRepository;
 
+    @ReactiveTransactional
     @GET
     @Path("model-dao")
     public Uni<String> testModelDao() {
-        return Panache.withTransaction(() -> personDao.findAll().list()
+        return personDao.findAll().list()
                 .flatMap(persons -> {
                     Assertions.assertEquals(0, persons.size());
 
@@ -935,7 +969,10 @@ public class TestEndpoint {
                                 return assertThrows(PanacheQueryException.class,
                                         () -> personDao.find("#Person.namedQueryNotFound").list(),
                                         "singleResult should have thrown");
-                            }).flatMap(v -> namedQueryRepository.list("#NamedQueryMappedSuperClass.getAll"))
+                            }).flatMap(v -> assertThrows(IllegalArgumentException.class,
+                                    () -> personDao.list("#Person.getByName", Sort.by("name"), Parameters.with("name", "stef")),
+                                    "Should have thrown sort exception"))
+                            .flatMap(v -> namedQueryRepository.list("#NamedQueryMappedSuperClass.getAll"))
                             .flatMap(v -> namedQueryRepository.list("#NamedQueryEntity.getAll"))
                             .flatMap(v -> namedQueryWith2QueriesRepository.list("#NamedQueryWith2QueriesEntity.getAll1"))
                             .flatMap(v -> namedQueryWith2QueriesRepository.list("#NamedQueryWith2QueriesEntity.getAll2"))
@@ -967,7 +1004,111 @@ public class TestEndpoint {
                                 Assertions.assertEquals(0, count);
 
                                 return makeSavedPersonDao();
-                            });
+                            })
+
+                            .flatMap(v -> Person.count("#Person.countAll")
+                                    .flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.count("#Person.countByName", Parameters.with("name", "stef").map());
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.count("#Person.countByName", Parameters.with("name", "stef"));
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.count("#Person.countByName.ordinal", "stef");
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Uni.createFrom().voidItem();
+                                    }))
+                            .flatMap(voidUni -> Person.update("#Person.updateAllNames", Parameters.with("name", "stef2").map())
+                                    .flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("#Person.getByName", Parameters.with("name", "stef2")).list();
+                                    }).flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.update("#Person.updateAllNames", Parameters.with("name", "stef3"));
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("#Person.getByName", Parameters.with("name", "stef3")).list();
+                                    }).flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.update("#Person.updateNameById",
+                                                Parameters.with("name", "stef2").and("id", ((Person) persons.get(0)).id).map());
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("#Person.getByName", Parameters.with("name", "stef2")).list();
+                                    }).flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.update("#Person.updateNameById",
+                                                Parameters.with("name", "stef3").and("id", ((Person) persons.get(0)).id));
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("#Person.getByName", Parameters.with("name", "stef3")).list();
+                                    }).flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.update("#Person.updateNameById.ordinal", "stef",
+                                                ((Person) persons.get(0)).id);
+                                    }).flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("#Person.getByName", Parameters.with("name", "stef")).list();
+                                    }).flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Uni.createFrom().voidItem();
+                                    }))
+                            .flatMap(voidUni -> Dog.deleteAll()
+                                    .flatMap(v -> Person.delete("#Person.deleteAll"))
+                                    .flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("").list();
+                                    })
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(0, persons.size());
+                                        return Uni.createFrom().voidItem();
+                                    }))
+                            .flatMap(voidUni -> makeSavedPerson().flatMap(personToDelete -> Dog.deleteAll()
+                                    .flatMap(v -> Person.find("").list())
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.delete("#Person.deleteById",
+                                                Parameters.with("id", personToDelete.id).map());
+                                    })
+                                    .flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("").list();
+                                    })
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(0, persons.size());
+                                        return Uni.createFrom().voidItem();
+                                    })))
+                            .flatMap(voidUni -> makeSavedPerson().flatMap(personToDelete -> Dog.deleteAll()
+                                    .flatMap(v -> Person.find("").list())
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.delete("#Person.deleteById", Parameters.with("id", personToDelete.id));
+                                    })
+                                    .flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("").list();
+                                    })
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(0, persons.size());
+                                        return Uni.createFrom().voidItem();
+                                    })))
+                            .flatMap(voidUni -> makeSavedPerson().flatMap(personToDelete -> Dog.deleteAll()
+                                    .flatMap(v -> Person.find("").list())
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(1, persons.size());
+                                        return Person.delete("#Person.deleteById.ordinal", personToDelete.id);
+                                    })
+                                    .flatMap(count -> {
+                                        Assertions.assertEquals(1, count);
+                                        return Person.find("").list();
+                                    })
+                                    .flatMap(persons -> {
+                                        Assertions.assertEquals(0, persons.size());
+                                        return makeSavedPersonDao();
+                                    })));
+
                 }).flatMap(person -> {
 
                     return personDao.count()
@@ -1007,6 +1148,31 @@ public class TestEndpoint {
                                 Assertions.assertEquals(1, count);
 
                                 return personDao.delete("name", "stef");
+                            }).flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return makeSavedPersonDao();
+                            });
+                }).flatMap(person -> {
+
+                    // full form
+                    return dogDao.delete("FROM Dog WHERE owner = :owner", Parameters.with("owner", person))
+                            .flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return personDao.delete("FROM Person2 WHERE name = ?1", "stef");
+                            }).flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return makeSavedPersonDao();
+                            });
+                }).flatMap(person -> {
+
+                    return dogDao.delete("DELETE FROM Dog WHERE owner = :owner", Parameters.with("owner", person))
+                            .flatMap(count -> {
+                                Assertions.assertEquals(1, count);
+
+                                return personDao.delete("DELETE FROM Person2 WHERE name = ?1", "stef");
                             }).map(count -> {
                                 Assertions.assertEquals(1, count);
 
@@ -1103,7 +1269,7 @@ public class TestEndpoint {
                 .map(v -> {
                     System.err.println("deleted " + v);
                     return "OK";
-                }));
+                });
     }
 
     enum PersistTest {
@@ -1351,10 +1517,11 @@ public class TestEndpoint {
         Assertions.assertEquals(returnType, method.getReturnType());
     }
 
+    @ReactiveTransactional
     @GET
     @Path("model1")
     public Uni<String> testModel1() {
-        return Panache.withTransaction(() -> Person.count()
+        return Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(0, count);
 
@@ -1375,13 +1542,14 @@ public class TestEndpoint {
                     Assertions.assertEquals(1, count);
 
                     return "OK";
-                }));
+                });
     }
 
+    @ReactiveTransactional
     @GET
     @Path("model2")
     public Uni<String> testModel2() {
-        return Panache.withTransaction(() -> Person.count()
+        return Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(1, count);
 
@@ -1391,13 +1559,14 @@ public class TestEndpoint {
 
                     person.name = "2";
                     return "OK";
-                }));
+                });
     }
 
+    @ReactiveTransactional
     @GET
-    @Path("projection")
+    @Path("projection1")
     public Uni<String> testProjection() {
-        return Panache.withTransaction(() -> Person.count()
+        return Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(1, count);
 
@@ -1434,13 +1603,33 @@ public class TestEndpoint {
 
                                 return "OK";
                             });
-                }));
+                });
     }
 
+    @ReactiveTransactional
+    @GET
+    @Path("projection2")
+    public Uni<String> testProjection2() {
+        String ownerName = "Julie";
+        String catName = "Bubulle";
+        CatOwner catOwner = new CatOwner(ownerName);
+        return catOwner.persist()
+                .chain(() -> new Cat(catName, catOwner).persist())
+                .chain(() -> Cat.find("name", catName)
+                        .project(CatDto.class)
+                        .<CatDto> firstResult())
+                .map(cat -> {
+                    Assertions.assertEquals(catName, cat.name);
+                    Assertions.assertEquals(ownerName, cat.ownerName);
+                    return "OK";
+                });
+    }
+
+    @ReactiveTransactional
     @GET
     @Path("model3")
     public Uni<String> testModel3() {
-        return Panache.withTransaction(() -> Person.count()
+        return Person.count()
                 .flatMap(count -> {
                     Assertions.assertEquals(1, count);
 
@@ -1457,7 +1646,7 @@ public class TestEndpoint {
                     Assertions.assertEquals(0, count);
 
                     return "OK";
-                }));
+                });
     }
 
     @GET
@@ -1499,58 +1688,57 @@ public class TestEndpoint {
                 .map(v -> "OK");
     }
 
+    @ReactiveTransactional
     @GET
     @Path("composite")
     public Uni<String> testCompositeKey() {
-        return Panache.withTransaction(() -> {
-            ObjectWithCompositeId obj = new ObjectWithCompositeId();
-            obj.part1 = "part1";
-            obj.part2 = "part2";
-            obj.description = "description";
-            return obj.persist()
-                    .flatMap(v -> {
-                        ObjectWithCompositeId.ObjectKey key = new ObjectWithCompositeId.ObjectKey("part1", "part2");
-                        return ObjectWithCompositeId.findById(key)
-                                .flatMap(result -> {
-                                    assertNotNull(result);
+        ObjectWithCompositeId obj = new ObjectWithCompositeId();
+        obj.part1 = "part1";
+        obj.part2 = "part2";
+        obj.description = "description";
+        return obj.persist()
+                .flatMap(v -> {
+                    ObjectWithCompositeId.ObjectKey key = new ObjectWithCompositeId.ObjectKey("part1", "part2");
+                    return ObjectWithCompositeId.findById(key)
+                            .flatMap(result -> {
+                                assertNotNull(result);
 
-                                    return ObjectWithCompositeId.deleteById(key);
-                                }).flatMap(deleted -> {
-                                    assertTrue(deleted);
+                                return ObjectWithCompositeId.deleteById(key);
+                            }).flatMap(deleted -> {
+                                assertTrue(deleted);
 
-                                    ObjectWithCompositeId.ObjectKey notExistingKey = new ObjectWithCompositeId.ObjectKey(
-                                            "notexist1",
-                                            "notexist2");
-                                    return ObjectWithCompositeId.deleteById(key);
-                                }).flatMap(deleted -> {
-                                    assertFalse(deleted);
+                                ObjectWithCompositeId.ObjectKey notExistingKey = new ObjectWithCompositeId.ObjectKey(
+                                        "notexist1",
+                                        "notexist2");
+                                return ObjectWithCompositeId.deleteById(key);
+                            }).flatMap(deleted -> {
+                                assertFalse(deleted);
 
-                                    ObjectWithEmbeddableId.ObjectKey embeddedKey = new ObjectWithEmbeddableId.ObjectKey("part1",
-                                            "part2");
-                                    ObjectWithEmbeddableId embeddable = new ObjectWithEmbeddableId();
-                                    embeddable.key = embeddedKey;
-                                    embeddable.description = "description";
-                                    return embeddable.persist()
-                                            .flatMap(v2 -> ObjectWithEmbeddableId.findById(embeddedKey))
-                                            .flatMap(embeddableResult -> {
-                                                assertNotNull(embeddableResult);
+                                ObjectWithEmbeddableId.ObjectKey embeddedKey = new ObjectWithEmbeddableId.ObjectKey("part1",
+                                        "part2");
+                                ObjectWithEmbeddableId embeddable = new ObjectWithEmbeddableId();
+                                embeddable.key = embeddedKey;
+                                embeddable.description = "description";
+                                return embeddable.persist()
+                                        .flatMap(v2 -> ObjectWithEmbeddableId.findById(embeddedKey))
+                                        .flatMap(embeddableResult -> {
+                                            assertNotNull(embeddableResult);
 
-                                                return ObjectWithEmbeddableId.deleteById(embeddedKey);
-                                            }).flatMap(deleted2 -> {
-                                                assertTrue(deleted2);
+                                            return ObjectWithEmbeddableId.deleteById(embeddedKey);
+                                        }).flatMap(deleted2 -> {
+                                            assertTrue(deleted2);
 
-                                                ObjectWithEmbeddableId.ObjectKey notExistingEmbeddedKey = new ObjectWithEmbeddableId.ObjectKey(
-                                                        "notexist1",
-                                                        "notexist2");
-                                                return ObjectWithEmbeddableId.deleteById(notExistingEmbeddedKey);
-                                            }).map(deleted2 -> {
-                                                assertFalse(deleted2);
+                                            ObjectWithEmbeddableId.ObjectKey notExistingEmbeddedKey = new ObjectWithEmbeddableId.ObjectKey(
+                                                    "notexist1",
+                                                    "notexist2");
+                                            return ObjectWithEmbeddableId.deleteById(notExistingEmbeddedKey);
+                                        }).map(deleted2 -> {
+                                            assertFalse(deleted2);
 
-                                                return "OK";
-                                            });
-                                });
-                    });
-        });
+                                            return "OK";
+                                        });
+                            });
+                });
     }
 
     @GET
@@ -1562,11 +1750,12 @@ public class TestEndpoint {
                 .map(v -> "OK"));
     }
 
+    @ReactiveTransactional
     @GET
     @Path("8254")
     public Uni<String> testBug8254() {
         CatOwner owner = new CatOwner("8254");
-        return Panache.withTransaction(() -> owner.persist()
+        return owner.persist()
                 .flatMap(v -> new Cat(owner).persist())
                 .flatMap(v -> new Cat(owner).persist())
                 .flatMap(v -> new Cat(owner).persist())
@@ -1602,9 +1791,10 @@ public class TestEndpoint {
                     assertEquals(1L, count);
 
                     return "OK";
-                }));
+                });
     }
 
+    @ReactiveTransactional
     @GET
     @Path("9025")
     public Uni<String> testBug9025() {
@@ -1612,7 +1802,7 @@ public class TestEndpoint {
         Fruit orange = new Fruit("orange", "orange");
         Fruit banana = new Fruit("banana", "yellow");
 
-        return Panache.withTransaction(() -> Fruit.persist(apple, orange, banana)
+        return Fruit.persist(apple, orange, banana)
                 .flatMap(v -> {
                     PanacheQuery<Fruit> query = Fruit.find(
                             "select name, color from Fruit").page(Page.ofSize(1));
@@ -1620,13 +1810,14 @@ public class TestEndpoint {
                     return query.list()
                             .flatMap(v2 -> query.pageCount())
                             .map(v2 -> "OK");
-                }));
+                });
     }
 
+    @ReactiveTransactional
     @GET
     @Path("9036")
     public Uni<String> testBug9036() {
-        return Panache.withTransaction(() -> Person.deleteAll()
+        return Person.deleteAll()
                 .flatMap(v -> new Person().persist())
                 .flatMap(v -> {
                     Person deadPerson = new Person();
@@ -1685,6 +1876,6 @@ public class TestEndpoint {
 
                                 return Person.deleteAll();
                             }).map(v -> "OK");
-                }));
+                });
     }
 }

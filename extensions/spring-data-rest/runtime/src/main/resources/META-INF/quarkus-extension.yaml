@@ -1,4 +1,5 @@
 ---
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
 name: "Quarkus Extension for Spring Data REST"
 metadata:
   keywords:
@@ -10,4 +11,7 @@ metadata:
   guide: "https://quarkus.io/guides/spring-data-rest"
   categories:
     - "compatibility"
-  status: "experimental"
+  status: "preview"
+  config:
+  - "quarkus.datasource."
+  - "quarkus.hibernate-orm."

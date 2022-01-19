@@ -1,7 +1,9 @@
 package io.quarkus.smallrye.openapi.common.deployment;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -22,6 +24,25 @@ public final class SmallRyeOpenApiConfig {
     public Optional<Path> storeSchemaDirectory;
 
     /**
+     * Do not run the filter only at startup, but every time the document is requested (dynamic).
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean alwaysRunFilter;
+
+    /**
+     * Do not include the provided static openapi document (eg. META-INF/openapi.yaml)
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean ignoreStaticDocument;
+
+    /**
+     * A list of local directories that should be scanned for yaml and/or json files to be included in the static model.
+     * Example: `META-INF/openapi/`
+     */
+    @ConfigItem
+    public Optional<List<Path>> additionalDocsDirectory;
+
+    /**
      * Add a certain SecurityScheme with config
      */
     public Optional<SecurityScheme> securityScheme;
@@ -37,6 +58,24 @@ public final class SmallRyeOpenApiConfig {
      */
     @ConfigItem(defaultValue = "Authentication")
     public String securitySchemeDescription;
+
+    /**
+     * This will automatically add the security requirement to all methods/classes that has a `RolesAllowed` annotation.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean autoAddSecurityRequirement;
+
+    /**
+     * This will automatically add tags to operations based on the Java class name.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean autoAddTags;
+
+    /**
+     * This will automatically add security based on the security extension included (if any).
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean autoAddSecurity;
 
     /**
      * Add a scheme value to the Basic HTTP Security Scheme
@@ -85,6 +124,12 @@ public final class SmallRyeOpenApiConfig {
      */
     @ConfigItem
     public Optional<String> openApiVersion;
+
+    /**
+     * Specify the list of global servers that provide connectivity information
+     */
+    @ConfigItem
+    public Optional<Set<String>> servers;
 
     /**
      * Set the title in Info tag in the Schema document

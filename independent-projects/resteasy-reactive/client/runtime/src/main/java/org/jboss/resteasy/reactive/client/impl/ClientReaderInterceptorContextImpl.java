@@ -17,6 +17,7 @@ import javax.ws.rs.ext.ReaderInterceptorContext;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
 import org.jboss.resteasy.reactive.common.util.CaseInsensitiveMap;
+import org.jboss.resteasy.reactive.common.util.MediaTypeHelper;
 
 public class ClientReaderInterceptorContextImpl extends AbstractClientInterceptorContextImpl
         implements ReaderInterceptorContext {
@@ -34,7 +35,7 @@ public class ClientReaderInterceptorContextImpl extends AbstractClientIntercepto
             Map<String, Object> properties, MultivaluedMap<String, String> headers,
             ConfigurationImpl configuration, Serialisers serialisers, InputStream inputStream,
             ReaderInterceptor[] interceptors) {
-        super(annotations, entityClass, entityType, mediaType, properties);
+        super(annotations, entityClass, entityType, MediaTypeHelper.withSuffixAsSubtype(mediaType), properties);
         this.configuration = configuration;
         this.serialisers = serialisers;
         this.inputStream = inputStream;
@@ -60,7 +61,7 @@ public class ClientReaderInterceptorContextImpl extends AbstractClientIntercepto
             }
             // Spec says to throw this
             throw new ProcessingException(
-                    "Request could not be mapped to type " + entityType);
+                    "Response could not be mapped to type " + entityType);
         } else {
             return interceptors[index++].aroundReadFrom(this);
         }

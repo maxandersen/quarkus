@@ -7,11 +7,15 @@ import static io.grpc.netty.NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.lang.annotation.Annotation;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import javax.enterprise.context.spi.CreationalContext;
@@ -30,9 +34,15 @@ import io.netty.handler.ssl.SslContextBuilder;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.BeanDestroyer;
 import io.quarkus.arc.InstanceHandle;
+import io.quarkus.grpc.GrpcClient;
+import io.quarkus.grpc.RegisterClientInterceptor;
+import io.quarkus.grpc.runtime.ClientInterceptorStorage;
 import io.quarkus.grpc.runtime.GrpcClientInterceptorContainer;
-import io.quarkus.grpc.runtime.annotations.GrpcServiceLiteral;
 import io.quarkus.grpc.runtime.config.GrpcClientConfiguration;
+import io.quarkus.grpc.runtime.config.GrpcServerConfiguration;
+import io.quarkus.grpc.runtime.config.SslClientConfig;
+import io.quarkus.runtime.LaunchMode;
+import io.smallrye.stork.Stork;
 
 @SuppressWarnings({ "OptionalIsPresent", "Convert2Lambda" })
 public class Channels {
@@ -43,17 +53,40 @@ public class Channels {
         // Avoid direct instantiation
     }
 
-    public static Channel createChannel(String name) throws SSLException {
+    public static Channel createChannel(String name, Set<String> perClientInterceptors) throws SSLException {
         InstanceHandle<GrpcClientConfigProvider> instance = Arc.container().instance(GrpcClientConfigProvider.class);
 
         if (!instance.isAvailable()) {
             throw new IllegalStateException("Unable to find the GrpcClientConfigProvider");
         }
 
-        GrpcClientConfiguration config = instance.get().getConfiguration(name);
+        GrpcClientConfigProvider configProvider = instance.get();
+        GrpcClientConfiguration config = configProvider.getConfiguration(name);
+
+        if (config == null && LaunchMode.current() == LaunchMode.TEST) {
+            LOGGER.infof(
+                    "gRPC client %s created without configuration. We are assuming that it's created to test your gRPC services.",
+                    name);
+            config = testConfig(configProvider.getServerConfiguration());
+        }
+
+        if (config == null) {
+            throw new IllegalStateException("gRPC client " + name + " is missing configuration.");
+        }
+
         String host = config.host;
         int port = config.port;
-        boolean plainText = !config.ssl.trustStore.isPresent();
+        String nameResolver = config.nameResolver;
+
+        String[] resolverSplit = nameResolver.split(":");
+
+        if (GrpcClientConfiguration.DNS.equalsIgnoreCase(resolverSplit[0])) {
+            host = "/" + host; // dns name resolver needs triple slash at the beginning
+        }
+
+        String target = String.format("%s://%s:%d", resolverSplit[0], host, port);
+
+        boolean plainText = config.ssl.trustStore.isEmpty();
         Optional<Boolean> usePlainText = config.plainText;
         if (usePlainText.isPresent()) {
             plainText = usePlainText.get();
@@ -85,8 +118,15 @@ public class Channels {
             context = sslContextBuilder.build();
         }
 
-        NettyChannelBuilder builder = NettyChannelBuilder.forAddress(host, port)
-                .defaultLoadBalancingPolicy(config.loadBalancingPolicy)
+        String loadBalancingPolicy = config.loadBalancingPolicy;
+
+        if (Stork.STORK.equalsIgnoreCase(nameResolver)) {
+            loadBalancingPolicy = Stork.STORK;
+        }
+
+        NettyChannelBuilder builder = NettyChannelBuilder
+                .forTarget(target)
+                .defaultLoadBalancingPolicy(loadBalancingPolicy)
                 .flowControlWindow(config.flowControlWindow.orElse(DEFAULT_FLOW_CONTROL_WINDOW))
                 .keepAliveWithoutCalls(config.keepAliveWithoutCalls)
                 .maxHedgedAttempts(config.maxHedgedAttempts)
@@ -139,13 +179,46 @@ public class Channels {
         }
 
         // Client-side interceptors
-        InstanceHandle<GrpcClientInterceptorContainer> interceptors = Arc.container()
-                .instance(GrpcClientInterceptorContainer.class);
-        for (ClientInterceptor clientInterceptor : interceptors.get().getSortedInterceptors()) {
-            builder.intercept(clientInterceptor);
-        }
+        GrpcClientInterceptorContainer interceptorContainer = Arc.container()
+                .instance(GrpcClientInterceptorContainer.class).get();
+        interceptorContainer.getSortedPerServiceInterceptors(perClientInterceptors).forEach(builder::intercept);
+        interceptorContainer.getSortedGlobalInterceptors().forEach(builder::intercept);
 
         return builder.build();
+    }
+
+    private static GrpcClientConfiguration testConfig(GrpcServerConfiguration serverConfiguration) {
+        GrpcClientConfiguration config = new GrpcClientConfiguration();
+        config.port = serverConfiguration.testPort;
+        config.host = serverConfiguration.host;
+        config.plainText = Optional.of(serverConfiguration.plainText);
+        config.compression = Optional.empty();
+        config.flowControlWindow = OptionalInt.empty();
+        config.idleTimeout = Optional.empty();
+        config.keepAliveTime = Optional.empty();
+        config.keepAliveTimeout = Optional.empty();
+        config.loadBalancingPolicy = "pick_first";
+        config.maxHedgedAttempts = 5;
+        config.maxInboundMessageSize = OptionalInt.empty();
+        config.maxInboundMetadataSize = OptionalInt.empty();
+        config.maxRetryAttempts = 0;
+        config.maxTraceEvents = OptionalInt.empty();
+        config.nameResolver = GrpcClientConfiguration.DNS;
+        config.negotiationType = "PLAINTEXT";
+        config.overrideAuthority = Optional.empty();
+        config.perRpcBufferLimit = OptionalLong.empty();
+        config.retry = false;
+        config.retryBufferSize = OptionalLong.empty();
+        config.ssl = new SslClientConfig();
+        config.ssl.key = Optional.empty();
+        config.ssl.certificate = Optional.empty();
+        config.ssl.trustStore = Optional.empty();
+        config.userAgent = Optional.empty();
+        if (serverConfiguration.ssl.certificate.isPresent() || serverConfiguration.ssl.keyStore.isPresent()) {
+            LOGGER.warn("gRPC client created without configuration and the gRPC server is configured for SSL. " +
+                    "Configuring SSL for such clients is not supported.");
+        }
+        return config;
     }
 
     private static InputStream streamFor(Path path, String resourceName) {
@@ -162,19 +235,27 @@ public class Channels {
         }
     }
 
-    public static Channel retrieveChannel(String name) {
-        InstanceHandle<Channel> instance = Arc.container().instance(Channel.class, GrpcServiceLiteral.of(name));
+    @SuppressWarnings("unchecked")
+    public static Channel retrieveChannel(String name, Set<String> perClientInterceptors) {
+        ClientInterceptorStorage clientInterceptorStorage = Arc.container().instance(ClientInterceptorStorage.class).get();
+        Annotation[] qualifiers = new Annotation[perClientInterceptors.size() + 1];
+        int idx = 0;
+        qualifiers[idx++] = GrpcClient.Literal.of(name);
+        for (String interceptor : perClientInterceptors) {
+            qualifiers[idx++] = RegisterClientInterceptor.Literal
+                    .of((Class<? extends ClientInterceptor>) clientInterceptorStorage.getPerClientInterceptor(interceptor));
+        }
+        InstanceHandle<Channel> instance = Arc.container().instance(Channel.class, qualifiers);
         if (!instance.isAvailable()) {
             throw new IllegalStateException("Unable to retrieve the gRPC Channel " + name);
         }
-
         return instance.get();
     }
 
     public static class ChannelDestroyer implements BeanDestroyer<Channel> {
 
         @Override
-        public void destroy(Channel instance, CreationalContext creationalContext, Map params) {
+        public void destroy(Channel instance, CreationalContext<Channel> creationalContext, Map<String, Object> params) {
             if (instance instanceof ManagedChannel) {
                 ManagedChannel channel = (ManagedChannel) instance;
                 LOGGER.info("Shutting down gRPC channel " + channel);

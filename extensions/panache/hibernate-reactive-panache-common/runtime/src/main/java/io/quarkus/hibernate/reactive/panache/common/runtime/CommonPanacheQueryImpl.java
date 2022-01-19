@@ -15,6 +15,7 @@ import org.hibernate.Filter;
 import org.hibernate.internal.util.LockModeConverter;
 import org.hibernate.reactive.mutiny.Mutiny;
 
+import io.quarkus.hibernate.reactive.panache.common.ProjectedFieldName;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Range;
 import io.quarkus.panache.common.exception.PanacheQueryException;
@@ -28,7 +29,7 @@ public class CommonPanacheQueryImpl<Entity> {
     private String query;
     protected String countQuery;
     private String orderBy;
-    private Mutiny.Session em;
+    private Uni<Mutiny.Session> em;
 
     private Page page;
     private Uni<Long> count;
@@ -40,7 +41,7 @@ public class CommonPanacheQueryImpl<Entity> {
 
     private Map<String, Map<String, Object>> filters;
 
-    public CommonPanacheQueryImpl(Mutiny.Session em, String query, String orderBy, Object paramsArrayOrMap) {
+    public CommonPanacheQueryImpl(Uni<Mutiny.Session> em, String query, String orderBy, Object paramsArrayOrMap) {
         this.em = em;
         this.query = query;
         this.orderBy = orderBy;
@@ -78,16 +79,24 @@ public class CommonPanacheQueryImpl<Entity> {
         StringBuilder select = new StringBuilder("SELECT new ").append(type.getName()).append(" (");
         int selectInitialLength = select.length();
         for (Parameter parameter : constructor.getParameters()) {
-            if (!parameter.isNamePresent()) {
+            String parameterName;
+            if (parameter.isAnnotationPresent(ProjectedFieldName.class)) {
+                final String name = parameter.getAnnotation(ProjectedFieldName.class).value();
+                if (name.isEmpty()) {
+                    throw new PanacheQueryException("The annotation ProjectedFieldName must have a non-empty value.");
+                }
+                parameterName = name;
+            } else if (!parameter.isNamePresent()) {
                 throw new PanacheQueryException(
                         "Your application must be built with parameter names, this should be the default if" +
                                 " using Quarkus artifacts. Check the maven or gradle compiler configuration to include '-parameters'.");
+            } else {
+                parameterName = parameter.getName();
             }
-
             if (select.length() > selectInitialLength) {
                 select.append(", ");
             }
-            select.append(parameter.getName());
+            select.append(parameterName);
         }
         select.append(") ");
 
@@ -195,13 +204,15 @@ public class CommonPanacheQueryImpl<Entity> {
         }
 
         if (count == null) {
-            Mutiny.Query<Long> countQuery = em.createQuery(countQuery());
-            if (paramsArrayOrMap instanceof Map)
-                AbstractJpaOperations.bindParameters(countQuery, (Map<String, Object>) paramsArrayOrMap);
-            else
-                AbstractJpaOperations.bindParameters(countQuery, (Object[]) paramsArrayOrMap);
             // FIXME: question about caching the result here
-            count = applyFilters(em, () -> countQuery.getSingleResult());
+            count = em.flatMap(session -> {
+                Mutiny.Query<Long> countQuery = session.createQuery(countQuery());
+                if (paramsArrayOrMap instanceof Map)
+                    AbstractJpaOperations.bindParameters(countQuery, (Map<String, Object>) paramsArrayOrMap);
+                else
+                    AbstractJpaOperations.bindParameters(countQuery, (Object[]) paramsArrayOrMap);
+                return applyFilters(session, () -> countQuery.getSingleResult());
+            });
         }
         return count;
     }
@@ -215,8 +226,10 @@ public class CommonPanacheQueryImpl<Entity> {
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public <T extends Entity> Uni<List<T>> list() {
-        Mutiny.Query<?> jpaQuery = createQuery(em);
-        return (Uni) applyFilters(em, () -> jpaQuery.getResultList());
+        return em.flatMap(session -> {
+            Mutiny.Query<?> jpaQuery = createQuery(session);
+            return (Uni) applyFilters(session, () -> jpaQuery.getResultList());
+        });
     }
 
     public <T extends Entity> Multi<T> stream() {
@@ -231,16 +244,20 @@ public class CommonPanacheQueryImpl<Entity> {
 
     @SuppressWarnings("unchecked")
     public <T extends Entity> Uni<T> firstResult() {
-        Mutiny.Query<?> jpaQuery = createQuery(em, 1);
-        return applyFilters(em, () -> jpaQuery.getResultList().map(list -> list.isEmpty() ? null : (T) list.get(0)));
+        return em.flatMap(session -> {
+            Mutiny.Query<?> jpaQuery = createQuery(session, 1);
+            return applyFilters(session, () -> jpaQuery.getResultList().map(list -> list.isEmpty() ? null : (T) list.get(0)));
+        });
     }
 
     @SuppressWarnings("unchecked")
     public <T extends Entity> Uni<T> singleResult() {
-        Mutiny.Query<?> jpaQuery = createQuery(em);
-        return applyFilters(em, () -> jpaQuery.getSingleResult().map(v -> (T) v))
-                // FIXME: workaround https://github.com/hibernate/hibernate-reactive/issues/263
-                .onFailure(CompletionException.class).transform(t -> t.getCause());
+        return em.flatMap(session -> {
+            Mutiny.Query<?> jpaQuery = createQuery(session);
+            return applyFilters(session, () -> jpaQuery.getSingleResult().map(v -> (T) v))
+                    // FIXME: workaround https://github.com/hibernate/hibernate-reactive/issues/263
+                    .onFailure(CompletionException.class).transform(t -> t.getCause());
+        });
     }
 
     private Mutiny.Query<?> createQuery(Mutiny.Session em) {

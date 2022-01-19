@@ -3,8 +3,10 @@ package io.quarkus.oidc.runtime;
 import javax.enterprise.context.ApplicationScoped;
 
 import io.quarkus.oidc.AuthorizationCodeTokens;
+import io.quarkus.oidc.OidcRequestContext;
 import io.quarkus.oidc.OidcTenantConfig;
 import io.quarkus.oidc.TokenStateManager;
+import io.smallrye.mutiny.Uni;
 import io.vertx.core.http.Cookie;
 import io.vertx.core.http.impl.ServerCookie;
 import io.vertx.ext.web.RoutingContext;
@@ -12,12 +14,12 @@ import io.vertx.ext.web.RoutingContext;
 @ApplicationScoped
 public class DefaultTokenStateManager implements TokenStateManager {
 
-    private static final String SESSION_AT_COOKIE_NAME = CodeAuthenticationMechanism.SESSION_COOKIE_NAME + "_at";
-    private static final String SESSION_RT_COOKIE_NAME = CodeAuthenticationMechanism.SESSION_COOKIE_NAME + "_rt";
+    private static final String SESSION_AT_COOKIE_NAME = OidcUtils.SESSION_COOKIE_NAME + "_at";
+    private static final String SESSION_RT_COOKIE_NAME = OidcUtils.SESSION_COOKIE_NAME + "_rt";
 
     @Override
-    public String createTokenState(RoutingContext routingContext, OidcTenantConfig oidcConfig,
-            AuthorizationCodeTokens tokens) {
+    public Uni<String> createTokenState(RoutingContext routingContext, OidcTenantConfig oidcConfig,
+            AuthorizationCodeTokens tokens, OidcRequestContext<String> requestContext) {
         StringBuilder sb = new StringBuilder();
         sb.append(tokens.getIdToken());
         if (oidcConfig.tokenStateManager.strategy == OidcTenantConfig.TokenStateManager.Strategy.KEEP_ALL_TOKENS) {
@@ -29,13 +31,13 @@ public class DefaultTokenStateManager implements TokenStateManager {
             } else {
                 CodeAuthenticationMechanism.createCookie(routingContext,
                         oidcConfig,
-                        getAccessTokenCookieName(oidcConfig.getTenantId().get()),
+                        getAccessTokenCookieName(oidcConfig),
                         tokens.getAccessToken(),
                         routingContext.get(CodeAuthenticationMechanism.SESSION_MAX_AGE_PARAM));
                 if (tokens.getRefreshToken() != null) {
                     CodeAuthenticationMechanism.createCookie(routingContext,
                             oidcConfig,
-                            getRefreshTokenCookieName(oidcConfig.getTenantId().get()),
+                            getRefreshTokenCookieName(oidcConfig),
                             tokens.getRefreshToken(),
                             routingContext.get(CodeAuthenticationMechanism.SESSION_MAX_AGE_PARAM));
                 }
@@ -50,17 +52,18 @@ public class DefaultTokenStateManager implements TokenStateManager {
                 if (tokens.getRefreshToken() != null) {
                     CodeAuthenticationMechanism.createCookie(routingContext,
                             oidcConfig,
-                            getRefreshTokenCookieName(oidcConfig.getTenantId().get()),
+                            getRefreshTokenCookieName(oidcConfig),
                             tokens.getRefreshToken(),
                             routingContext.get(CodeAuthenticationMechanism.SESSION_MAX_AGE_PARAM));
                 }
             }
         }
-        return sb.toString();
+        return Uni.createFrom().item(sb.toString());
     }
 
     @Override
-    public AuthorizationCodeTokens getTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState) {
+    public Uni<AuthorizationCodeTokens> getTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState,
+            OidcRequestContext<AuthorizationCodeTokens> requestContext) {
         String[] tokens = CodeAuthenticationMechanism.COOKIE_PATTERN.split(tokenState);
         String idToken = tokens[0];
 
@@ -91,34 +94,36 @@ public class DefaultTokenStateManager implements TokenStateManager {
             }
         }
 
-        return new AuthorizationCodeTokens(idToken, accessToken, refreshToken);
+        return Uni.createFrom().item(new AuthorizationCodeTokens(idToken, accessToken, refreshToken));
     }
 
     @Override
-    public void deleteTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState) {
+    public Uni<Void> deleteTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState,
+            OidcRequestContext<Void> requestContext) {
         if (oidcConfig.tokenStateManager.splitTokens) {
-            CodeAuthenticationMechanism.removeCookie(routingContext, getAccessTokenCookie(routingContext, oidcConfig),
+            OidcUtils.removeCookie(routingContext, getAccessTokenCookie(routingContext, oidcConfig),
                     oidcConfig);
-            CodeAuthenticationMechanism.removeCookie(routingContext, getRefreshTokenCookie(routingContext, oidcConfig),
+            OidcUtils.removeCookie(routingContext, getRefreshTokenCookie(routingContext, oidcConfig),
                     oidcConfig);
         }
+        return CodeAuthenticationMechanism.VOID_UNI;
     }
 
     private static ServerCookie getAccessTokenCookie(RoutingContext routingContext, OidcTenantConfig oidcConfig) {
-        return (ServerCookie) routingContext.request().getCookie(getAccessTokenCookieName(oidcConfig.getTenantId().get()));
+        return (ServerCookie) routingContext.request().getCookie(getAccessTokenCookieName(oidcConfig));
     }
 
     private static ServerCookie getRefreshTokenCookie(RoutingContext routingContext, OidcTenantConfig oidcConfig) {
-        return (ServerCookie) routingContext.request().getCookie(getRefreshTokenCookieName(oidcConfig.getTenantId().get()));
+        return (ServerCookie) routingContext.request().getCookie(getRefreshTokenCookieName(oidcConfig));
     }
 
-    private static String getAccessTokenCookieName(String tenantId) {
-        String cookieSuffix = CodeAuthenticationMechanism.getCookieSuffix(tenantId);
+    private static String getAccessTokenCookieName(OidcTenantConfig oidcConfig) {
+        String cookieSuffix = CodeAuthenticationMechanism.getCookieSuffix(oidcConfig);
         return SESSION_AT_COOKIE_NAME + cookieSuffix;
     }
 
-    private static String getRefreshTokenCookieName(String tenantId) {
-        String cookieSuffix = CodeAuthenticationMechanism.getCookieSuffix(tenantId);
+    private static String getRefreshTokenCookieName(OidcTenantConfig oidcConfig) {
+        String cookieSuffix = CodeAuthenticationMechanism.getCookieSuffix(oidcConfig);
         return SESSION_RT_COOKIE_NAME + cookieSuffix;
     }
 }

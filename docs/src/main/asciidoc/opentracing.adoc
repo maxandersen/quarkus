@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Using OpenTracing
+= Using OpenTracing
 
 include::./attributes.adoc[]
 
@@ -16,7 +16,7 @@ To complete this guide, you need:
 
 * less than 15 minutes
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 * Docker
 
@@ -41,7 +41,7 @@ First, we need a new project. Create a new project with the following command:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=opentracing-quickstart \
     -DclassName="org.acme.opentracing.TracedResource" \
@@ -93,11 +93,13 @@ public class TracedResource {
     @GET
     @Produces(MediaType.TEXT_PLAIN)
     public String hello() {
-        LOG.info("hello");
+        LOG.info("hello"); // <1>
         return "hello";
     }
 }
 ----
+
+<1> The log event carries OpenTracing information as well. In order to print OpenTracing information to the console output, the console log handler with the required OpenTracing event's keys needs to be defined in the `application.properties` file.
 
 Notice that there is no tracing specific code included in the application. By default, requests sent to this
 endpoint will be traced without any code changes being required. It is also possible to enhance the tracing information.
@@ -240,7 +242,7 @@ The https://github.com/opentracing-contrib/java-kafka-client[Kafka instrumentati
 
 It contains OpenTracing interceptors that must be registered on Kafka producers and consumers.
 
-If you followed the link:kafka[Kafka guide], the interceptors can be added on the `generated-price` and the `prices` channels as follows:
+If you followed the xref:kafka.adoc[Kafka guide], the interceptors can be added on the `generated-price` and the `prices` channels as follows:
 
 [source, properties]
 ----
@@ -272,12 +274,33 @@ The https://github.com/opentracing-contrib/java-mongo-driver[Mongo Driver instru
 ----
 
 It contains the OpenTracing CommandListener that will be registered on the configuration of the mongo client.
-Following the link:mongodb[MongoDB guide], the command listener will be registered defining the config property as follows:
+Following the xref:mongodb.adoc[MongoDB guide], the command listener will be registered defining the config property as follows:
 
 [source, properties]
 ----
 # Enable tracing commands in mongodb client 
 quarkus.mongodb.tracing.enabled=true
+----
+
+=== Zipkin compatibility mode
+
+To enable it, add the following dependency to your pom.xml:
+
+[source, xml]
+----
+<dependency>
+    <groupId>io.jaegertracing</groupId>
+    <artifactId>jaeger-zipkin</artifactId>
+</dependency>
+----
+
+It contains the dependencies to convert the request to zipkin format.
+The zipkin compatibility mode will be activated after defining the config property as follows:
+
+[source, properties]
+----
+# Enable zipkin compatibility mode 
+quarkus.jaeger.zipkin.compatibility-mode=true 
 ----
 
 [[configuration-reference]]

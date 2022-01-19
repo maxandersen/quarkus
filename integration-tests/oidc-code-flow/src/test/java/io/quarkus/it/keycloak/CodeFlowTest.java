@@ -78,6 +78,9 @@ public class CodeFlowTest {
             assertTrue(page.asText().contains("openid"));
             assertTrue(page.asText().contains("profile"));
 
+            Cookie sessionCookie = getSessionCookie(webClient, null);
+            assertNotNull(sessionCookie);
+
             webClient.getCookieManager().clearCookies();
         }
     }
@@ -93,7 +96,7 @@ public class CodeFlowTest {
                     .loadWebResponse(
                             new WebRequest(URI.create("http://localhost:8081/tenant-https").toURL()));
             String keycloakUrl = webResponse.getResponseHeaderValue("location");
-            verifyLocationHeader(webClient, keycloakUrl, "tenant-https", "xforwarded%2Ftenant-https",
+            verifyLocationHeader(webClient, keycloakUrl, "tenant-https_test", "xforwarded%2Ftenant-https",
                     true);
 
             HtmlPage page = webClient.getPage(keycloakUrl);
@@ -130,7 +133,9 @@ public class CodeFlowTest {
             assertNull(endpointLocationWithoutQueryUri.getRawQuery());
 
             page = webClient.getPage(endpointLocationWithoutQueryUri.toURL());
-            assertEquals("tenant-https", page.getBody().asText());
+            assertEquals("tenant-https:reauthenticated", page.getBody().asText());
+            Cookie sessionCookie = getSessionCookie(webClient, "tenant-https_test");
+            assertNotNull(sessionCookie);
             webClient.getCookieManager().clearCookies();
         }
     }
@@ -144,7 +149,7 @@ public class CodeFlowTest {
                     .loadWebResponse(
                             new WebRequest(URI.create("http://localhost:8081/tenant-https/query?a=b").toURL()));
             String keycloakUrl = webResponse.getResponseHeaderValue("location");
-            verifyLocationHeader(webClient, keycloakUrl, "tenant-https", "tenant-https",
+            verifyLocationHeader(webClient, keycloakUrl, "tenant-https_test", "tenant-https",
                     true);
 
             HtmlPage page = webClient.getPage(keycloakUrl);
@@ -176,7 +181,9 @@ public class CodeFlowTest {
             assertEquals("a=b", endpointLocationWithoutQueryUri.getRawQuery());
 
             page = webClient.getPage(endpointLocationWithoutQueryUri.toURL());
-            assertEquals("tenant-https?a=b", page.getBody().asText());
+            assertEquals("tenant-https:reauthenticated?a=b", page.getBody().asText());
+            Cookie sessionCookie = getSessionCookie(webClient, "tenant-https_test");
+            assertNotNull(sessionCookie);
             webClient.getCookieManager().clearCookies();
         }
     }
@@ -553,6 +560,8 @@ public class CodeFlowTest {
                 fail("401 status error is expected: " + page.getBody().asText());
             } catch (FailingHttpStatusCodeException ex) {
                 assertEquals(401, ex.getStatusCode());
+                assertEquals("http://localhost:8081/web-app/callback-before-wrong-redirect",
+                        ex.getResponse().getResponseHeaderValue("RedirectUri"));
             }
             webClient.getCookieManager().clearCookies();
         }
@@ -904,10 +913,28 @@ public class CodeFlowTest {
 
     @Test
     public void testNoCodeFlowUnprotected() {
-        RestAssured.when().get("/public-web-app/access")
+        RestAssured.when().get("/public-web-app/name")
                 .then()
                 .statusCode(200)
                 .body(Matchers.equalTo("no user"));
+    }
+
+    @Test
+    public void testCustomLogin() throws Exception {
+        try (final WebClient webClient = createWebClient()) {
+            HtmlPage page = webClient.getPage("http://localhost:8081/public-web-app/login");
+
+            assertEquals("Sign in to quarkus", page.getTitleText());
+
+            HtmlForm loginForm = page.getForms().get(0);
+
+            loginForm.getInputByName("username").setValueAttribute("alice");
+            loginForm.getInputByName("password").setValueAttribute("alice");
+
+            page = loginForm.getInputByName("login").click();
+
+            assertEquals("alice", page.getBody().asText());
+        }
     }
 
     private WebClient createWebClient() {
@@ -917,7 +944,7 @@ public class CodeFlowTest {
     }
 
     private Cookie getStateCookie(WebClient webClient, String tenantId) {
-        return webClient.getCookieManager().getCookie("q_auth" + (tenantId == null ? "" : "_" + tenantId));
+        return webClient.getCookieManager().getCookie("q_auth" + (tenantId == null ? "_Default_test" : "_" + tenantId));
     }
 
     private String getStateCookieStateParam(WebClient webClient, String tenantId) {
@@ -930,15 +957,15 @@ public class CodeFlowTest {
     }
 
     private Cookie getSessionCookie(WebClient webClient, String tenantId) {
-        return webClient.getCookieManager().getCookie("q_session" + (tenantId == null ? "" : "_" + tenantId));
+        return webClient.getCookieManager().getCookie("q_session" + (tenantId == null ? "_Default_test" : "_" + tenantId));
     }
 
     private Cookie getSessionAtCookie(WebClient webClient, String tenantId) {
-        return webClient.getCookieManager().getCookie("q_session_at" + (tenantId == null ? "" : "_" + tenantId));
+        return webClient.getCookieManager().getCookie("q_session_at" + (tenantId == null ? "_Default_test" : "_" + tenantId));
     }
 
     private Cookie getSessionRtCookie(WebClient webClient, String tenantId) {
-        return webClient.getCookieManager().getCookie("q_session_rt" + (tenantId == null ? "" : "_" + tenantId));
+        return webClient.getCookieManager().getCookie("q_session_rt" + (tenantId == null ? "_Default_test" : "_" + tenantId));
     }
 
     private String getIdToken(Cookie sessionCookie) {

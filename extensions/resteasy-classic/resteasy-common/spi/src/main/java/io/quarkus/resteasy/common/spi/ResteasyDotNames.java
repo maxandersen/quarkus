@@ -1,11 +1,11 @@
 package io.quarkus.resteasy.common.spi;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
+
+import javax.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.DotName;
@@ -49,14 +49,15 @@ public final class ResteasyDotNames {
             .createSimple("org.jboss.resteasy.annotations.providers.multipart.PartType");
     public static final DotName CONFIG_PROPERTY = DotName
             .createSimple(ConfigProperty.class.getName());
+    public static final DotName CDI_INJECT = DotName
+            .createSimple(Inject.class.getName());
     public static final DotName CDI_INSTANCE = DotName
             .createSimple(javax.enterprise.inject.Instance.class.getName());
     public static final DotName JSON_IGNORE = DotName.createSimple("com.fasterxml.jackson.annotation.JsonIgnore");
     public static final DotName JSONB_TRANSIENT = DotName.createSimple("javax.json.bind.annotation.JsonbTransient");
     public static final DotName XML_TRANSIENT = DotName.createSimple("javax.xml.bind.annotation.XmlTransient");
 
-    public static final List<DotName> JAXRS_METHOD_ANNOTATIONS = Collections
-            .unmodifiableList(Arrays.asList(GET, POST, HEAD, DELETE, PUT, PATCH, OPTIONS));
+    public static final List<DotName> JAXRS_METHOD_ANNOTATIONS = List.of(GET, POST, HEAD, DELETE, PUT, PATCH, OPTIONS);
 
     public static final IgnoreTypeForReflectionPredicate IGNORE_TYPE_FOR_REFLECTION_PREDICATE = new IgnoreTypeForReflectionPredicate();
     public static final IgnoreFieldForReflectionPredicate IGNORE_FIELD_FOR_REFLECTION_PREDICATE = new IgnoreFieldForReflectionPredicate();
@@ -101,7 +102,7 @@ public final class ResteasyDotNames {
     }
 
     // Types ignored for reflection used by the RESTEasy and SmallRye REST client extensions.
-    private static final Set<DotName> TYPES_IGNORED_FOR_REFLECTION = new HashSet<>(Arrays.asList(
+    private static final Set<DotName> TYPES_IGNORED_FOR_REFLECTION = new HashSet<>(List.of(
     // Consider adding packages below instead if it makes more sense
     ));
 

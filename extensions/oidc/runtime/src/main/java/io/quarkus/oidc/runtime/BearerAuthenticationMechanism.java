@@ -1,5 +1,6 @@
 package io.quarkus.oidc.runtime;
 
+import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.quarkus.oidc.AccessTokenCredential;
 import io.quarkus.oidc.OidcTenantConfig;
@@ -15,15 +16,14 @@ import io.vertx.ext.web.RoutingContext;
 public class BearerAuthenticationMechanism extends AbstractOidcAuthenticationMechanism {
 
     protected static final ChallengeData UNAUTHORIZED_CHALLENGE = new ChallengeData(HttpResponseStatus.UNAUTHORIZED.code(),
-            null, null);
+            HttpHeaderNames.WWW_AUTHENTICATE, OidcConstants.BEARER_SCHEME);
 
     public Uni<SecurityIdentity> authenticate(RoutingContext context,
-            IdentityProviderManager identityProviderManager) {
-        String token = extractBearerToken(context, resolver.resolveConfig(context));
-
+            IdentityProviderManager identityProviderManager, OidcTenantConfig oidcTenantConfig) {
+        String token = extractBearerToken(context, oidcTenantConfig);
         // if a bearer token is provided try to authenticate
         if (token != null) {
-            return authenticate(identityProviderManager, new AccessTokenCredential(token, context));
+            return authenticate(identityProviderManager, context, new AccessTokenCredential(token));
         }
         return Uni.createFrom().nullItem();
     }

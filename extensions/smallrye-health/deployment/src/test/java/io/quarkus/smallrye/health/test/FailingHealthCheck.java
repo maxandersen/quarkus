@@ -10,12 +10,14 @@ import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 import org.eclipse.microprofile.health.Readiness;
+import org.eclipse.microprofile.health.Startup;
 
 import io.smallrye.health.api.HealthGroup;
 
 @Dependent
 @Liveness
 @Readiness
+@Startup
 @HealthGroup("group1")
 @HealthGroup("group2")
 public class FailingHealthCheck implements HealthCheck {
@@ -29,8 +31,8 @@ public class FailingHealthCheck implements HealthCheck {
             }
 
             @Override
-            public State getState() {
-                return State.DOWN;
+            public Status getStatus() {
+                return Status.DOWN;
             }
 
             @Override

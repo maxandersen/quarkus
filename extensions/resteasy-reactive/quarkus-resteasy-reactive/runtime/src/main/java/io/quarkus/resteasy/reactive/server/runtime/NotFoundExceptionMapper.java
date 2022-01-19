@@ -51,7 +51,7 @@ public class NotFoundExceptionMapper {
 
     private final static Variant JSON_VARIANT = new Variant(MediaType.APPLICATION_JSON_TYPE, (String) null, null);
     private final static Variant HTML_VARIANT = new Variant(MediaType.TEXT_HTML_TYPE, (String) null, null);
-    private final static List<Variant> VARIANTS = Arrays.asList(JSON_VARIANT, HTML_VARIANT);
+    private final static List<Variant> VARIANTS = List.of(JSON_VARIANT, HTML_VARIANT);
     static volatile List<RequestMapper.RequestPath<RestInitialHandler.InitialMatch>> classMappers;
 
     private volatile static String httpRoot = "";
@@ -86,7 +86,11 @@ public class NotFoundExceptionMapper {
         if ((classMappers == null) || classMappers.isEmpty()) {
             return respond(headers);
         }
-        return respond(ResourceDescription.fromClassMappers(classMappers), headers);
+        return respond(getResourceDescriptions(), headers);
+    }
+
+    private List<ResourceDescription> getResourceDescriptions() {
+        return ResourceDescription.fromClassMappers(classMappers);
     }
 
     private Response respond(HttpHeaders headers) {

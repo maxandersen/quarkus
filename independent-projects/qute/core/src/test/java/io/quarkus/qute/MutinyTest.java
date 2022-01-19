@@ -24,8 +24,8 @@ public class MutinyTest {
         Multi<String> multi = template.data(data).createMulti();
 
         assertMulti(multi, "foofooalpha");
-        assertMulti(multi.transform().byDroppingDuplicates(), "fooalpha");
-        assertMulti(multi.transform().byTakingFirstItems(1), "foo");
+        assertMulti(multi.select().distinct(), "fooalpha");
+        assertMulti(multi.select().first(), "foo");
     }
 
     @Test
@@ -58,7 +58,7 @@ public class MutinyTest {
     @Test
     public void testUniResolution() {
         Engine engine = Engine.builder().addDefaults().addValueResolver(new ReflectionValueResolver()).build();
-        Template template = engine.parse("{foo.toLowerCase}::{#each items}{count}.{it}{#if hasNext},{/if}{/each}");
+        Template template = engine.parse("{foo.toLowerCase}::{#each items}{it_count}.{it}{#if it_hasNext},{/if}{/each}");
         Uni<Object> fooUni = Uni.createFrom().item("FOO");
         Uni<List<String>> itemsUni = Uni.createFrom().item(() -> Arrays.asList("foo", "bar", "baz"));
         assertEquals("foo::1.foo,2.bar,3.baz", template.data("foo", fooUni, "items", itemsUni).render());

@@ -10,6 +10,8 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -27,6 +29,7 @@ import javax.ws.rs.ext.WriterInterceptor;
 import org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext;
 import org.jboss.resteasy.reactive.common.util.Encode;
 import org.jboss.resteasy.reactive.common.util.PathSegmentImpl;
+import org.jboss.resteasy.reactive.server.core.multipart.FormData;
 import org.jboss.resteasy.reactive.server.core.serialization.EntityWriter;
 import org.jboss.resteasy.reactive.server.injection.ResteasyReactiveInjectionContext;
 import org.jboss.resteasy.reactive.server.jaxrs.AsyncResponseImpl;
@@ -138,6 +141,7 @@ public abstract class ResteasyReactiveRequestContext
     private SecurityContext securityContext;
     private OutputStream outputStream;
     private OutputStream underlyingOutputStream;
+    private FormData formData;
 
     public ResteasyReactiveRequestContext(Deployment deployment, ProvidersImpl providers,
             ThreadSetupAction requestContext, ServerRestHandler[] handlerChain, ServerRestHandler[] abortHandlerChain) {
@@ -179,11 +183,12 @@ public abstract class ResteasyReactiveRequestContext
     }
 
     /**
-     * Meant to be used when a error occurred early in processing chain
+     * Meant to be used when an error occurred early in processing chain
      */
     @Override
     public void abortWith(Response response) {
         setResult(response);
+        setAbortHandlerChainStarted(true);
         restart(getAbortHandlerChain());
         // this is a valid action after suspend, in which case we must resume
         if (isSuspended()) {
@@ -315,6 +320,10 @@ public abstract class ResteasyReactiveRequestContext
         return this;
     }
 
+    public boolean handlesUnmappedException() {
+        return true;
+    }
+
     public void handleUnmappedException(Throwable throwable) {
         setResult(Response.serverError().build());
     }
@@ -328,7 +337,7 @@ public abstract class ResteasyReactiveRequestContext
         // we got an exception
         if (throwable != null) {
             this.responseContentType = null;
-            deployment.getExceptionMapping().mapException(throwable, this);
+            deployment.getExceptionMapper().mapException(throwable, this);
             // NOTE: keep the throwable around for close() AsyncResponse notification
         }
     }
@@ -774,10 +783,22 @@ public abstract class ResteasyReactiveRequestContext
 
     @Override
     public Object getHeader(String name, boolean single) {
-        if (single)
-            return serverRequest().getRequestHeader(name);
-        // empty collections must not be turned to null
-        return serverRequest().getAllRequestHeaders(name);
+        if (httpHeaders == null) {
+            if (single)
+                return serverRequest().getRequestHeader(name);
+            // empty collections must not be turned to null
+            return serverRequest().getAllRequestHeaders(name);
+        } else {
+            if (single)
+                return httpHeaders.getMutableHeaders().getFirst(name);
+            // empty collections must not be turned to null
+            List<String> list = httpHeaders.getMutableHeaders().get(name);
+            if (list == null) {
+                return Collections.emptyList();
+            } else {
+                return list;
+            }
+        }
     }
 
     @Override
@@ -841,20 +862,29 @@ public abstract class ResteasyReactiveRequestContext
 
     @Override
     public Object getFormParameter(String name, boolean single, boolean encoded) {
-        if (single) {
-            String val = serverRequest().getFormAttribute(name);
-            if (encoded && val != null) {
-                val = Encode.encodeQueryParam(val);
-            }
-            return val;
+        if (formData == null) {
+            return null;
         }
-        List<String> strings = serverRequest().getAllFormAttributes(name);
-        if (encoded) {
-            List<String> newStrings = new ArrayList<>();
-            for (String i : strings) {
-                newStrings.add(Encode.encodeQueryParam(i));
+        if (single) {
+            FormData.FormValue val = formData.getFirst(name);
+            if (val == null || val.isFileItem()) {
+                return null;
             }
-            return newStrings;
+            if (encoded) {
+                return Encode.encodeQueryParam(val.getValue());
+            }
+            return val.getValue();
+        }
+        Deque<FormData.FormValue> val = formData.get(name);
+        List<String> strings = new ArrayList<>();
+        if (val != null) {
+            for (FormData.FormValue i : val) {
+                if (encoded) {
+                    strings.add(Encode.encodeQueryParam(i.getValue()));
+                } else {
+                    strings.add(i.getValue());
+                }
+            }
         }
         return strings;
 
@@ -865,12 +895,20 @@ public abstract class ResteasyReactiveRequestContext
         // this is a slower version than getPathParam, but we can't actually bake path indices inside
         // BeanParam classes (which use thismethod ) because they can be used by multiple resources that would have different
         // indices
-        Integer index = this.target.getPathParameterIndexes().get(name);
+        Integer index = target.getPathParameterIndexes().get(name);
+        String value;
+        if (index != null) {
+            value = getPathParam(index);
+        } else {
+            // Check previous resources if the path is not defined in the current target
+            value = getResourceLocatorPathParam(name);
+        }
+
         // It's possible to inject a path param that's not defined, return null in this case
-        String value = index != null ? getPathParam(index) : null;
         if (encoded && value != null) {
             return Encode.encodeQueryParam(value);
         }
+
         return value;
     }
 
@@ -932,6 +970,15 @@ public abstract class ResteasyReactiveRequestContext
         return getResourceLocatorPathParam(name, previousResource);
     }
 
+    public FormData getFormData() {
+        return formData;
+    }
+
+    public ResteasyReactiveRequestContext setFormData(FormData formData) {
+        this.formData = formData;
+        return this;
+    }
+
     private String getResourceLocatorPathParam(String name, PreviousResource previousResource) {
         if (previousResource == null) {
             return null;
@@ -973,6 +1020,8 @@ public abstract class ResteasyReactiveRequestContext
         }
         return getResourceLocatorPathParam(name, previousResource.prev);
     }
+
+    public abstract boolean resumeExternalProcessing();
 
     static class PreviousResource {
 

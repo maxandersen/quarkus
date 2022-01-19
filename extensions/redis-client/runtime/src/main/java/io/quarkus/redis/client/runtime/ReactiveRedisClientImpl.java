@@ -40,13 +40,13 @@ class ReactiveRedisClientImpl implements ReactiveRedisClient {
     }
 
     @Override
-    public Uni<Response> auth(String arg0) {
-        return redisAPI.auth(arg0);
+    public Uni<Response> auth(List<String> args) {
+        return redisAPI.auth(args);
     }
 
     @Override
-    public Response authAndAwait(String arg0) {
-        return redisAPI.authAndAwait(arg0);
+    public Response authAndAwait(List<String> args) {
+        return redisAPI.authAndAwait(args);
     }
 
     @Override
@@ -180,13 +180,13 @@ class ReactiveRedisClientImpl implements ReactiveRedisClient {
     }
 
     @Override
-    public Uni<Response> command() {
-        return redisAPI.command();
+    public Uni<Response> command(List<String> args) {
+        return redisAPI.command(args);
     }
 
     @Override
-    public Response commandAndAwait() {
-        return redisAPI.commandAndAwait();
+    public Response commandAndAwait(List<String> args) {
+        return redisAPI.commandAndAwait(args);
     }
 
     @Override
@@ -751,11 +751,21 @@ class ReactiveRedisClientImpl implements ReactiveRedisClient {
 
     @Override
     public Uni<Response> lpop(String arg0) {
+        return redisAPI.lpop(List.of(arg0));
+    }
+
+    @Override
+    public Uni<Response> lpop(List<String> arg0) {
         return redisAPI.lpop(arg0);
     }
 
     @Override
     public Response lpopAndAwait(String arg0) {
+        return redisAPI.lpopAndAwait(List.of(arg0));
+    }
+
+    @Override
+    public Response lpopAndAwait(List<String> arg0) {
         return redisAPI.lpopAndAwait(arg0);
     }
 
@@ -1041,12 +1051,22 @@ class ReactiveRedisClientImpl implements ReactiveRedisClient {
 
     @Override
     public Uni<Response> psync(String arg0, String arg1) {
-        return redisAPI.psync(arg0, arg1);
+        return redisAPI.psync(List.of(arg0, arg1));
+    }
+
+    @Override
+    public Uni<Response> psync(List<String> args) {
+        return redisAPI.psync(args);
+    }
+
+    @Override
+    public Response psyncAndAwait(List<String> args) {
+        return redisAPI.psyncAndAwait(args);
     }
 
     @Override
     public Response psyncAndAwait(String arg0, String arg1) {
-        return redisAPI.psyncAndAwait(arg0, arg1);
+        return redisAPI.psyncAndAwait(List.of(arg0, arg1));
     }
 
     @Override
@@ -1191,12 +1211,22 @@ class ReactiveRedisClientImpl implements ReactiveRedisClient {
 
     @Override
     public Uni<Response> rpop(String arg0) {
-        return redisAPI.rpop(arg0);
+        return redisAPI.rpop(List.of(arg0));
+    }
+
+    @Override
+    public Uni<Response> rpop(List<String> args) {
+        return redisAPI.rpop(args);
+    }
+
+    @Override
+    public Response rpopAndAwait(List<String> args) {
+        return redisAPI.rpopAndAwait(args);
     }
 
     @Override
     public Response rpopAndAwait(String arg0) {
-        return redisAPI.rpopAndAwait(arg0);
+        return redisAPI.rpopAndAwait(List.of(arg0));
     }
 
     @Override
@@ -2007,6 +2037,16 @@ class ReactiveRedisClientImpl implements ReactiveRedisClient {
     @Override
     public Response zscoreAndAwait(String arg0, String arg1) {
         return redisAPI.zscoreAndAwait(arg0, arg1);
+    }
+
+    @Override
+    public Uni<Response> zunion(List<String> args) {
+        return redisAPI.zunion(args);
+    }
+
+    @Override
+    public Response zunionAndAwait(List<String> args) {
+        return redisAPI.zunionAndAwait(args);
     }
 
     @Override

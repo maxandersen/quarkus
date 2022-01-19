@@ -4,13 +4,15 @@ import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.util.PropertyUtils;
+import io.quarkus.fs.util.ZipUtils;
+import io.quarkus.maven.dependency.ArtifactCoords;
+import io.quarkus.maven.dependency.GACTV;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -57,8 +59,8 @@ public class ModelUtils {
      * @param appArtifact application artifact
      * @return provisioning state artifact
      */
-    public static AppArtifact getStateArtifact(AppArtifact appArtifact) {
-        return new AppArtifact(appArtifact.getGroupId() + ".quarkus.curate",
+    public static ArtifactCoords getStateArtifact(ArtifactCoords appArtifact) {
+        return new GACTV(appArtifact.getGroupId() + ".quarkus.curate",
                 appArtifact.getArtifactId(),
                 "",
                 "pom",
@@ -104,7 +106,7 @@ public class ModelUtils {
     }
 
     public static AppArtifact resolveAppArtifact(Path appJar) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(appJar, (ClassLoader) null)) {
+        try (FileSystem fs = ZipUtils.newFileSystem(appJar)) {
             final Path metaInfMaven = fs.getPath("META-INF", "maven");
             if (Files.exists(metaInfMaven)) {
                 try (DirectoryStream<Path> groupIds = Files.newDirectoryStream(metaInfMaven)) {
@@ -140,7 +142,7 @@ public class ModelUtils {
     }
 
     public static Model readAppModel(Path appJar, AppArtifact appArtifact) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(appJar, (ClassLoader) null)) {
+        try (FileSystem fs = ZipUtils.newFileSystem(appJar)) {
             final Path pomXml = fs.getPath("META-INF", "maven", appArtifact.getGroupId(), appArtifact.getArtifactId(),
                     "pom.xml");
             if (!Files.exists(pomXml)) {
@@ -151,7 +153,7 @@ public class ModelUtils {
     }
 
     static Model readAppModel(Path appJar) throws IOException {
-        try (FileSystem fs = FileSystems.newFileSystem(appJar, (ClassLoader) null)) {
+        try (FileSystem fs = ZipUtils.newFileSystem(appJar)) {
             final Path metaInfMaven = fs.getPath("META-INF", "maven");
             if (Files.exists(metaInfMaven)) {
                 try (DirectoryStream<Path> groupIds = Files.newDirectoryStream(metaInfMaven)) {
@@ -236,6 +238,11 @@ public class ModelUtils {
             final String resolved = props.get(matcher.group(1));
             if (resolved == null) {
                 return null;
+            }
+            if (resolved.contains("${")) {
+                throw new IllegalArgumentException("Illegal placeholder in Maven CI friendly version property \""
+                        + matcher.group(1) + "\": " + resolved
+                        + "\n\tPlease consult https://maven.apache.org/maven-ci-friendly.html#single-project-setup");
             }
             matcher.appendReplacement(sb, resolved);
         }

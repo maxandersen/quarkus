@@ -18,6 +18,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.mailer.MailTemplate;
 import io.quarkus.mailer.runtime.BlockingMailerImpl;
@@ -26,7 +27,6 @@ import io.quarkus.mailer.runtime.MailTemplateProducer;
 import io.quarkus.mailer.runtime.MailerSupportProducer;
 import io.quarkus.mailer.runtime.MockMailboxImpl;
 import io.quarkus.mailer.runtime.MutinyMailerImpl;
-import io.quarkus.mailer.runtime.ReactiveMailerImpl;
 import io.quarkus.qute.deployment.CheckedTemplateAdapterBuildItem;
 import io.quarkus.qute.deployment.QuteProcessor;
 import io.quarkus.qute.deployment.TemplatePathBuildItem;
@@ -36,17 +36,14 @@ public class MailerProcessor {
     private static final DotName MAIL_TEMPLATE = DotName.createSimple(MailTemplate.class.getName());
 
     @BuildStep
-    void unremoveableBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
-        additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(MailClientProducer.class));
-        additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(MailerSupportProducer.class));
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem registerMailers() {
-        return AdditionalBeanBuildItem.builder()
-                .addBeanClasses(ReactiveMailerImpl.class, MutinyMailerImpl.class, BlockingMailerImpl.class,
-                        MockMailboxImpl.class, MailTemplateProducer.class)
-                .build();
+    void registerBeans(BuildProducer<AdditionalBeanBuildItem> beans) {
+        beans.produce(AdditionalBeanBuildItem.builder().setUnremovable()
+                .addBeanClasses(MutinyMailerImpl.class, BlockingMailerImpl.class,
+                        MailClientProducer.class, MailerSupportProducer.class)
+                .build());
+        beans.produce(AdditionalBeanBuildItem.builder()
+                .addBeanClasses(MockMailboxImpl.class, MailTemplateProducer.class)
+                .build());
     }
 
     @BuildStep
@@ -60,7 +57,7 @@ public class MailerProcessor {
     }
 
     @BuildStep
-    void registerAuthClass(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+    NativeImageConfigBuildItem registerAuthClass(BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
         // We must register the auth provider used by the Vert.x mail clients
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, true,
                 "io.vertx.ext.mail.impl.sasl.AuthDigestMD5",
@@ -70,6 +67,12 @@ public class MailerProcessor {
                 "io.vertx.ext.mail.impl.sasl.AuthDigestMD5",
                 "io.vertx.ext.mail.impl.sasl.AuthPlain",
                 "io.vertx.ext.mail.impl.sasl.AuthLogin"));
+
+        // Register io.vertx.ext.mail.impl.sasl.NTLMEngineImpl to be initialized at runtime, it uses a static random.
+        NativeImageConfigBuildItem.Builder builder = NativeImageConfigBuildItem.builder();
+        builder.addRuntimeInitializedClass("io.vertx.ext.mail.impl.sasl.NTLMEngineImpl");
+
+        return builder.build();
     }
 
     @BuildStep
@@ -102,7 +105,7 @@ public class MailerProcessor {
 
         for (InjectionPointInfo injectionPoint : validationPhase.getContext().get(BuildExtension.Key.INJECTION_POINTS)) {
             if (injectionPoint.getRequiredType().name().equals(MAIL_TEMPLATE)) {
-                AnnotationInstance resourcePath = injectionPoint.getRequiredQualifier(QuteProcessor.RESOURCE_PATH);
+                AnnotationInstance resourcePath = injectionPoint.getRequiredQualifier(QuteProcessor.LOCATION);
                 String name;
                 if (resourcePath != null) {
                     name = resourcePath.value().asString();

@@ -29,6 +29,9 @@ import javax.ws.rs.core.Variant;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.WriterInterceptor;
+import org.jboss.resteasy.reactive.FilePart;
+import org.jboss.resteasy.reactive.PathPart;
+import org.jboss.resteasy.reactive.common.PreserveTargetException;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 import org.jboss.resteasy.reactive.common.headers.HeaderUtil;
 import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
@@ -47,9 +50,12 @@ import org.jboss.resteasy.reactive.server.providers.serialisers.ServerCharArrayM
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerCharacterMessageBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerDefaultTextPlainBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFileBodyHandler;
+import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFilePartBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerFormUrlEncodedProvider;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerInputStreamMessageBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerNumberMessageBodyHandler;
+import org.jboss.resteasy.reactive.server.providers.serialisers.ServerPathBodyHandler;
+import org.jboss.resteasy.reactive.server.providers.serialisers.ServerPathPartBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerReaderBodyHandler;
 import org.jboss.resteasy.reactive.server.providers.serialisers.ServerStringMessageBodyHandler;
 import org.jboss.resteasy.reactive.server.spi.ServerHttpRequest;
@@ -65,46 +71,6 @@ public class ServerSerialisers extends Serialisers {
         }
     };
 
-    public static BuiltinReader[] BUILTIN_READERS = new BuiltinReader[] {
-            new BuiltinReader(String.class, ServerStringMessageBodyHandler.class,
-                    MediaType.WILDCARD),
-            new BuiltinReader(Boolean.class, ServerBooleanMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinReader(Character.class, ServerCharacterMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinReader(Number.class, ServerNumberMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinReader(InputStream.class, ServerInputStreamMessageBodyHandler.class, MediaType.WILDCARD),
-            new BuiltinReader(Reader.class, ServerReaderBodyHandler.class, MediaType.WILDCARD),
-            new BuiltinReader(File.class, ServerFileBodyHandler.class, MediaType.WILDCARD),
-
-            new BuiltinReader(byte[].class, ServerByteArrayMessageBodyHandler.class, MediaType.WILDCARD),
-            new BuiltinReader(Object.class, ServerDefaultTextPlainBodyHandler.class, MediaType.TEXT_PLAIN, RuntimeType.SERVER),
-    };
-    public static BuiltinWriter[] BUILTIN_WRITERS = new BuiltinWriter[] {
-            new BuiltinWriter(String.class, ServerStringMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinWriter(Number.class, ServerStringMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinWriter(Boolean.class, ServerStringMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinWriter(Character.class, ServerStringMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinWriter(Object.class, ServerStringMessageBodyHandler.class,
-                    MediaType.WILDCARD),
-            new BuiltinWriter(char[].class, ServerCharArrayMessageBodyHandler.class,
-                    MediaType.TEXT_PLAIN),
-            new BuiltinWriter(byte[].class, ServerByteArrayMessageBodyHandler.class,
-                    MediaType.WILDCARD),
-            new BuiltinWriter(MultivaluedMap.class, ServerFormUrlEncodedProvider.class,
-                    MediaType.APPLICATION_FORM_URLENCODED),
-            new BuiltinWriter(InputStream.class, ServerInputStreamMessageBodyHandler.class,
-                    MediaType.WILDCARD),
-            new BuiltinWriter(Reader.class, ServerReaderBodyHandler.class,
-                    MediaType.WILDCARD),
-            new BuiltinWriter(File.class, ServerFileBodyHandler.class,
-                    MediaType.WILDCARD),
-    };
     private static final String CONTENT_TYPE = "Content-Type"; // use this instead of the Vert.x constant because the TCK expects upper case
 
     static {
@@ -117,6 +83,52 @@ public class ServerSerialisers extends Serialisers {
         primitivesToWrappers.put(float.class, Float.class);
         primitivesToWrappers.put(double.class, Double.class);
     }
+
+    public final static List<Serialisers.BuiltinReader> BUILTIN_READERS = List.of(
+            new Serialisers.BuiltinReader(String.class, ServerStringMessageBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinReader(Boolean.class, ServerBooleanMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinReader(Character.class, ServerCharacterMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinReader(Number.class, ServerNumberMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinReader(InputStream.class, ServerInputStreamMessageBodyHandler.class, MediaType.WILDCARD),
+            new Serialisers.BuiltinReader(Reader.class, ServerReaderBodyHandler.class, MediaType.WILDCARD),
+            new Serialisers.BuiltinReader(File.class, ServerFileBodyHandler.class, MediaType.WILDCARD),
+
+            new Serialisers.BuiltinReader(byte[].class, ServerByteArrayMessageBodyHandler.class, MediaType.WILDCARD),
+            new Serialisers.BuiltinReader(Object.class, ServerDefaultTextPlainBodyHandler.class, MediaType.TEXT_PLAIN,
+                    RuntimeType.SERVER));
+    public final static List<Serialisers.BuiltinWriter> BUILTIN_WRITERS = List.of(
+            new Serialisers.BuiltinWriter(String.class, ServerStringMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinWriter(Number.class, ServerStringMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinWriter(Boolean.class, ServerStringMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinWriter(Character.class, ServerStringMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinWriter(Object.class, ServerStringMessageBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(char[].class, ServerCharArrayMessageBodyHandler.class,
+                    MediaType.TEXT_PLAIN),
+            new Serialisers.BuiltinWriter(byte[].class, ServerByteArrayMessageBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(MultivaluedMap.class, ServerFormUrlEncodedProvider.class,
+                    MediaType.APPLICATION_FORM_URLENCODED),
+            new Serialisers.BuiltinWriter(InputStream.class, ServerInputStreamMessageBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(Reader.class, ServerReaderBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(File.class, ServerFileBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(FilePart.class, ServerFilePartBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(java.nio.file.Path.class, ServerPathBodyHandler.class,
+                    MediaType.WILDCARD),
+            new Serialisers.BuiltinWriter(PathPart.class, ServerPathPartBodyHandler.class,
+                    MediaType.WILDCARD));
 
     public static final MessageBodyWriter<?>[] NO_WRITER = new MessageBodyWriter[0];
     public static final MessageBodyReader<?>[] NO_READER = new MessageBodyReader[0];
@@ -223,12 +235,13 @@ public class ServerSerialisers extends Serialisers {
             //and the pre commit listener will interfere with that
             context.serverResponse().setPreCommitListener(null);
             if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
+                throw new PreserveTargetException(e);
             } else if (e instanceof IOException) {
-                throw (IOException) e;
+                throw new PreserveTargetException(e);
             } else {
-                throw new RuntimeException(e);
+                throw new PreserveTargetException(new RuntimeException(e));
             }
+
         }
     }
 
@@ -316,7 +329,7 @@ public class ServerSerialisers extends Serialisers {
                 selectedResourceWriters = new ArrayList<>(1);
                 selectedResourceWriters.add(resourceWriter);
             } else {
-                int compare = MediaTypeHelper.COMPARATOR.compare(current.getValue(), selectedMediaTypes.getValue());
+                int compare = MediaTypeHelper.Q_COMPARATOR.compare(current.getValue(), selectedMediaTypes.getValue());
                 if (compare == 0) {
                     selectedResourceWriters.add(resourceWriter);
                 } else if (compare < 0) {
@@ -382,16 +395,6 @@ public class ServerSerialisers extends Serialisers {
             }
         }
         return new NoMediaTypeResult(finalResult.toArray(NO_WRITER), selected, serialisers);
-    }
-
-    @Override
-    public BuiltinWriter[] getBultinWriters() {
-        return BUILTIN_WRITERS;
-    }
-
-    @Override
-    public BuiltinReader[] getBultinReaders() {
-        return BUILTIN_READERS;
     }
 
     public static class NoMediaTypeResult {
@@ -461,7 +464,8 @@ public class ServerSerialisers extends Serialisers {
 
     public static void encodeResponseHeaders(ResteasyReactiveRequestContext requestContext) {
         ServerHttpResponse vertxResponse = requestContext.serverResponse();
-        if (!requestContext.getResponse().isCreated()) {
+        LazyResponse lazyResponse = requestContext.getResponse();
+        if (!lazyResponse.isCreated() && lazyResponse.isPredetermined()) {
             //fast path
             //there is no response, so we just set the content type
             if (requestContext.getResponseEntity() == null) {
@@ -481,7 +485,9 @@ public class ServerSerialisers extends Serialisers {
         for (Map.Entry<String, List<Object>> entry : headers.entrySet()) {
             if (entry.getValue().size() == 1) {
                 Object o = entry.getValue().get(0);
-                if (o instanceof CharSequence) {
+                if (o == null) {
+                    vertxResponse.setResponseHeader(entry.getKey(), "");
+                } else if (o instanceof CharSequence) {
                     vertxResponse.setResponseHeader(entry.getKey(), (CharSequence) o);
                 } else {
                     vertxResponse.setResponseHeader(entry.getKey(), (CharSequence) HeaderUtil.headerToString(o));

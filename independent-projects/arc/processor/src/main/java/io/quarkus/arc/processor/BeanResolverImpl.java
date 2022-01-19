@@ -9,6 +9,7 @@ import static org.jboss.jandex.Type.Kind.WILDCARD_TYPE;
 
 import io.quarkus.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -36,16 +37,9 @@ class BeanResolverImpl implements BeanResolver {
     }
 
     @Override
-    public Set<BeanInfo> resolveBeans(Type requiredType, AnnotationInstance... requiredQualifiers) {
+    public Set<BeanInfo> resolveBeans(Type requiredType, Set<AnnotationInstance> requiredQualifiers) {
         Objects.requireNonNull(requiredType, "Required type must not be null");
-        Set<AnnotationInstance> qualifiers;
-        if (requiredQualifiers.length == 0) {
-            qualifiers = Collections.emptySet();
-        } else {
-            qualifiers = new HashSet<>();
-            Collections.addAll(qualifiers, requiredQualifiers);
-        }
-        TypeAndQualifiers typeAndQualifiers = new TypeAndQualifiers(requiredType, qualifiers);
+        TypeAndQualifiers typeAndQualifiers = new TypeAndQualifiers(requiredType, requiredQualifiers);
         // Note that this method must not cache the results beacause it can be used before synthetic components are registered
         List<BeanInfo> beans = findMatching(typeAndQualifiers);
         Set<BeanInfo> ret;
@@ -81,7 +75,9 @@ class BeanResolverImpl implements BeanResolver {
 
     private List<BeanInfo> findMatching(TypeAndQualifiers typeAndQualifiers) {
         List<BeanInfo> resolved = new ArrayList<>();
-        for (BeanInfo b : beanDeployment.getBeans()) {
+        //optimisation for the simple class case
+        Collection<BeanInfo> potentialBeans = potentialBeans(typeAndQualifiers.type);
+        for (BeanInfo b : potentialBeans) {
             if (Beans.matches(b, typeAndQualifiers)) {
                 resolved.add(b);
             }
@@ -91,12 +87,21 @@ class BeanResolverImpl implements BeanResolver {
 
     List<BeanInfo> findTypeMatching(Type type) {
         List<BeanInfo> resolved = new ArrayList<>();
-        for (BeanInfo b : beanDeployment.getBeans()) {
+        //optimisation for the simple class case
+        Collection<BeanInfo> potentialBeans = potentialBeans(type);
+        for (BeanInfo b : potentialBeans) {
             if (Beans.matchesType(b, type)) {
                 resolved.add(b);
             }
         }
         return resolved.isEmpty() ? Collections.emptyList() : resolved;
+    }
+
+    Collection<BeanInfo> potentialBeans(Type type) {
+        if ((type.kind() == CLASS || type.kind() == PARAMETERIZED_TYPE) && !type.name().equals(DotNames.OBJECT)) {
+            return beanDeployment.getBeansByRawType(type.name());
+        }
+        return beanDeployment.getBeans();
     }
 
     boolean matches(Type requiredType, Type beanType) {

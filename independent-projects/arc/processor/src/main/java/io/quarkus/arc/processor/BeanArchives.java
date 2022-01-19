@@ -1,7 +1,9 @@
 package io.quarkus.arc.processor;
 
+import io.quarkus.arc.All;
 import io.quarkus.arc.Lock;
 import io.quarkus.arc.impl.ActivateRequestContextInterceptor;
+import io.quarkus.arc.impl.Identified;
 import io.quarkus.arc.impl.InjectableRequestContextController;
 import io.quarkus.arc.impl.LockInterceptor;
 import java.io.IOException;
@@ -32,6 +34,7 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
+import org.jboss.jandex.ModuleInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
@@ -66,6 +69,8 @@ public final class BeanArchives {
         index(indexer, Intercepted.class.getName());
         index(indexer, Model.class.getName());
         index(indexer, Lock.class.getName());
+        index(indexer, All.class.getName());
+        index(indexer, Identified.class.getName());
         // Arc built-in beans
         index(indexer, ActivateRequestContextInterceptor.class.getName());
         index(indexer, InjectableRequestContextController.class.getName());
@@ -177,6 +182,21 @@ public final class BeanArchives {
             return this.index.getAnnotationsWithRepeatable(annotationName, index);
         }
 
+        @Override
+        public Collection<ModuleInfo> getKnownModules() {
+            return this.index.getKnownModules();
+        }
+
+        @Override
+        public ModuleInfo getModuleByName(DotName moduleName) {
+            return this.index.getModuleByName(moduleName);
+        }
+
+        @Override
+        public Collection<ClassInfo> getKnownUsers(DotName className) {
+            return this.index.getKnownUsers(className);
+        }
+
         private void getAllKnownSubClasses(DotName className, Set<ClassInfo> allKnown, Set<DotName> processedClasses) {
             final Set<DotName> subClassesToProcess = new HashSet<DotName>();
             subClassesToProcess.add(className);
@@ -244,7 +264,8 @@ public final class BeanArchives {
 
     static boolean index(Indexer indexer, String className, ClassLoader classLoader) {
         boolean result = false;
-        if (Types.isPrimitiveClassName(className)) {
+        if (Types.isPrimitiveClassName(className) || className.startsWith("[")) {
+            // Ignore primitives and arrays
             return false;
         }
         try (InputStream stream = classLoader

@@ -1,60 +1,63 @@
 package io.quarkus.resteasy.reactive.common.deployment;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import javax.ws.rs.Priorities;
-import javax.ws.rs.RuntimeType;
 import javax.ws.rs.ext.RuntimeDelegate;
 
-import org.jboss.jandex.AnnotationInstance;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.Type;
+import org.jboss.jandex.Indexer;
 import org.jboss.resteasy.reactive.common.jaxrs.RuntimeDelegateImpl;
 import org.jboss.resteasy.reactive.common.model.InterceptorContainer;
 import org.jboss.resteasy.reactive.common.model.PreMatchInterceptorContainer;
 import org.jboss.resteasy.reactive.common.model.ResourceInterceptor;
 import org.jboss.resteasy.reactive.common.model.ResourceInterceptors;
-import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
 import org.jboss.resteasy.reactive.common.processor.scanning.ApplicationScanningResult;
-import org.jboss.resteasy.reactive.common.processor.scanning.ApplicationScanningResult.KeepProviderResult;
 import org.jboss.resteasy.reactive.common.processor.scanning.ResourceScanningResult;
 import org.jboss.resteasy.reactive.common.processor.scanning.ResteasyReactiveInterceptorScanner;
 import org.jboss.resteasy.reactive.common.processor.scanning.ResteasyReactiveScanner;
+import org.jboss.resteasy.reactive.common.processor.scanning.SerializerScanningResult;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
-import io.quarkus.arc.deployment.PreAdditionalBeanBuildTimeConditionBuildItem;
+import io.quarkus.arc.deployment.BuildTimeConditionBuildItem;
+import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
-import io.quarkus.deployment.util.JandexUtil;
-import io.quarkus.resteasy.reactive.common.runtime.JaxRsSecurityConfig;
 import io.quarkus.resteasy.reactive.common.runtime.ResteasyReactiveConfig;
 import io.quarkus.resteasy.reactive.spi.AbstractInterceptorBuildItem;
+import io.quarkus.resteasy.reactive.spi.AdditionalResourceClassBuildItem;
 import io.quarkus.resteasy.reactive.spi.ContainerRequestFilterBuildItem;
 import io.quarkus.resteasy.reactive.spi.ContainerResponseFilterBuildItem;
+import io.quarkus.resteasy.reactive.spi.GeneratedJaxRsResourceBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyReaderBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyReaderOverrideBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyWriterBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyWriterOverrideBuildItem;
 import io.quarkus.resteasy.reactive.spi.ReaderInterceptorBuildItem;
 import io.quarkus.resteasy.reactive.spi.WriterInterceptorBuildItem;
-import io.quarkus.security.spi.AdditionalSecuredClassesBuildIem;
+import io.quarkus.security.spi.AdditionalSecuredClassesBuildItem;
 import io.quarkus.security.spi.SecurityTransformerUtils;
 
 public class ResteasyReactiveCommonProcessor {
@@ -64,10 +67,19 @@ public class ResteasyReactiveCommonProcessor {
 
     @BuildStep
     void setUpDenyAllJaxRs(CombinedIndexBuildItem index,
-            JaxRsSecurityConfig config,
+            ResteasyReactiveConfig rrConfig,
             Optional<ResourceScanningResultBuildItem> resteasyDeployment,
-            BuildProducer<AdditionalSecuredClassesBuildIem> additionalSecuredClasses) {
-        if (config.denyJaxRs && resteasyDeployment.isPresent()) {
+            BuildProducer<AdditionalSecuredClassesBuildItem> additionalSecuredClasses) {
+
+        Config config = ConfigProvider.getConfig();
+
+        // we do this in order to avoid having 'io.quarkus.resteasy.reactive.common.runtime.JaxRsSecurityConfig' conflict with 'io.quarkus.resteasy.runtime.JaxRsSecurityConfig'
+        Optional<Boolean> denyUnannotatedEndpointsConfig = config
+                .getOptionalValue("quarkus.security.jaxrs.deny-unannotated-endpoints", Boolean.class);
+        Optional<List<String>> defaultRolesAllowedConfig = config
+                .getOptionalValues("quarkus.security.jaxrs.default-roles-allowed", String.class);
+
+        if (rrConfig.denyJaxRs.orElse(denyUnannotatedEndpointsConfig.orElse(false)) && resteasyDeployment.isPresent()) {
             final List<ClassInfo> classes = new ArrayList<>();
 
             Set<DotName> resourceClasses = resteasyDeployment.get().getResult().getScannedResourcePaths().keySet();
@@ -78,18 +90,27 @@ public class ResteasyReactiveCommonProcessor {
                 }
             }
 
-            additionalSecuredClasses.produce(new AdditionalSecuredClassesBuildIem(classes));
+            additionalSecuredClasses.produce(new AdditionalSecuredClassesBuildItem(classes));
+        } else if (defaultRolesAllowedConfig.isPresent() && resteasyDeployment.isPresent()) {
+
+            final List<ClassInfo> classes = new ArrayList<>();
+            Set<DotName> resourceClasses = resteasyDeployment.get().getResult().getScannedResourcePaths().keySet();
+            for (DotName className : resourceClasses) {
+                ClassInfo classInfo = index.getIndex().getClassByName(className);
+                if (!SecurityTransformerUtils.hasSecurityAnnotation(classInfo)) {
+                    classes.add(classInfo);
+                }
+            }
+            additionalSecuredClasses
+                    .produce(new AdditionalSecuredClassesBuildItem(classes, defaultRolesAllowedConfig));
         }
     }
 
     @BuildStep
     ApplicationResultBuildItem handleApplication(CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            List<PreAdditionalBeanBuildTimeConditionBuildItem> buildTimeConditions,
+            List<BuildTimeConditionBuildItem> buildTimeConditions,
             ResteasyReactiveConfig config) {
-        // Use the "pre additional bean" build time conditions since we need to be able to filter the beans
-        // before actually adding them otherwise if we use normal build time conditions, we end up
-        // with a circular dependency
         ApplicationScanningResult result = ResteasyReactiveScanner
                 .scanForApplicationClass(combinedIndexBuildItem.getComputingIndex(),
                         config.buildTimeConditionAware ? getExcludedClasses(buildTimeConditions) : Collections.emptySet());
@@ -159,6 +180,7 @@ public class ResteasyReactiveCommonProcessor {
         }
         if (filterItem instanceof ContainerRequestFilterBuildItem) {
             interceptor.setNonBlockingRequired(((ContainerRequestFilterBuildItem) filterItem).isNonBlockingRequired());
+            interceptor.setReadBody(((ContainerRequestFilterBuildItem) filterItem).isReadBody());
         }
         if (interceptors instanceof PreMatchInterceptorContainer
                 && ((ContainerRequestFilterBuildItem) filterItem).isPreMatching()) {
@@ -200,13 +222,37 @@ public class ResteasyReactiveCommonProcessor {
     }
 
     @BuildStep
+    JaxRsResourceIndexBuildItem resourceIndex(CombinedIndexBuildItem combinedIndex,
+            List<GeneratedJaxRsResourceBuildItem> generatedJaxRsResources,
+            BuildProducer<GeneratedBeanBuildItem> generatedBeansProducer) throws IOException {
+        if (generatedJaxRsResources.isEmpty()) {
+            return new JaxRsResourceIndexBuildItem(combinedIndex.getComputingIndex());
+        }
+
+        Indexer indexer = new Indexer();
+        for (GeneratedJaxRsResourceBuildItem generatedJaxRsResource : generatedJaxRsResources) {
+            indexer.index(new ByteArrayInputStream(generatedJaxRsResource.getData()));
+            generatedBeansProducer
+                    .produce(new GeneratedBeanBuildItem(generatedJaxRsResource.getName(), generatedJaxRsResource.getData()));
+        }
+        return new JaxRsResourceIndexBuildItem(CompositeIndex.create(combinedIndex.getComputingIndex(), indexer.complete()));
+    }
+
+    @BuildStep
     void scanResources(
-            // TODO: We need to use this index instead of BeanArchiveIndexBuildItem to avoid build cycles. It it OK?
-            CombinedIndexBuildItem combinedIndexBuildItem,
+            JaxRsResourceIndexBuildItem jaxRsResourceIndexBuildItem,
+            List<AdditionalResourceClassBuildItem> additionalResourceClassBuildItems,
             BuildProducer<AnnotationsTransformerBuildItem> annotationsTransformerBuildItemBuildProducer,
             BuildProducer<ResourceScanningResultBuildItem> resourceScanningResultBuildItemBuildProducer) {
 
-        ResourceScanningResult res = ResteasyReactiveScanner.scanResources(combinedIndexBuildItem.getComputingIndex());
+        Map<DotName, ClassInfo> additionalResources = new HashMap<>();
+        Map<DotName, String> additionalResourcePaths = new HashMap<>();
+        for (AdditionalResourceClassBuildItem bi : additionalResourceClassBuildItems) {
+            additionalResources.put(bi.getClassInfo().name(), bi.getClassInfo());
+            additionalResourcePaths.put(bi.getClassInfo().name(), bi.getPath());
+        }
+        ResourceScanningResult res = ResteasyReactiveScanner.scanResources(jaxRsResourceIndexBuildItem.getIndexView(),
+                additionalResources, additionalResourcePaths);
         if (res == null) {
             return;
         }
@@ -233,70 +279,16 @@ public class ResteasyReactiveCommonProcessor {
         }
 
         IndexView index = beanArchiveIndexBuildItem.getIndex();
-        Collection<ClassInfo> writers = index
-                .getAllKnownImplementors(ResteasyReactiveDotNames.MESSAGE_BODY_WRITER);
-        Collection<ClassInfo> readers = index
-                .getAllKnownImplementors(ResteasyReactiveDotNames.MESSAGE_BODY_READER);
-
-        for (ClassInfo writerClass : writers) {
-            KeepProviderResult keepProviderResult = applicationResultBuildItem.getResult().keepProvider(writerClass);
-            if (keepProviderResult != KeepProviderResult.DISCARD) {
-                RuntimeType runtimeType = null;
-                if (keepProviderResult == KeepProviderResult.SERVER_ONLY) {
-                    runtimeType = RuntimeType.SERVER;
-                }
-                List<String> mediaTypeStrings = Collections.emptyList();
-                AnnotationInstance producesAnnotation = writerClass.classAnnotation(ResteasyReactiveDotNames.PRODUCES);
-                if (producesAnnotation != null) {
-                    mediaTypeStrings = Arrays.asList(producesAnnotation.value().asStringArray());
-                }
-                List<Type> typeParameters = JandexUtil.resolveTypeParameters(writerClass.name(),
-                        ResteasyReactiveDotNames.MESSAGE_BODY_WRITER,
-                        index);
-                String writerClassName = writerClass.name().toString();
-                AnnotationInstance constrainedToInstance = writerClass.classAnnotation(ResteasyReactiveDotNames.CONSTRAINED_TO);
-                if (constrainedToInstance != null) {
-                    runtimeType = RuntimeType.valueOf(constrainedToInstance.value().asEnum());
-                }
-                int priority = Priorities.USER;
-                AnnotationInstance priorityInstance = writerClass.classAnnotation(ResteasyReactiveDotNames.PRIORITY);
-                if (priorityInstance != null) {
-                    priority = priorityInstance.value().asInt();
-                }
-                messageBodyWriterBuildItemBuildProducer.produce(new MessageBodyWriterBuildItem(writerClassName,
-                        typeParameters.get(0).name().toString(), mediaTypeStrings, runtimeType, false, priority));
-            }
+        SerializerScanningResult serializers = ResteasyReactiveScanner.scanForSerializers(index,
+                applicationResultBuildItem.getResult());
+        for (var i : serializers.getReaders()) {
+            messageBodyReaderBuildItemBuildProducer.produce(new MessageBodyReaderBuildItem(i.getClassName(),
+                    i.getHandledClassName(), i.getMediaTypeStrings(), i.getRuntimeType(), i.isBuiltin(), i.getPriority()));
+            reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, i.getClassName()));
         }
-
-        for (ClassInfo readerClass : readers) {
-            KeepProviderResult keepProviderResult = applicationResultBuildItem.getResult().keepProvider(readerClass);
-            if (keepProviderResult != KeepProviderResult.DISCARD) {
-                List<Type> typeParameters = JandexUtil.resolveTypeParameters(readerClass.name(),
-                        ResteasyReactiveDotNames.MESSAGE_BODY_READER,
-                        index);
-                RuntimeType runtimeType = null;
-                if (keepProviderResult == KeepProviderResult.SERVER_ONLY) {
-                    runtimeType = RuntimeType.SERVER;
-                }
-                List<String> mediaTypeStrings = Collections.emptyList();
-                String readerClassName = readerClass.name().toString();
-                AnnotationInstance consumesAnnotation = readerClass.classAnnotation(ResteasyReactiveDotNames.CONSUMES);
-                if (consumesAnnotation != null) {
-                    mediaTypeStrings = Arrays.asList(consumesAnnotation.value().asStringArray());
-                }
-                AnnotationInstance constrainedToInstance = readerClass.classAnnotation(ResteasyReactiveDotNames.CONSTRAINED_TO);
-                if (constrainedToInstance != null) {
-                    runtimeType = RuntimeType.valueOf(constrainedToInstance.value().asEnum());
-                }
-                int priority = Priorities.USER;
-                AnnotationInstance priorityInstance = readerClass.classAnnotation(ResteasyReactiveDotNames.PRIORITY);
-                if (priorityInstance != null) {
-                    priority = priorityInstance.value().asInt();
-                }
-                messageBodyReaderBuildItemBuildProducer.produce(new MessageBodyReaderBuildItem(readerClassName,
-                        typeParameters.get(0).name().toString(), mediaTypeStrings, runtimeType, false, priority));
-                reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, false, readerClassName));
-            }
+        for (var i : serializers.getWriters()) {
+            messageBodyWriterBuildItemBuildProducer.produce(new MessageBodyWriterBuildItem(i.getClassName(),
+                    i.getHandledClassName(), i.getMediaTypeStrings(), i.getRuntimeType(), i.isBuiltin(), i.getPriority()));
         }
     }
 
@@ -335,10 +327,10 @@ public class ResteasyReactiveCommonProcessor {
      * @param buildTimeConditions the build time conditions from which the excluded classes are extracted.
      * @return the set of classes that have been annotated with unsuccessful build time conditions.
      */
-    private static Set<String> getExcludedClasses(List<PreAdditionalBeanBuildTimeConditionBuildItem> buildTimeConditions) {
+    private static Set<String> getExcludedClasses(List<BuildTimeConditionBuildItem> buildTimeConditions) {
         return buildTimeConditions.stream()
                 .filter(item -> !item.isEnabled())
-                .map(PreAdditionalBeanBuildTimeConditionBuildItem::getTarget)
+                .map(BuildTimeConditionBuildItem::getTarget)
                 .filter(target -> target.kind() == AnnotationTarget.Kind.CLASS)
                 .map(target -> target.asClass().toString())
                 .collect(Collectors.toSet());

@@ -6,8 +6,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -22,7 +20,7 @@ public class OpenshiftWithRoutePropertiesTest {
 
     @RegisterExtension
     static final QuarkusProdModeTest config = new QuarkusProdModeTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(GreetingResource.class))
+            .withApplicationRoot((jar) -> jar.addClasses(GreetingResource.class))
             .setApplicationName("openshift")
             .setApplicationVersion("0.1-SNAPSHOT")
             .withConfigurationResource("openshift-with-route.properties");
@@ -56,16 +54,17 @@ public class OpenshiftWithRoutePropertiesTest {
         });
 
         assertThat(openshiftList).filteredOn(i -> "Route".equals(i.getKind())).singleElement().satisfies(i -> {
-            assertThat(i).isInstanceOfSatisfying(Route.class, in -> {
+            assertThat(i).isInstanceOfSatisfying(Route.class, r -> {
                 //Check that labels and annotations are also applied to Routes (#10260)
-                assertThat(i.getMetadata()).satisfies(m -> {
+                assertThat(r.getMetadata()).satisfies(m -> {
                     assertThat(m.getName()).isEqualTo("test-it");
                     assertThat(m.getLabels()).contains(entry("foo", "bar"));
                     assertThat(m.getAnnotations()).contains(entry("bar", "baz"));
                     assertThat(m.getAnnotations()).contains(entry("kubernetes.io/tls-acme", "true"));
                     assertThat(m.getNamespace()).isEqualTo("applications");
                 });
-                assertThat(in.getSpec().getHost()).isEqualTo("foo.bar.io");
+                assertThat(r.getSpec().getPort().getTargetPort().getIntVal()).isEqualTo(9090);
+                assertThat(r.getSpec().getHost()).isEqualTo("foo.bar.io");
             });
         });
     }

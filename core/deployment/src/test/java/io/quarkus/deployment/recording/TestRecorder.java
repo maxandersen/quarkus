@@ -59,12 +59,17 @@ public class TestRecorder {
         RESULT.add(bean);
     }
 
+    public void bean(TestJavaBeanWithBoolean bean) {
+        RESULT.add(bean);
+    }
+
     public void bean(NonSerializable bean) {
         RESULT.add(bean);
     }
 
     public void add(RuntimeValue<TestJavaBean> bean) {
         bean.getValue().setIval(bean.getValue().getIval() + 1);
+        bean.getValue().setBoxedIval(bean.getValue().getBoxedIval() + 1);
     }
 
     public void bean(TestConstructorBean bean) {

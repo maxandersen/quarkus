@@ -4,25 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.inject.Inject;
-import javax.transaction.NotSupportedException;
-import javax.transaction.SystemException;
 import javax.transaction.UserTransaction;
 
 import org.hibernate.search.mapper.orm.entity.SearchIndexedEntity;
 import org.hibernate.search.mapper.orm.mapping.SearchMapping;
 import org.hibernate.search.mapper.orm.session.SearchSession;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import io.quarkus.hibernate.search.elasticsearch.test.util.TransactionUtils;
 import io.quarkus.test.QuarkusUnitTest;
 
 public class SinglePersistenceUnitsCdiTest {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
+                    .addClass(TransactionUtils.class)
                     .addClass(DefaultPUEntity.class)
                     .addAsResource("application.properties"));
 
@@ -57,16 +55,6 @@ public class SinglePersistenceUnitsCdiTest {
     }
 
     private void inTransaction(Runnable runnable) {
-        try {
-            transaction.begin();
-            try {
-                runnable.run();
-                transaction.commit();
-            } catch (Exception e) {
-                transaction.rollback();
-            }
-        } catch (SystemException | NotSupportedException e) {
-            throw new IllegalStateException("Transaction exception", e);
-        }
+        TransactionUtils.inTransaction(transaction, runnable);
     }
 }

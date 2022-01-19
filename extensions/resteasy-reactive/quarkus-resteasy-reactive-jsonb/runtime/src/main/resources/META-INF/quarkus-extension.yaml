@@ -1,5 +1,5 @@
----
 name: "RESTEasy Reactive JSON-B"
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
 metadata:
   short-name: "resteasy-reactive-jsonb"
   keywords:
@@ -13,4 +13,14 @@ metadata:
   categories:
   - "web"
   - "reactive"
-  status: "experimental"
+  status: "stable"
+  codestart:
+    name: "resteasy-reactive"
+    kind: "core"
+    languages:
+      - "java"
+      - "kotlin"
+      - "scala"
+    artifact: "io.quarkus:quarkus-project-core-extension-codestarts"
+  config:
+  - "quarkus.resteasy-reactive."

@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Scripting with Quarkus
+= Scripting with Quarkus
 include::./attributes.adoc[]
 :extension-status: preview
 
@@ -80,7 +80,7 @@ public class quarkusapp {
 
 In this guide, we create a straightforward application serving a `hello` endpoint with a single source file, no additional build files like `pom.xml` or `build.gradle` needed. To demonstrate dependency injection, this endpoint uses a `greeting` bean.
 
-image::getting-started-architecture.png[alt=Architecture]
+image::getting-started-architecture.png[alt=Architecture, align=center]
 
 == Creating the initial file
 
@@ -241,7 +241,7 @@ If you want to clear the caches to force resolution use `jbang cache clear`.
 == Using injection
 
 Dependency injection in Quarkus is based on ArC which is a CDI-based dependency injection solution tailored for Quarkus' architecture.
-You can learn more about it in the link:cdi-reference[Contexts and Dependency Injection guide].
+You can learn more about it in the xref:cdi-reference.adoc[Contexts and Dependency Injection guide].
 
 ArC comes as a dependency of `quarkus-resteasy` so you already have it handy.
 

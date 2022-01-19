@@ -2,8 +2,6 @@ package io.quarkus.vertx.http.hotreload;
 
 import static org.hamcrest.CoreMatchers.containsString;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -14,7 +12,7 @@ public class VertxInjectionTest {
 
     @RegisterExtension
     final static QuarkusDevModeTest TEST = new QuarkusDevModeTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(VertxEventBusConsumer.class, VertxEventBusProducer.class));
 
     @Test
@@ -23,9 +21,7 @@ public class VertxInjectionTest {
                 .statusCode(200)
                 .body(containsString("hello"));
 
-        System.out.println("Modification");
         TEST.modifySourceFile("VertxEventBusConsumer.java", s -> s.replace("hello", "bonjour"));
-        System.out.println("After");
         RestAssured.get("/").then()
                 .statusCode(200)
                 .body(containsString("bonjour"));

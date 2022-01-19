@@ -9,11 +9,10 @@ import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import org.jboss.logging.Logger;
@@ -47,7 +46,7 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
 
     private static final int BUFFER_SIZE = 8096;
 
-    private static Headers errorHeaders = new Headers();
+    private static final Headers errorHeaders = new Headers();
     static {
         errorHeaders.putSingle("Content-Type", "application/json");
     }
@@ -138,9 +137,9 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
                     if (baos != null) {
                         if (isBinary(responseBuilder.getHeaders().get("Content-Type"))) {
                             responseBuilder.setIsBase64Encoded(true);
-                            responseBuilder.setBody(Base64.getMimeEncoder().encodeToString(baos.toByteArray()));
+                            responseBuilder.setBody(Base64.getEncoder().encodeToString(baos.toByteArray()));
                         } else {
-                            responseBuilder.setBody(new String(baos.toByteArray(), StandardCharsets.UTF_8));
+                            responseBuilder.setBody(baos.toString(StandardCharsets.UTF_8));
                         }
                     }
                     future.complete(responseBuilder);
@@ -168,8 +167,16 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
         quarkusHeaders.setContextObject(Context.class, context);
         quarkusHeaders.setContextObject(APIGatewayV2HTTPEvent.class, request);
         quarkusHeaders.setContextObject(APIGatewayV2HTTPEvent.RequestContext.class, request.getRequestContext());
+        HttpMethod httpMethod = null;
+        if (request.getRequestContext() != null && request.getRequestContext().getHttp() != null
+                && request.getRequestContext().getHttp().getMethod() != null) {
+            httpMethod = HttpMethod.valueOf(request.getRequestContext().getHttp().getMethod());
+        }
+        if (httpMethod == null) {
+            throw new IllegalStateException("Missing HTTP method in request event");
+        }
         DefaultHttpRequest nettyRequest = new DefaultHttpRequest(HttpVersion.HTTP_1_1,
-                HttpMethod.valueOf(request.getRequestContext().getHttp().getMethod()), ofNullable(request.getRawQueryString())
+                httpMethod, ofNullable(request.getRawQueryString())
                         .filter(q -> !q.isEmpty()).map(q -> request.getRawPath() + '?' + q).orElse(request.getRawPath()),
                 quarkusHeaders);
         if (request.getHeaders() != null) { //apparently this can be null if no headers are sent
@@ -187,7 +194,7 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
         HttpContent requestContent = LastHttpContent.EMPTY_LAST_CONTENT;
         if (request.getBody() != null) {
             if (request.getIsBase64Encoded()) {
-                ByteBuf body = Unpooled.wrappedBuffer(Base64.getMimeDecoder().decode(request.getBody()));
+                ByteBuf body = Unpooled.wrappedBuffer(Base64.getDecoder().decode(request.getBody()));
                 requestContent = new DefaultLastHttpContent(body);
             } else {
                 ByteBuf body = Unpooled.copiedBuffer(request.getBody(), StandardCharsets.UTF_8); //TODO: do we need to look at the request encoding?
@@ -213,23 +220,10 @@ public class LambdaHttpHandler implements RequestHandler<APIGatewayV2HTTPEvent, 
         return baos;
     }
 
-    static Set<String> binaryTypes = new HashSet<>();
-
-    static {
-        binaryTypes.add("application/octet-stream");
-        binaryTypes.add("image/jpeg");
-        binaryTypes.add("image/png");
-        binaryTypes.add("image/gif");
-    }
-
     private boolean isBinary(String contentType) {
         if (contentType != null) {
-            int index = contentType.indexOf(';');
-            if (index >= 0) {
-                return binaryTypes.contains(contentType.substring(0, index));
-            } else {
-                return binaryTypes.contains(contentType);
-            }
+            String ct = contentType.toLowerCase(Locale.ROOT);
+            return !(ct.startsWith("text") || ct.contains("json") || ct.contains("xml") || ct.contains("yaml"));
         }
         return false;
     }

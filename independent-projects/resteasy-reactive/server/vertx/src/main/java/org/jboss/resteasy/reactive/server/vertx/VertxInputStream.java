@@ -17,6 +17,7 @@ import java.io.InterruptedIOException;
 import java.nio.channels.ClosedChannelException;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import org.jboss.resteasy.reactive.common.core.BlockingNotAllowedException;
 
 public class VertxInputStream extends InputStream {
 
@@ -130,7 +131,7 @@ public class VertxInputStream extends InputStream {
             throw new IOException("Stream is closed");
         }
         if (finished) {
-            return -1;
+            return 0;
         }
 
         return exchange.readBytesAvailable();
@@ -139,7 +140,7 @@ public class VertxInputStream extends InputStream {
     @Override
     public void close() throws IOException {
         if (closed) {
-            throw new IOException("Stream is closed");
+            return;
         }
         closed = true;
         try {
@@ -238,7 +239,7 @@ public class VertxInputStream extends InputStream {
 
                     try {
                         if (Context.isOnEventLoopThread()) {
-                            throw new IOException("Attempting a blocking read on io thread");
+                            throw new BlockingNotAllowedException("Attempting a blocking read on io thread");
                         }
                         waiting = true;
                         request.connection().wait(rem);
@@ -293,7 +294,12 @@ public class VertxInputStream extends InputStream {
                 return 0;
             }
 
-            return Integer.parseInt(length);
+            try {
+                return Integer.parseInt(length);
+            } catch (NumberFormatException e) {
+                Long.parseLong(length); // ignore the value as can only return an int anyway
+                return Integer.MAX_VALUE;
+            }
         }
     }
 

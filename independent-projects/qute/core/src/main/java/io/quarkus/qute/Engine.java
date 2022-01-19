@@ -5,8 +5,11 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 /**
- * Represents a central point for template management. It has a dedicated configuration and is able to cache the
- * template definitions.
+ * Represents a central point for template management.
+ * <p>
+ * It has a dedicated configuration and is able to cache the template definitions.
+ * 
+ * @see EngineBuilder
  */
 public interface Engine {
 
@@ -62,6 +65,16 @@ public interface Engine {
     public List<ResultMapper> getResultMappers();
 
     /**
+     * Maps the given result to a string value. If no result mappers are available the {@link Object#toString()} value is used.
+     * 
+     * @param result Must not be null
+     * @param expression Must not be null
+     * @return the string value
+     * @see Engine#getResultMappers()
+     */
+    public String mapResult(Object result, Expression expression);
+
+    /**
      *
      * @param id
      * @param template
@@ -91,14 +104,40 @@ public interface Engine {
      */
     public void removeTemplates(Predicate<String> test);
 
+    /**
+     * 
+     * @param name
+     * @return the section helper factory for the giben name
+     */
     public SectionHelperFactory<?> getSectionHelperFactory(String name);
 
+    /**
+     * 
+     * @return an immutable map of section helper factories
+     */
     public Map<String, SectionHelperFactory<?>> getSectionHelperFactories();
 
+    /**
+     * 
+     * @return an immutable list of value resolvers
+     */
     public List<ValueResolver> getValueResolvers();
 
+    /**
+     * 
+     * @return an immutable list of namespace resolvers
+     */
     public List<NamespaceResolver> getNamespaceResolvers();
 
+    /**
+     * 
+     * @return the evaluator used to evaluate expressions
+     */
     public Evaluator getEvaluator();
+
+    /**
+     * @return an immutable list of template instance initializers
+     */
+    public List<TemplateInstance.Initializer> getTemplateInstanceInitializers();
 
 }

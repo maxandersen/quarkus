@@ -46,7 +46,7 @@ public class DecoratorGenerator extends BeanGenerator {
             Set<String> existingClasses, Map<BeanInfo, String> beanToGeneratedName,
             Predicate<DotName> injectionPointAnnotationsPredicate) {
         super(annotationLiterals, applicationClassPredicate, privateMembers, generateSources, reflectionRegistration,
-                existingClasses, beanToGeneratedName, injectionPointAnnotationsPredicate);
+                existingClasses, beanToGeneratedName, injectionPointAnnotationsPredicate, Collections.emptyList());
     }
 
     /**
@@ -106,9 +106,8 @@ public class DecoratorGenerator extends BeanGenerator {
         implementGetIdentifier(decorator, decoratorCreator);
         implementSupplierGet(decoratorCreator);
         implementCreate(classOutput, decoratorCreator, decorator, providerType, baseName,
-                injectionPointToProviderField,
-                Collections.emptyMap(), Collections.emptyMap(),
-                reflectionRegistration, targetPackage, isApplicationClass);
+                injectionPointToProviderField, Collections.emptyMap(), Collections.emptyMap(),
+                targetPackage, isApplicationClass);
         implementGet(decorator, decoratorCreator, providerType, baseName);
         implementGetTypes(decoratorCreator, beanTypes.getFieldDescriptor());
         implementGetBeanClass(decorator, decoratorCreator);
@@ -277,7 +276,7 @@ public class DecoratorGenerator extends BeanGenerator {
             ResultHandle delegateQualifiersHandle = constructor.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
             for (AnnotationInstance delegateQualifier : decorator.getDelegateQualifiers()) {
                 // Create annotation literal first
-                ClassInfo delegateQualifierClass = decorator.getDeployment().getInterceptorBinding(delegateQualifier.name());
+                ClassInfo delegateQualifierClass = decorator.getDeployment().getQualifier(delegateQualifier.name());
                 constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, delegateQualifiersHandle,
                         annotationLiterals.process(constructor, classOutput, delegateQualifierClass, delegateQualifier,
                                 Types.getPackageName(creator.getClassName())));

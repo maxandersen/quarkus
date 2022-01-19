@@ -1,4 +1,5 @@
 ---
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
 name: "SmallRye JWT"
 metadata:
   keywords:
@@ -6,8 +7,12 @@ metadata:
   - "jwt"
   - "json-web-token"
   - "rbac"
+  - "security"
   guide: "https://quarkus.io/guides/security-jwt"
   categories:
-  - "web"
   - "security"
   status: "stable"
+  config:
+  - "mp.jwt."
+  - "smallrye.jwt."
+  - "quarkus.smallrye-jwt."

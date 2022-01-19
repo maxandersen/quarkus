@@ -21,15 +21,15 @@ import org.apache.maven.model.Model;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import io.quarkus.bootstrap.model.AppArtifactCoords;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.devtools.PlatformAwareTestBase;
 import io.quarkus.devtools.commands.data.QuarkusCommandException;
 import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
 import io.quarkus.devtools.project.QuarkusProjectHelper;
+import io.quarkus.devtools.testing.PlatformAwareTestBase;
 import io.quarkus.devtools.testing.SnapshotTesting;
+import io.quarkus.maven.ArtifactCoords;
+import io.quarkus.maven.ArtifactKey;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 
@@ -42,9 +42,8 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
 
         final ListExtensions listExtensions = new ListExtensions(project);
 
-        final Map<AppArtifactKey, AppArtifactCoords> installed = readByKey(project);
-
-        Assertions.assertNotNull(installed.get(AppArtifactKey.fromString(IO_QUARKUS + ":quarkus-agroal")));
+        final Map<ArtifactKey, ArtifactCoords> installed = readByKey(project);
+        Assertions.assertNotNull(installed.get(ArtifactKey.fromString(IO_QUARKUS + ":quarkus-agroal")));
     }
 
     /**
@@ -60,11 +59,11 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
 
         final ListExtensions listExtensions = new ListExtensions(quarkusProject);
 
-        final Map<AppArtifactKey, AppArtifactCoords> installed = readByKey(quarkusProject);
+        final Map<ArtifactKey, ArtifactCoords> installed = readByKey(quarkusProject);
 
-        Assertions.assertNotNull(installed.get(AppArtifactKey.fromString(IO_QUARKUS + ":quarkus-resteasy")));
+        Assertions.assertNotNull(installed.get(ArtifactKey.fromString(IO_QUARKUS + ":quarkus-resteasy")));
         Assertions.assertNotNull(
-                installed.get(AppArtifactKey.fromString(IO_QUARKUS + ":quarkus-hibernate-validator")));
+                installed.get(ArtifactKey.fromString(IO_QUARKUS + ":quarkus-hibernate-validator")));
     }
 
     @Test
@@ -112,7 +111,7 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
                                     String.format("%s", "https://quarkus.io/guides/rest-json")),
                             "RESTEasy should list as having an guide: " + line);
                 } else if (line.contains("quarkus-hibernate-orm-panache ")) {
-                    assertTrue(line.startsWith("custom"), "Panache should list as being custom: " + line);
+                    assertTrue(line.startsWith("default"), "Panache should list as being custom: " + line);
                     assertTrue(
                             line.contains(String.format("%-25s", getMavenPluginVersion())),
                             "Panache should list as being custom*: " + line);
@@ -135,7 +134,6 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
         final QuarkusProject quarkusProject = createNewProject(new File("target/list-extensions-test", "pom.xml"));
         addExtensions(quarkusProject, "commons-io:commons-io:2.5", "Agroal");
 
-        final PrintStream out = System.out;
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             new ListExtensions(quarkusProject, MessageWriter.info(printStream))
@@ -170,7 +168,7 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
     void testListExtensionsWithoutAPomFile() throws Exception {
         final Path tempDirectory = Files.createTempDirectory("proj");
         final QuarkusProject project = QuarkusProjectHelper.getProject(tempDirectory, BuildTool.MAVEN);
-        final Map<AppArtifactKey, AppArtifactCoords> installed = readByKey(project);
+        final Map<ArtifactKey, ArtifactCoords> installed = readByKey(project);
         assertTrue(installed.isEmpty());
         assertFalse(project.getExtensionsCatalog().getExtensions().isEmpty());
 
@@ -200,8 +198,8 @@ public class ListExtensionsTest extends PlatformAwareTestBase {
         return project;
     }
 
-    private static Map<AppArtifactKey, AppArtifactCoords> readByKey(QuarkusProject project) throws IOException {
+    private static Map<ArtifactKey, ArtifactCoords> readByKey(QuarkusProject project) throws IOException {
         return project.getExtensionManager().getInstalled().stream()
-                .collect(toMap(AppArtifactCoords::getKey, Function.identity()));
+                .collect(toMap(ArtifactCoords::getKey, Function.identity()));
     }
 }

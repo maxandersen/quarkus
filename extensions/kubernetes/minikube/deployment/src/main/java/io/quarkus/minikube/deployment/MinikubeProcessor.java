@@ -2,6 +2,8 @@ package io.quarkus.minikube.deployment;
 
 import static io.quarkus.kubernetes.deployment.Constants.DEFAULT_HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_GROUP;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_VERSION;
 import static io.quarkus.kubernetes.deployment.Constants.HTTP_PORT;
 import static io.quarkus.kubernetes.deployment.Constants.KUBERNETES;
 import static io.quarkus.kubernetes.deployment.Constants.MAX_NODE_PORT_VALUE;
@@ -16,7 +18,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import io.dekorate.kubernetes.annotation.ServiceType;
@@ -42,8 +46,10 @@ import io.quarkus.kubernetes.deployment.ApplyServiceTypeDecorator;
 import io.quarkus.kubernetes.deployment.EnvConverter;
 import io.quarkus.kubernetes.deployment.KubernetesCommonHelper;
 import io.quarkus.kubernetes.deployment.KubernetesConfig;
+import io.quarkus.kubernetes.deployment.PortConfig;
 import io.quarkus.kubernetes.deployment.ResourceNameUtil;
 import io.quarkus.kubernetes.spi.ConfiguratorBuildItem;
+import io.quarkus.kubernetes.spi.CustomProjectRootBuildItem;
 import io.quarkus.kubernetes.spi.DecoratorBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesAnnotationBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
@@ -53,6 +59,7 @@ import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesLabelBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesPortBuildItem;
+import io.quarkus.kubernetes.spi.KubernetesResourceMetadataBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBindingBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
 
@@ -62,8 +69,16 @@ public class MinikubeProcessor {
     private static final int MINIKUBE_PRIORITY = DEFAULT_PRIORITY + 20;
 
     @BuildStep
-    public void checkMinikube(BuildProducer<KubernetesDeploymentTargetBuildItem> deploymentTargets) {
-        deploymentTargets.produce(new KubernetesDeploymentTargetBuildItem(MINIKUBE, DEPLOYMENT, MINIKUBE_PRIORITY, true));
+    public void checkMinikube(ApplicationInfoBuildItem applicationInfo, KubernetesConfig config,
+            BuildProducer<KubernetesDeploymentTargetBuildItem> deploymentTargets,
+            BuildProducer<KubernetesResourceMetadataBuildItem> resourceMeta) {
+        deploymentTargets.produce(
+                new KubernetesDeploymentTargetBuildItem(MINIKUBE, DEPLOYMENT, DEPLOYMENT_GROUP, DEPLOYMENT_VERSION,
+                        MINIKUBE_PRIORITY, true));
+
+        String name = ResourceNameUtil.getResourceName(config, applicationInfo);
+        resourceMeta.produce(
+                new KubernetesResourceMetadataBuildItem(KUBERNETES, DEPLOYMENT_GROUP, DEPLOYMENT_VERSION, DEPLOYMENT, name));
     }
 
     @BuildStep
@@ -108,12 +123,14 @@ public class MinikubeProcessor {
             Optional<KubernetesHealthLivenessPathBuildItem> livenessPath,
             Optional<KubernetesHealthReadinessPathBuildItem> readinessPath,
             List<KubernetesRoleBuildItem> roles,
-            List<KubernetesRoleBindingBuildItem> roleBindings) {
+            List<KubernetesRoleBindingBuildItem> roleBindings,
+            Optional<CustomProjectRootBuildItem> customProjectRoot) {
 
         List<DecoratorBuildItem> result = new ArrayList<>();
         String name = ResourceNameUtil.getResourceName(config, applicationInfo);
 
-        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, outputTarget, packageConfig);
+        Optional<Project> project = KubernetesCommonHelper.createProject(applicationInfo, customProjectRoot, outputTarget,
+                packageConfig);
         result.addAll(KubernetesCommonHelper.createDecorators(project, MINIKUBE, name, config,
                 metricsConfiguration,
                 annotations, labels, command,
@@ -139,8 +156,18 @@ public class MinikubeProcessor {
 
         //Service handling
         result.add(new DecoratorBuildItem(MINIKUBE, new ApplyServiceTypeDecorator(name, ServiceType.NodePort.name())));
-        result.add(new DecoratorBuildItem(MINIKUBE, new AddNodePortDecorator(name, config.getNodePort()
-                .orElseGet(() -> getStablePortNumberInRange(name, MIN_NODE_PORT_VALUE, MAX_NODE_PORT_VALUE)))));
+        List<Map.Entry<String, PortConfig>> nodeConfigPorts = config.getPorts().entrySet().stream()
+                .filter(e -> e.getValue().nodePort.isPresent())
+                .collect(Collectors.toList());
+        if (!nodeConfigPorts.isEmpty()) {
+            for (Map.Entry<String, PortConfig> entry : nodeConfigPorts) {
+                result.add(new DecoratorBuildItem(KUBERNETES,
+                        new AddNodePortDecorator(name, entry.getValue().nodePort.getAsInt(), Optional.of(entry.getKey()))));
+            }
+        } else {
+            result.add(new DecoratorBuildItem(MINIKUBE, new AddNodePortDecorator(name, config.getNodePort()
+                    .orElseGet(() -> getStablePortNumberInRange(name, MIN_NODE_PORT_VALUE, MAX_NODE_PORT_VALUE)))));
+        }
 
         //Probe port handling
         Integer port = ports.stream().filter(p -> HTTP_PORT.equals(p.getName())).map(KubernetesPortBuildItem::getPort)

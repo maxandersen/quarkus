@@ -1,6 +1,7 @@
 package io.quarkus.cache.test.deployment;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 
@@ -8,23 +9,19 @@ import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.cache.CacheManager;
 import io.quarkus.cache.CacheResult;
-import io.quarkus.cache.runtime.caffeine.CaffeineCache;
+import io.quarkus.cache.runtime.caffeine.CaffeineCacheImpl;
 import io.quarkus.test.QuarkusUnitTest;
 
 public class CacheConfigTest {
 
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
-            .setArchiveProducer(
-                    () -> ShrinkWrap.create(JavaArchive.class).addClass(TestResource.class).addAsResource(
-                            "cache-config-test.properties", "application.properties"));
+    static final QuarkusUnitTest TEST = new QuarkusUnitTest().withApplicationRoot(
+            jar -> jar.addClass(TestResource.class).addAsResource("cache-config-test.properties", "application.properties"));
 
     private static final String CACHE_NAME = "test-cache";
 
@@ -33,11 +30,12 @@ public class CacheConfigTest {
 
     @Test
     public void testConfig() {
-        CaffeineCache cache = (CaffeineCache) cacheManager.getCache(CACHE_NAME).get();
-        assertEquals(10, cache.getInitialCapacity());
-        assertEquals(100L, cache.getMaximumSize());
-        assertEquals(Duration.ofSeconds(30L), cache.getExpireAfterWrite());
-        assertEquals(Duration.ofDays(2L), cache.getExpireAfterAccess());
+        CaffeineCacheImpl cache = (CaffeineCacheImpl) cacheManager.getCache(CACHE_NAME).get();
+        assertEquals(10, cache.getCacheInfo().initialCapacity);
+        assertEquals(100L, cache.getCacheInfo().maximumSize);
+        assertEquals(Duration.ofSeconds(30L), cache.getCacheInfo().expireAfterWrite);
+        assertEquals(Duration.ofDays(2L), cache.getCacheInfo().expireAfterAccess);
+        assertTrue(cache.getCacheInfo().metricsEnabled);
     }
 
     @Path("/test")

@@ -3,7 +3,6 @@ package io.quarkus.jdbc.oracle.deployment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 
 /**
  * Registers the {@code oracle.jdbc.driver.OracleDriver} so that it can be loaded
@@ -22,22 +21,9 @@ public final class OracleReflections {
         // but it delegates all use to "oracle.jdbc.driver.OracleDriver" - which is also what's recommended by the docs.
         final String driverName = "oracle.jdbc.driver.OracleDriver";
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, driverName));
+
+        // for ldap style jdbc urls. e.g. jdbc:oracle:thin:@ldap://oid:5000/mydb1,cn=OracleContext,dc=myco,dc=com
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, "com.sun.jndi.ldap.LdapCtxFactory"));
     }
 
-    @BuildStep
-    void runtimeInitializeDriver(BuildProducer<RuntimeInitializedClassBuildItem> runtimeInitialized) {
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.jdbc.driver.OracleDriver"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.jdbc.driver.SQLUtil$XMLFactory"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.jdbc.driver.NamedTypeAccessor$XMLFactory"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.jdbc.driver.OracleTimeoutThreadPerVM"));
-        runtimeInitialized
-                .produce(new RuntimeInitializedClassBuildItem("oracle.jdbc.driver.BlockSource$ThreadedCachingBlockSource"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.jdbc.driver.T4CTTIoauthenticate"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.net.nt.TcpMultiplexer$LazyHolder"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.security.o5logon.O5Logon"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem(
-                "oracle.jdbc.driver.BlockSource$ThreadedCachingBlockSource$BlockReleaser"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.net.nt.TimeoutInterruptHandler"));
-        runtimeInitialized.produce(new RuntimeInitializedClassBuildItem("oracle.net.nt.Clock"));
-    }
 }

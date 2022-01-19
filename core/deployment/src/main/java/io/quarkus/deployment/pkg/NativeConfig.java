@@ -3,6 +3,7 @@ package io.quarkus.deployment.pkg;
 import java.io.File;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -15,7 +16,8 @@ import io.quarkus.runtime.configuration.TrimmedStringConverter;
 public class NativeConfig {
 
     /**
-     * Additional arguments to pass to the build process
+     * Comma-separated, additional arguments to pass to the build process.
+     * If an argument includes the {@code ,} symbol, it needs to be escaped, e.g. {@code \\,}
      */
     @ConfigItem
     public Optional<List<String>> additionalBuildArgs;
@@ -34,14 +36,17 @@ public class NativeConfig {
 
     /**
      * If all security services should be added to the native image
+     *
+     * @deprecated {@code --enable-all-security-services} was removed in GraalVM 21.1 https://github.com/oracle/graal/pull/3258
      */
     @ConfigItem
+    @Deprecated
     public boolean enableAllSecurityServices;
 
     /**
      * If {@code -H:+InlineBeforeAnalysis} flag will be added to the native-image run
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "true")
     public boolean inlineBeforeAnalysis;
 
     /**
@@ -50,6 +55,13 @@ public class NativeConfig {
     @Deprecated
     @ConfigItem(defaultValue = "true")
     public boolean enableJni;
+
+    /**
+     * The default value for java.awt.headless JVM option.
+     * Switching this option affects linking of awt libraries.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean headless;
 
     /**
      * Defines the user language used for building the native executable.
@@ -166,17 +178,21 @@ public class NativeConfig {
     public boolean dumpProxies;
 
     /**
-     * If this build should be done using a container runtime. If this is set docker will be used by default,
-     * unless container-runtime is also set.
+     * If this build should be done using a container runtime. Unless container-runtime is also set, docker will be
+     * used by default. If docker is not available or is an alias to podman, podman will be used instead as the default.
      */
     @ConfigItem
-    public boolean containerBuild;
+    public Optional<Boolean> containerBuild;
 
     /**
      * If this build is done using a remote docker daemon.
      */
     @ConfigItem
     public boolean remoteContainerBuild;
+
+    public boolean isContainerBuild() {
+        return containerBuild.orElse(containerRuntime.isPresent() || remoteContainerBuild);
+    }
 
     /**
      * The docker image to use to do the image build
@@ -228,6 +244,17 @@ public class NativeConfig {
      */
     @ConfigItem
     public boolean reportErrorsAtRuntime;
+
+    /**
+     * Don't build a native image if it already exists.
+     *
+     * This is useful if you have already built an image and you want to use Quarkus to deploy it somewhere.
+     *
+     * Note that this is not able to detect if the existing image is outdated, if you have modified source
+     * or config and want a new image you must not use this flag.
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean reuseExisting;
 
     /**
      * Build time configuration options for resources inclusion in the native executable.
@@ -362,6 +389,34 @@ public class NativeConfig {
      */
     @ConfigItem
     public boolean enableDashboardDump;
+
+    /**
+     * Configure native executable compression using UPX.
+     */
+    @ConfigItem
+    public Compression compression;
+
+    @ConfigGroup
+    public static class Compression {
+        /**
+         * The compression level in [1, 10].
+         * 10 means <em>best</em>
+         *
+         * Higher compression level requires more time to compress the executable.
+         */
+        @ConfigItem
+        public OptionalInt level;
+
+        /**
+         * Allows passing extra arguments to the UPX command line (like --brute).
+         * The arguments are comma-separated.
+         *
+         * The exhaustive list of parameters can be found in
+         * <a href="https://github.com/upx/upx/blob/devel/doc/upx.pod">https://github.com/upx/upx/blob/devel/doc/upx.pod</a>.
+         */
+        @ConfigItem
+        public Optional<List<String>> additionalArgs;
+    }
 
     /**
      * Supported Container runtimes

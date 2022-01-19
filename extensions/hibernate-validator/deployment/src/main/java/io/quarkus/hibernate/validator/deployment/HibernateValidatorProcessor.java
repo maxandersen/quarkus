@@ -32,6 +32,7 @@ import javax.ws.rs.Priorities;
 import org.hibernate.validator.internal.metadata.core.ConstraintHelper;
 import org.hibernate.validator.messageinterpolation.AbstractMessageInterpolator;
 import org.hibernate.validator.spi.messageinterpolation.LocaleResolver;
+import org.hibernate.validator.spi.nodenameprovider.PropertyNodeNameProvider;
 import org.hibernate.validator.spi.properties.GetterPropertySelectionStrategy;
 import org.hibernate.validator.spi.scripting.ScriptEvaluatorFactory;
 import org.jboss.jandex.AnnotationInstance;
@@ -53,6 +54,8 @@ import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
+import io.quarkus.bootstrap.classloading.ClassPathElement;
+import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
@@ -60,12 +63,13 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.ConfigClassBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBundleBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
@@ -74,13 +78,14 @@ import io.quarkus.hibernate.validator.runtime.HibernateValidatorBuildTimeConfig;
 import io.quarkus.hibernate.validator.runtime.HibernateValidatorRecorder;
 import io.quarkus.hibernate.validator.runtime.ValidatorProvider;
 import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterceptor;
-import io.quarkus.hibernate.validator.runtime.jaxrs.QuarkusRestViolationExceptionMapper;
 import io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyConfigSupport;
+import io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyReactiveViolationExceptionMapper;
+import io.quarkus.hibernate.validator.runtime.jaxrs.ViolationReport;
 import io.quarkus.hibernate.validator.spi.BeanValidationAnnotationsBuildItem;
+import io.quarkus.jaxrs.spi.deployment.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
 import io.quarkus.resteasy.reactive.spi.ExceptionMapperBuildItem;
-import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.runtime.LocalesBuildTimeConfig;
 
 class HibernateValidatorProcessor {
@@ -98,6 +103,8 @@ class HibernateValidatorProcessor {
     private static final DotName SCRIPT_EVALUATOR_FACTORY = DotName.createSimple(ScriptEvaluatorFactory.class.getName());
     private static final DotName GETTER_PROPERTY_SELECTION_STRATEGY = DotName
             .createSimple(GetterPropertySelectionStrategy.class.getName());
+    private static final DotName PROPERTY_NODE_NAME_PROVIDER = DotName
+            .createSimple(PropertyNodeNameProvider.class.getName());
 
     private static final DotName CONSTRAINT_VALIDATOR = DotName.createSimple(ConstraintValidator.class.getName());
     private static final DotName VALUE_EXTRACTOR = DotName.createSimple(ValueExtractor.class.getName());
@@ -109,11 +116,6 @@ class HibernateValidatorProcessor {
     private static final DotName REPEATABLE = DotName.createSimple(Repeatable.class.getName());
 
     private static final Pattern BUILT_IN_CONSTRAINT_REPEATABLE_CONTAINER_PATTERN = Pattern.compile("\\$List$");
-
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.HIBERNATE_VALIDATOR);
-    }
 
     @BuildStep
     HotDeploymentWatchedFileBuildItem configFile() {
@@ -155,12 +157,15 @@ class HibernateValidatorProcessor {
         } else if (capabilities.isPresent(Capability.RESTEASY_REACTIVE)) {
             // The CDI interceptor which will validate the methods annotated with @JaxrsEndPointValidated
             additionalBeans.produce(new AdditionalBeanBuildItem(
-                    "io.quarkus.hibernate.validator.runtime.jaxrs.QuarkusRestEndPointValidationInterceptor"));
+                    "io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyReactiveEndPointValidationInterceptor"));
+            additionalBeans.produce(new AdditionalBeanBuildItem(
+                    "io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyReactiveContextLocaleResolver"));
         }
 
-        // A constraint validator with an injection point but no scope is added as @Singleton
-        autoScopes.produce(AutoAddScopeBuildItem.builder().implementsInterface(CONSTRAINT_VALIDATOR).requiresContainerServices()
-                .defaultScope(BuiltinScope.SINGLETON).build());
+        // A constraint validator with an injection point but no scope is added as @Dependent
+        autoScopes.produce(AutoAddScopeBuildItem.builder().implementsInterface(CONSTRAINT_VALIDATOR)
+                .requiresContainerServices()
+                .defaultScope(BuiltinScope.DEPENDENT).build());
 
         // Do not remove the Bean Validation beans
         unremovableBean.produce(new UnremovableBeanBuildItem(new Predicate<BeanInfo>() {
@@ -171,7 +176,8 @@ class HibernateValidatorProcessor {
                         || beanInfo.hasType(PARAMETER_NAME_PROVIDER) || beanInfo.hasType(CLOCK_PROVIDER)
                         || beanInfo.hasType(VALUE_EXTRACTOR) || beanInfo.hasType(SCRIPT_EVALUATOR_FACTORY)
                         || beanInfo.hasType(GETTER_PROPERTY_SELECTION_STRATEGY)
-                        || beanInfo.hasType(LOCALE_RESOLVER);
+                        || beanInfo.hasType(LOCALE_RESOLVER)
+                        || beanInfo.hasType(PROPERTY_NODE_NAME_PROVIDER);
             }
         }));
     }
@@ -188,6 +194,7 @@ class HibernateValidatorProcessor {
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
             BuildProducer<BeanValidationAnnotationsBuildItem> beanValidationAnnotations,
             ShutdownContextBuildItem shutdownContext,
+            List<ConfigClassBuildItem> configClasses,
             List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations,
             Capabilities capabilities,
             LocalesBuildTimeConfig localesBuildTimeConfig,
@@ -276,14 +283,44 @@ class HibernateValidatorProcessor {
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
                     contributeClass(classNamesToBeValidated, indexView, annotation.target().asClass().name());
                     // no need for reflection in the case of a class level constraint
+                } else if (annotation.target().kind() == AnnotationTarget.Kind.TYPE) {
+                    // container element constraints
+                    AnnotationTarget enclosingTarget = annotation.target().asType().enclosingTarget();
+                    if (enclosingTarget.kind() == AnnotationTarget.Kind.FIELD) {
+                        contributeClass(classNamesToBeValidated, indexView, enclosingTarget.asField().declaringClass().name());
+                        reflectiveFields.produce(new ReflectiveFieldBuildItem(enclosingTarget.asField()));
+                        if (annotation.target().asType().target() != null) {
+                            contributeClassMarkedForCascadingValidation(classNamesToBeValidated, indexView,
+                                    consideredAnnotation,
+                                    annotation.target().asType().target());
+                        }
+                    } else if (enclosingTarget.kind() == AnnotationTarget.Kind.METHOD) {
+                        contributeClass(classNamesToBeValidated, indexView, enclosingTarget.asMethod().declaringClass().name());
+                        reflectiveMethods.produce(new ReflectiveMethodBuildItem(enclosingTarget.asMethod()));
+                        if (annotation.target().asType().target() != null) {
+                            contributeClassMarkedForCascadingValidation(classNamesToBeValidated, indexView,
+                                    consideredAnnotation,
+                                    annotation.target().asType().target());
+                        }
+                        contributeMethodsWithInheritedValidation(methodsWithInheritedValidation, indexView,
+                                enclosingTarget.asMethod());
+                    }
                 }
+            }
+        }
+
+        for (ConfigClassBuildItem configClass : configClasses) {
+            for (String generatedClass : configClass.getGeneratedClasses()) {
+                classNamesToBeValidated.add(DotName.createSimple(generatedClass));
             }
         }
 
         // JAX-RS methods are handled differently by the transformer so those need to be gathered here.
         // Note: The focus only on methods is basically an incomplete solution, since there could also be
         // class-level JAX-RS annotations but currently the transformer only looks at methods.
-        Map<DotName, Set<SimpleMethodSignatureKey>> jaxRsMethods = gatherJaxRsMethods(additionalJaxRsResourceMethodAnnotations,
+        Set<DotName> additional = new HashSet<>();
+        additionalJaxRsResourceMethodAnnotations.forEach((s) -> additional.addAll(s.getAnnotationClasses()));
+        Map<DotName, Set<SimpleMethodSignatureKey>> jaxRsMethods = gatherJaxRsMethods(additional,
                 indexView);
 
         // Add the annotations transformer to add @MethodValidated annotations on the methods requiring validation
@@ -310,18 +347,30 @@ class HibernateValidatorProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem nativeImageConfig() {
-        return NativeImageConfigBuildItem.builder()
-                .addResourceBundle(AbstractMessageInterpolator.DEFAULT_VALIDATION_MESSAGES)
-                .addResourceBundle(AbstractMessageInterpolator.USER_VALIDATION_MESSAGES)
-                .addResourceBundle(AbstractMessageInterpolator.CONTRIBUTOR_VALIDATION_MESSAGES)
-                .build();
+    void optionalResouceBundles(BuildProducer<NativeImageResourceBundleBuildItem> resourceBundles) {
+        String[] potentialHibernateValidatorResourceBundles = {
+                AbstractMessageInterpolator.DEFAULT_VALIDATION_MESSAGES,
+                AbstractMessageInterpolator.USER_VALIDATION_MESSAGES,
+                AbstractMessageInterpolator.CONTRIBUTOR_VALIDATION_MESSAGES };
+
+        for (String potentialHibernateValidatorResourceBundle : potentialHibernateValidatorResourceBundles) {
+            for (ClassPathElement cpe : QuarkusClassLoader.getElements(potentialHibernateValidatorResourceBundle, false)) {
+                if (cpe.isRuntime()) {
+                    resourceBundles.produce(new NativeImageResourceBundleBuildItem(potentialHibernateValidatorResourceBundle));
+                    break;
+                }
+            }
+        }
     }
 
     @BuildStep
-    ExceptionMapperBuildItem mapper() {
-        return new ExceptionMapperBuildItem(QuarkusRestViolationExceptionMapper.class.getName(),
-                ValidationException.class.getName(), Priorities.USER + 1, true);
+    void exceptionMapper(BuildProducer<ExceptionMapperBuildItem> exceptionMapperProducer,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClassProducer) {
+        exceptionMapperProducer.produce(new ExceptionMapperBuildItem(ResteasyReactiveViolationExceptionMapper.class.getName(),
+                ValidationException.class.getName(), Priorities.USER + 1, true));
+        reflectiveClassProducer.produce(
+                new ReflectiveClassBuildItem(true, true, ViolationReport.class,
+                        ViolationReport.Violation.class));
     }
 
     private static void contributeBuiltinConstraints(Set<String> builtinConstraints,
@@ -397,16 +446,14 @@ class HibernateValidatorProcessor {
     }
 
     private static Map<DotName, Set<SimpleMethodSignatureKey>> gatherJaxRsMethods(
-            List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations,
+            Set<DotName> additionalJaxRsResourceMethodAnnotations,
             IndexView indexView) {
         Map<DotName, Set<SimpleMethodSignatureKey>> jaxRsMethods = new HashMap<>();
 
         Collection<DotName> jaxRsMethodDefiningAnnotations = new ArrayList<>(
                 ResteasyDotNames.JAXRS_METHOD_ANNOTATIONS.size() + additionalJaxRsResourceMethodAnnotations.size());
         jaxRsMethodDefiningAnnotations.addAll(ResteasyDotNames.JAXRS_METHOD_ANNOTATIONS);
-        for (AdditionalJaxRsResourceMethodAnnotationsBuildItem additionalJaxRsResourceMethodAnnotation : additionalJaxRsResourceMethodAnnotations) {
-            jaxRsMethodDefiningAnnotations.addAll(additionalJaxRsResourceMethodAnnotation.getAnnotationClasses());
-        }
+        jaxRsMethodDefiningAnnotations.addAll(additionalJaxRsResourceMethodAnnotations);
 
         for (DotName jaxRsAnnotation : jaxRsMethodDefiningAnnotations) {
             Collection<AnnotationInstance> annotationInstances = indexView.getAnnotations(jaxRsAnnotation);

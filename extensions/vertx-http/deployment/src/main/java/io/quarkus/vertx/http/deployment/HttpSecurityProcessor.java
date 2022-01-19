@@ -17,7 +17,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
-import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.quarkus.vertx.http.runtime.PolicyConfig;
 import io.quarkus.vertx.http.runtime.security.AuthenticatedHttpSecurityPolicy;
 import io.quarkus.vertx.http.runtime.security.BasicAuthenticationMechanism;
@@ -59,13 +58,17 @@ public class HttpSecurityProcessor {
     SyntheticBeanBuildItem initFormAuth(
             HttpSecurityRecorder recorder,
             HttpBuildTimeConfig buildTimeConfig,
-            HttpConfiguration httpConfiguration) {
+            BuildProducer<RouteBuildItem> filterBuildItemBuildProducer) {
+        if (!buildTimeConfig.auth.proactive) {
+            filterBuildItemBuildProducer.produce(RouteBuildItem.builder().route(buildTimeConfig.auth.form.postLocation)
+                    .handler(recorder.formAuthPostHandler()).build());
+        }
         if (buildTimeConfig.auth.form.enabled) {
             return SyntheticBeanBuildItem.configure(FormAuthenticationMechanism.class)
                     .types(HttpAuthenticationMechanism.class)
                     .setRuntimeInit()
                     .scope(Singleton.class)
-                    .supplier(recorder.setupFormAuth(httpConfiguration, buildTimeConfig)).done();
+                    .supplier(recorder.setupFormAuth()).done();
         }
         return null;
     }
@@ -89,9 +92,15 @@ public class HttpSecurityProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     SyntheticBeanBuildItem initBasicAuth(
             HttpSecurityRecorder recorder,
-            HttpBuildTimeConfig buildTimeConfig) {
+            HttpBuildTimeConfig buildTimeConfig,
+            BuildProducer<SecurityInformationBuildItem> securityInformationProducer) {
+        //basic auth explicitly disabled
+        if (buildTimeConfig.auth.basic.isPresent() && !buildTimeConfig.auth.basic.get()) {
+            return null;
+        }
+        boolean basicExplicitlyEnabled = buildTimeConfig.auth.basic.orElse(false);
         if ((buildTimeConfig.auth.form.enabled || isMtlsClientAuthenticationEnabled(buildTimeConfig))
-                && !buildTimeConfig.auth.basic) {
+                && !basicExplicitlyEnabled) {
             //if form auth is enabled and we are not then we don't install
             return null;
         }
@@ -102,9 +111,10 @@ public class HttpSecurityProcessor {
                 .scope(Singleton.class)
                 .supplier(recorder.setupBasicAuth(buildTimeConfig));
         if (!buildTimeConfig.auth.form.enabled && !isMtlsClientAuthenticationEnabled(buildTimeConfig)
-                && !buildTimeConfig.auth.basic) {
+                && !basicExplicitlyEnabled) {
             //if not explicitly enabled we make this a default bean, so it is the fallback if nothing else is defined
             configurator.defaultBean();
+            securityInformationProducer.produce(SecurityInformationBuildItem.BASIC());
         }
 
         return configurator.done();
@@ -119,7 +129,8 @@ public class HttpSecurityProcessor {
             Capabilities capabilities,
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListenerBuildItemBuildProducer,
             HttpBuildTimeConfig buildTimeConfig,
-            List<HttpSecurityPolicyBuildItem> httpSecurityPolicyBuildItemList) {
+            List<HttpSecurityPolicyBuildItem> httpSecurityPolicyBuildItemList,
+            BuildProducer<SecurityInformationBuildItem> securityInformationProducer) {
         Map<String, Supplier<HttpSecurityPolicy>> policyMap = new HashMap<>();
         for (HttpSecurityPolicyBuildItem e : httpSecurityPolicyBuildItemList) {
             if (policyMap.containsKey(e.getName())) {
@@ -128,9 +139,8 @@ public class HttpSecurityProcessor {
             policyMap.put(e.getName(), e.policySupplier);
         }
 
-        if (buildTimeConfig.auth.form.enabled) {
-        } else if (buildTimeConfig.auth.basic) {
-            beanProducer.produce(AdditionalBeanBuildItem.unremovableOf(BasicAuthenticationMechanism.class));
+        if (!buildTimeConfig.auth.form.enabled && buildTimeConfig.auth.basic.orElse(false)) {
+            securityInformationProducer.produce(SecurityInformationBuildItem.BASIC());
         }
 
         if (capabilities.isPresent(Capability.SECURITY)) {

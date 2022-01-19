@@ -97,21 +97,30 @@ public final class MicrometerConfig {
         /**
          * Micrometer JVM metrics support.
          * <p>
-         * Micrometer JVM metrics support is enabled by default.
+         * Support for JVM metrics will be enabled if Micrometer
+         * support is enabled, and either this value is true, or this
+         * value is unset and {@code quarkus.micrometer.binder-enabled-default} is true.
          */
-        @ConfigItem(defaultValue = "true")
-        public boolean jvm;
+        @ConfigItem
+        public Optional<Boolean> jvm;
 
         public KafkaConfigGroup kafka;
+
+        public GrpcServerConfigGroup grpcServer;
+
+        public GrpcClientConfigGroup grpcClient;
+
         public MPMetricsConfigGroup mpMetrics;
 
         /**
          * Micrometer System metrics support.
          * <p>
-         * Micrometer System metrics support is enabled by default.
+         * Support for System metrics will be enabled if Micrometer
+         * support is enabled, and either this value is true, or this
+         * value is unset and {@code quarkus.micrometer.binder-enabled-default} is true.
          */
-        @ConfigItem(defaultValue = "true")
-        public boolean system;
+        @ConfigItem
+        public Optional<Boolean> system;
 
         public VertxConfigGroup vertx;
     }
@@ -123,7 +132,7 @@ public final class MicrometerConfig {
         public PrometheusConfigGroup prometheus;
     }
 
-    public static interface CapabilityEnabled {
+    public interface CapabilityEnabled {
         Optional<Boolean> getEnabled();
     }
 }

@@ -16,6 +16,12 @@ public class ConsoleConfig {
     boolean enable;
 
     /**
+     * If console logging should go to {@link System#err} instead of {@link System#out}.
+     */
+    @ConfigItem(defaultValue = "false")
+    boolean stderr;
+
+    /**
      * The log format. Note that this value will be ignored if an extension is present that takes
      * control of console formatting (e.g. an XML or JSON-format extension).
      */
@@ -33,9 +39,13 @@ public class ConsoleConfig {
      * best guess based on operating system and environment.
      * Note that this value will be ignored if an extension is present that takes
      * control of console formatting (e.g. an XML or JSON-format extension).
+     *
+     * This has been deprecated, and replaced with quarkus.console.color instead,
+     * as quarkus now provides more console based functionality than just logging.
      */
     @ConfigItem
-    Optional<Boolean> color;
+    @Deprecated
+    public Optional<Boolean> color;
 
     /**
      * Specify how much the colors should be darkened.

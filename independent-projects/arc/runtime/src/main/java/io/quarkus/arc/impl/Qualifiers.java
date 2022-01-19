@@ -1,13 +1,16 @@
 package io.quarkus.arc.impl;
 
 import java.lang.annotation.Annotation;
+import java.lang.annotation.Repeatable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
 import javax.enterprise.util.Nonbinding;
@@ -15,22 +18,57 @@ import javax.inject.Qualifier;
 
 public final class Qualifiers {
 
-    public static final Set<Annotation> DEFAULT_QUALIFIERS = initDefaultQualifiers();
+    public static final Set<Annotation> DEFAULT_QUALIFIERS = Set.of(Default.Literal.INSTANCE, Any.Literal.INSTANCE);
 
+    @SuppressWarnings("unused")
     public static final Set<Annotation> IP_DEFAULT_QUALIFIERS = Collections.singleton(Default.Literal.INSTANCE);
 
     private Qualifiers() {
     }
 
-    static void verify(Iterable<Annotation> qualifiers) {
-        for (Annotation qualifier : qualifiers) {
-            verifyQualifier(qualifier.annotationType());
+    static void verify(Collection<Annotation> qualifiers, Set<String> customQualifiers) {
+        if (qualifiers.isEmpty()) {
+            return;
+        }
+
+        if (qualifiers.size() == 1) {
+            verifyQualifier(qualifiers.iterator().next().annotationType(), customQualifiers);
+        } else {
+            Map<Class<? extends Annotation>, Integer> timesQualifierWasSeen = new HashMap<>();
+            for (Annotation qualifier : qualifiers) {
+                verifyQualifier(qualifier.annotationType(), customQualifiers);
+                timesQualifierWasSeen.compute(qualifier.annotationType(), TimesSeenBiFunction.INSTANCE);
+            }
+            checkQualifiersForDuplicates(timesQualifierWasSeen);
         }
     }
 
-    static void verify(Annotation... qualifiers) {
-        for (Annotation qualifier : qualifiers) {
-            verifyQualifier(qualifier.annotationType());
+    static void verify(Annotation[] qualifiers, Set<String> customQualifiers) {
+        if (qualifiers.length == 0) {
+            return;
+        }
+
+        if (qualifiers.length == 1) {
+            verifyQualifier(qualifiers[0].annotationType(), customQualifiers);
+        } else {
+            Map<Class<? extends Annotation>, Integer> timesQualifierWasSeen = new HashMap<>();
+            for (Annotation qualifier : qualifiers) {
+                verifyQualifier(qualifier.annotationType(), customQualifiers);
+                timesQualifierWasSeen.compute(qualifier.annotationType(), TimesSeenBiFunction.INSTANCE);
+            }
+            checkQualifiersForDuplicates(timesQualifierWasSeen);
+        }
+    }
+
+    // in various cases, specification requires to check qualifiers for duplicates and throw IAE
+    private static void checkQualifiersForDuplicates(Map<Class<? extends Annotation>, Integer> timesQualifierSeen) {
+        timesQualifierSeen.forEach(Qualifiers::checkQualifiersForDuplicates);
+    }
+
+    private static void checkQualifiersForDuplicates(Class<? extends Annotation> aClass, Integer times) {
+        if (times > 1 && (aClass.getAnnotation(Repeatable.class) == null)) {
+            throw new IllegalArgumentException("The qualifier " + aClass + " was used repeatedly " +
+                    "but it is not annotated with @java.lang.annotation.Repeatable");
         }
     }
 
@@ -95,13 +133,6 @@ public final class Qualifiers {
         return true;
     }
 
-    private static Set<Annotation> initDefaultQualifiers() {
-        Set<Annotation> qualifiers = new HashSet<>();
-        qualifiers.add(Default.Literal.INSTANCE);
-        qualifiers.add(Any.Literal.INSTANCE);
-        return Collections.unmodifiableSet(qualifiers);
-    }
-
     private static Object invoke(Method method, Object instance) {
         try {
             if (!method.isAccessible()) {
@@ -114,10 +145,26 @@ public final class Qualifiers {
         }
     }
 
-    private static void verifyQualifier(Class<? extends Annotation> annotationType) {
+    private static void verifyQualifier(Class<? extends Annotation> annotationType, Set<String> customQualifiers) {
+        if (customQualifiers.contains(annotationType.getName())) {
+            return;
+        }
+
         if (!annotationType.isAnnotationPresent(Qualifier.class)) {
             throw new IllegalArgumentException("Annotation is not a qualifier: " + annotationType);
         }
     }
 
+    private static class TimesSeenBiFunction implements BiFunction<Class<? extends Annotation>, Integer, Integer> {
+
+        private static final TimesSeenBiFunction INSTANCE = new TimesSeenBiFunction();
+
+        private TimesSeenBiFunction() {
+        }
+
+        @Override
+        public Integer apply(Class<? extends Annotation> k, Integer v) {
+            return (v == null) ? 1 : (v + 1);
+        }
+    }
 }

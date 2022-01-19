@@ -1,33 +1,24 @@
 //usr/bin/env jbang "$0" "$@" ; exit $?
+//JAVA {java.version}
+//JAVAC_OPTIONS -parameters
 //DEPS {quarkus.bom.group-id}:{quarkus.bom.artifact-id}:{quarkus.bom.version}@pom
 {#for dep in dependencies}
 //DEPS {dep}
 {/for}
 
-//JAVAC_OPTIONS -parameters
-//
-import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Parameters;
 
-@TopCommand
-@CommandLine.Command(mixinStandardHelpOptions = true, subcommands = {command.subcommands})
-public class {command.class-name} {
-}
+@Command(name = "{command.name}", mixinStandardHelpOptions = true)
+public class {command.class-name} implements Runnable {
 
-@CommandLine.Command(name = "{command.hello.name}", description = "{command.hello.description}")
-class HelloCommand implements Runnable {
-
-    @Override
-    public void run() {
-        System.out.println("{command.hello.message}");
-    }
-}
-
-@CommandLine.Command(name = "{command.goodbye.name}", description = "{command.goodbye.description}")
-class GoodByeCommand implements Runnable {
+    @Parameters(paramLabel = "<name>", defaultValue = "picocli",
+        description = "Your name.")
+    String name;
 
     @Override
     public void run() {
-        System.out.println("{command.goodbye.message}");
+        System.out.printf("Hello %s, go go commando!\n", name);
     }
 }

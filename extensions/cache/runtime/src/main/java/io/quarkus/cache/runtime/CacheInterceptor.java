@@ -15,8 +15,11 @@ import javax.interceptor.InvocationContext;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.runtime.InterceptorBindings;
+import io.quarkus.cache.Cache;
 import io.quarkus.cache.CacheKey;
 import io.quarkus.cache.CacheManager;
+import io.quarkus.cache.CompositeCacheKey;
+import io.smallrye.mutiny.Uni;
 
 public abstract class CacheInterceptor {
 
@@ -50,6 +53,7 @@ public abstract class CacheInterceptor {
             InvocationContext invocationContext, Class<T> interceptorBindingClass) {
         Set<Annotation> bindings = InterceptorBindings.getInterceptorBindings(invocationContext);
         if (bindings == null) {
+            LOGGER.trace("Interceptor bindings not found in ArC");
             // This should only happen when the interception is not managed by Arc.
             return Optional.empty();
         }
@@ -69,6 +73,7 @@ public abstract class CacheInterceptor {
 
     private <T extends Annotation> CacheInterceptionContext<T> getNonArcCacheInterceptionContext(
             InvocationContext invocationContext, Class<T> interceptorBindingClass, boolean supportsCacheKey) {
+        LOGGER.trace("Retrieving interceptor bindings using reflection");
         List<T> interceptorBindings = new ArrayList<>();
         List<Short> cacheKeyParameterPositions = new ArrayList<>();
         boolean cacheKeyParameterPositionsFound = false;
@@ -104,7 +109,7 @@ public abstract class CacheInterceptor {
         return (T) annotation;
     }
 
-    protected Object getCacheKey(AbstractCache cache, List<Short> cacheKeyParameterPositions, Object[] methodParameterValues) {
+    protected Object getCacheKey(Cache cache, List<Short> cacheKeyParameterPositions, Object[] methodParameterValues) {
         if (methodParameterValues == null || methodParameterValues.length == 0) {
             // If the intercepted method doesn't have any parameter, then the default cache key will be used.
             return cache.getDefaultKey();
@@ -128,5 +133,9 @@ public abstract class CacheInterceptor {
             // will be used.
             return new CompositeCacheKey(methodParameterValues);
         }
+    }
+
+    protected static boolean isUniReturnType(InvocationContext invocationContext) {
+        return Uni.class.isAssignableFrom(invocationContext.getMethod().getReturnType());
     }
 }

@@ -151,23 +151,20 @@ public class UndertowDeploymentRecorder {
 
     }
 
+    final RuntimeValue<HttpConfiguration> httpConfiguration;
+
+    public UndertowDeploymentRecorder(RuntimeValue<HttpConfiguration> httpConfiguration) {
+        this.httpConfiguration = httpConfiguration;
+    }
+
     public static void setHotDeploymentResources(List<Path> resources) {
         hotDeploymentResourcePaths = resources;
     }
 
     public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
-            LaunchMode launchMode, ShutdownContext context, String contextPath, String httpRootPath, String defaultCharset,
+            LaunchMode launchMode, ShutdownContext context, String mountPoint, String defaultCharset,
             String requestCharacterEncoding, String responseCharacterEncoding, boolean proactiveAuth,
             List<String> welcomeFiles) {
-        String realMountPoint;
-        if (contextPath.equals("/")) {
-            realMountPoint = httpRootPath;
-        } else if (httpRootPath.equals("/")) {
-            realMountPoint = contextPath;
-        } else {
-            realMountPoint = httpRootPath + contextPath;
-        }
-
         DeploymentInfo d = new DeploymentInfo();
         d.setDefaultRequestEncoding(requestCharacterEncoding);
         d.setDefaultResponseEncoding(responseCharacterEncoding);
@@ -175,7 +172,7 @@ public class UndertowDeploymentRecorder {
         d.setSessionIdGenerator(new QuarkusSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
-        d.setContextPath(realMountPoint);
+        d.setContextPath(mountPoint);
         d.setEagerFilterInit(true);
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
@@ -223,7 +220,9 @@ public class UndertowDeploymentRecorder {
             public void handleNotification(SecurityNotification notification) {
                 if (notification.getEventType() == SecurityNotification.EventType.AUTHENTICATED) {
                     QuarkusUndertowAccount account = (QuarkusUndertowAccount) notification.getAccount();
-                    CDI.current().select(CurrentIdentityAssociation.class).get().setIdentity(account.getSecurityIdentity());
+                    Instance<CurrentIdentityAssociation> instance = CDI.current().select(CurrentIdentityAssociation.class);
+                    if (instance.isResolvable())
+                        instance.get().setIdentity(account.getSecurityIdentity());
                 }
             }
         });
@@ -343,7 +342,7 @@ public class UndertowDeploymentRecorder {
     }
 
     public Handler<RoutingContext> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
-            DeploymentManager manager, List<HandlerWrapper> wrappers, HttpConfiguration httpConfiguration,
+            DeploymentManager manager, List<HandlerWrapper> wrappers,
             ServletRuntimeConfig servletRuntimeConfig) throws Exception {
 
         shutdown.addShutdownTask(new Runnable() {
@@ -392,11 +391,11 @@ public class UndertowDeploymentRecorder {
                         event.getBody());
                 exchange.setPushHandler(VertxHttpRecorder.getRootHandler());
 
-                Optional<MemorySize> maxBodySize = httpConfiguration.limits.maxBodySize;
+                Optional<MemorySize> maxBodySize = httpConfiguration.getValue().limits.maxBodySize;
                 if (maxBodySize.isPresent()) {
                     exchange.setMaxEntitySize(maxBodySize.get().asLongValue());
                 }
-                Duration readTimeout = httpConfiguration.readTimeout;
+                Duration readTimeout = httpConfiguration.getValue().readTimeout;
                 exchange.setReadTimeout(readTimeout.toMillis());
 
                 exchange.setUndertowOptions(undertowOptionMap);
@@ -530,7 +529,11 @@ public class UndertowDeploymentRecorder {
     }
 
     public void addServletContextAttribute(RuntimeValue<DeploymentInfo> deployment, String key, Object value1) {
-        deployment.getValue().addServletContextAttribute(key, value1);
+        if (value1 instanceof RuntimeValue) {
+            deployment.getValue().addServletContextAttribute(key, ((RuntimeValue<?>) value1).getValue());
+        } else {
+            deployment.getValue().addServletContextAttribute(key, value1);
+        }
     }
 
     public void addServletExtension(RuntimeValue<DeploymentInfo> deployment, ServletExtension extension) {

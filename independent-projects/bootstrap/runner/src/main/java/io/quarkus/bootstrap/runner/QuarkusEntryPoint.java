@@ -1,5 +1,7 @@
 package io.quarkus.bootstrap.runner;
 
+import io.quarkus.bootstrap.forkjoin.QuarkusForkJoinWorkerThread;
+import io.quarkus.bootstrap.logging.InitialConfigurator;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -21,8 +23,16 @@ public class QuarkusEntryPoint {
 
     public static void main(String... args) throws Throwable {
         System.setProperty("java.util.logging.manager", org.jboss.logmanager.LogManager.class.getName());
-        Timing.staticInitStarted();
-        doRun(args);
+        System.setProperty("java.util.concurrent.ForkJoinPool.common.threadFactory",
+                "io.quarkus.bootstrap.forkjoin.QuarkusForkJoinWorkerThreadFactory");
+        Timing.staticInitStarted(false);
+
+        try {
+            doRun(args);
+        } catch (Exception e) {
+            InitialConfigurator.DELAYED_HANDLER.close();
+            throw e;
+        }
     }
 
     private static void doRun(Object args) throws IOException, ClassNotFoundException, IllegalAccessException,
@@ -42,12 +52,15 @@ public class QuarkusEntryPoint {
                     24_576)) {
                 app = SerializedApplication.read(in, appRoot);
             }
+            final RunnerClassLoader appRunnerClassLoader = app.getRunnerClassLoader();
             try {
-                Thread.currentThread().setContextClassLoader(app.getRunnerClassLoader());
-                Class<?> mainClass = app.getRunnerClassLoader().loadClass(app.getMainClass());
+                Thread.currentThread().setContextClassLoader(appRunnerClassLoader);
+                QuarkusForkJoinWorkerThread.setQuarkusAppClassloader(appRunnerClassLoader);
+                Class<?> mainClass = appRunnerClassLoader.loadClass(app.getMainClass());
                 mainClass.getMethod("main", String[].class).invoke(null, args);
             } finally {
-                app.getRunnerClassLoader().close();
+                QuarkusForkJoinWorkerThread.setQuarkusAppClassloader(null);
+                appRunnerClassLoader.close();
             }
         }
     }

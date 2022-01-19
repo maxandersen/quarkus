@@ -1,4 +1,5 @@
 ---
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
 name: "SmallRye OpenAPI"
 metadata:
   keywords:
@@ -9,3 +10,8 @@ metadata:
   categories:
   - "web"
   status: "stable"
+  config:
+  - "quarkus.smallrye-openapi."
+  - "smallrye.openapi."
+  - "mp.openapi."
+  - "quarkus.swagger-ui."

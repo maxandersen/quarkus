@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.BeanCreator;
 import io.quarkus.arc.BeanDestroyer;
+import io.quarkus.arc.InjectableInstance;
 import io.quarkus.arc.processor.BeanConfigurator;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BeanRegistrar;
@@ -20,15 +21,19 @@ import io.quarkus.gizmo.ResultHandle;
 import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.util.AnnotationLiteral;
+import javax.inject.Inject;
 import javax.inject.Qualifier;
 import javax.inject.Singleton;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
+import org.jboss.jandex.Type.Kind;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -40,8 +45,9 @@ public class BeanRegistrarTest {
 
     @RegisterExtension
     public ArcTestContainer container = ArcTestContainer.builder()
-            .beanClasses(UselessBean.class, MyQualifier.class, NextQualifier.class)
+            .beanClasses(UselessBean.class, MyQualifier.class, NextQualifier.class, ListConsumer.class)
             .removeUnusedBeans(true)
+            .addRemovalExclusion(b -> b.hasType(DotName.createSimple(ListConsumer.class.getName())))
             .beanRegistrars(new TestRegistrar()).build();
 
     @AfterAll
@@ -74,6 +80,27 @@ public class BeanRegistrarTest {
         assertEquals(Integer.valueOf(152), Arc.container().instance(Integer.class).get());
         assertEquals("Hello Frantisek!", Arc.container().instance(String.class).get());
         assertEquals("Hello Roman!", Arc.container().instance(String.class, new NextQualifierLiteral()).get());
+        @SuppressWarnings({ "resource" })
+        List<String> list = Arc.container().instance(ListConsumer.class).get().list;
+        assertEquals(1, list.size());
+        assertEquals("foo", list.get(0));
+
+        InjectableInstance<Long> instance = Arc.container().select(Long.class);
+        // test configurator with higher priority
+        assertEquals(42l, instance.iterator().next());
+        long val = 0;
+        for (Long v : instance) {
+            val += v;
+        }
+        assertEquals(64l, val);
+    }
+
+    @Singleton
+    static class ListConsumer {
+
+        @Inject
+        List<String> list;
+
     }
 
     static class TestRegistrar implements BeanRegistrar {
@@ -94,7 +121,8 @@ public class BeanRegistrarTest {
                     context.beans().withQualifier(MyQualifier.class).firstResult().get().getIdentifier());
 
             BeanConfigurator<Integer> integerConfigurator = context.configure(Integer.class);
-            integerConfigurator.unremovable().types(Integer.class).creator(mc -> {
+            integerConfigurator.unremovable();
+            integerConfigurator.types(Integer.class).creator(mc -> {
                 ResultHandle ret = mc.newInstance(MethodDescriptor.ofConstructor(Integer.class, int.class), mc.load(152));
                 mc.returnValue(ret);
             });
@@ -102,13 +130,43 @@ public class BeanRegistrarTest {
             integerConfigurator.scope(Singleton.class);
             integerConfigurator.done();
 
-            context.configure(String.class).unremovable().types(String.class).param("name", "Frantisek")
-                    .creator(StringCreator.class).done();
+            context.configure(String.class)
+                    .unremovable()
+                    .types(String.class)
+                    .param("name", "Frantisek")
+                    .creator(StringCreator.class)
+                    .done();
 
             context.configure(String.class).types(String.class).param("name", "Roman")
-                    .creator(StringCreator.class).addQualifier().annotation(NextQualifier.class).addValue("name", "Roman")
-                    .addValue("age", 42)
-                    .addValue("classes", new Class[] { String.class }).done().unremovable().done();
+                    .creator(StringCreator.class)
+                    .addQualifier().annotation(NextQualifier.class).addValue("name", "Roman").addValue("age", 42)
+                    .addValue("classes", new Class[] { String.class }).done()
+                    .unremovable()
+                    .done();
+
+            context.configure(List.class)
+                    // List, List<String>
+                    .addType(Type.create(DotName.createSimple(List.class.getName()), Kind.CLASS))
+                    .addType(ParameterizedType.create(DotName.createSimple(List.class.getName()),
+                            new Type[] { Type.create(DotName.createSimple(String.class.getName()), Kind.CLASS) }, null))
+                    .creator(ListCreator.class)
+                    .unremovable()
+                    .done();
+
+            context.configure(Long.class)
+                    .addType(Long.class)
+                    .priority(10)
+                    .creator(mc -> mc.returnValue(mc.load(42l)))
+                    .unremovable()
+                    .done();
+
+            context.configure(Long.class)
+                    .addType(Long.class)
+                    .addType(Double.class)
+                    .priority(5)
+                    .creator(mc -> mc.returnValue(mc.load(22l)))
+                    .unremovable()
+                    .done();
 
             uselessBean = context.beans()
                     .assignableTo(
@@ -125,6 +183,15 @@ public class BeanRegistrarTest {
         @Override
         public String create(CreationalContext<String> creationalContext, Map<String, Object> params) {
             return "Hello " + params.get("name") + "!";
+        }
+
+    }
+
+    public static class ListCreator implements BeanCreator<List<String>> {
+
+        @Override
+        public List<String> create(CreationalContext<List<String>> creationalContext, Map<String, Object> params) {
+            return List.of("foo");
         }
 
     }

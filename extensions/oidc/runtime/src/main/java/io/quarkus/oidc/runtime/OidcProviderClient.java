@@ -1,9 +1,9 @@
 package io.quarkus.oidc.runtime;
 
+import java.io.Closeable;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
-import java.time.Duration;
 
 import org.jboss.logging.Logger;
 
@@ -11,8 +11,11 @@ import io.quarkus.oidc.AuthorizationCodeTokens;
 import io.quarkus.oidc.OIDCException;
 import io.quarkus.oidc.OidcConfigurationMetadata;
 import io.quarkus.oidc.OidcTenantConfig;
+import io.quarkus.oidc.TokenIntrospection;
+import io.quarkus.oidc.UserInfo;
 import io.quarkus.oidc.common.runtime.OidcCommonUtils;
 import io.quarkus.oidc.common.runtime.OidcConstants;
+import io.quarkus.oidc.common.runtime.OidcEndpointAccessException;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.groups.UniOnItem;
 import io.vertx.core.http.HttpHeaders;
@@ -23,11 +26,15 @@ import io.vertx.mutiny.ext.web.client.HttpRequest;
 import io.vertx.mutiny.ext.web.client.HttpResponse;
 import io.vertx.mutiny.ext.web.client.WebClient;
 
-public class OidcProviderClient {
+public class OidcProviderClient implements Closeable {
     private static final Logger LOG = Logger.getLogger(OidcProviderClient.class);
 
-    private static final Duration REQUEST_RETRY_BACKOFF_DURATION = Duration.ofSeconds(1);
     private static final String AUTHORIZATION_HEADER = String.valueOf(HttpHeaders.AUTHORIZATION);
+    private static final String CONTENT_TYPE_HEADER = String.valueOf(HttpHeaders.CONTENT_TYPE);
+    private static final String ACCEPT_HEADER = String.valueOf(HttpHeaders.ACCEPT);
+    private static final String APPLICATION_X_WWW_FORM_URLENCODED = String
+            .valueOf(HttpHeaders.APPLICATION_X_WWW_FORM_URLENCODED.toString());
+    private static final String APPLICATION_JSON = "application/json";
 
     private final WebClient client;
     private final OidcConfigurationMetadata metadata;
@@ -49,18 +56,18 @@ public class OidcProviderClient {
         return metadata;
     }
 
-    public Uni<JsonWebKeyCache> getJsonWebKeySet() {
+    public Uni<JsonWebKeySet> getJsonWebKeySet() {
         return client.getAbs(metadata.getJsonWebKeySetUri()).send().onItem()
-                .transform(resp -> getJsonWebKeyCache(resp));
+                .transform(resp -> getJsonWebKeySet(resp));
     }
 
-    public Uni<JsonObject> getUserInfo(String token) {
-        return client.postAbs(metadata.getUserInfoUri())
+    public Uni<UserInfo> getUserInfo(String token) {
+        return client.getAbs(metadata.getUserInfoUri())
                 .putHeader(AUTHORIZATION_HEADER, OidcConstants.BEARER_SCHEME + " " + token)
                 .send().onItem().transform(resp -> getUserInfo(resp));
     }
 
-    public Uni<JsonObject> introspectToken(String token) {
+    public Uni<TokenIntrospection> introspectToken(String token) {
         MultiMap introspectionParams = new MultiMap(io.vertx.core.MultiMap.caseInsensitiveMultiMap());
         introspectionParams.add(OidcConstants.INTROSPECTION_TOKEN, token);
         introspectionParams.add(OidcConstants.INTROSPECTION_TOKEN_TYPE_HINT, OidcConstants.ACCESS_TOKEN_VALUE);
@@ -68,11 +75,11 @@ public class OidcProviderClient {
                 .transform(resp -> getTokenIntrospection(resp));
     }
 
-    private JsonWebKeyCache getJsonWebKeyCache(HttpResponse<Buffer> resp) {
+    private JsonWebKeySet getJsonWebKeySet(HttpResponse<Buffer> resp) {
         if (resp.statusCode() == 200) {
-            return new JsonWebKeyCache(resp.bodyAsString(StandardCharsets.UTF_8.name()));
+            return new JsonWebKeySet(resp.bodyAsString(StandardCharsets.UTF_8.name()));
         } else {
-            throw new OIDCException();
+            throw new OidcEndpointAccessException(resp.statusCode());
         }
     }
 
@@ -97,12 +104,19 @@ public class OidcProviderClient {
 
     private UniOnItem<HttpResponse<Buffer>> getHttpResponse(String uri, MultiMap formBody) {
         HttpRequest<Buffer> request = client.postAbs(uri);
-        request.putHeader(HttpHeaders.CONTENT_TYPE.toString(), HttpHeaders.APPLICATION_X_WWW_FORM_URLENCODED.toString());
+        request.putHeader(CONTENT_TYPE_HEADER, APPLICATION_X_WWW_FORM_URLENCODED);
+        request.putHeader(ACCEPT_HEADER, APPLICATION_JSON);
         if (clientSecretBasicAuthScheme != null) {
             request.putHeader(AUTHORIZATION_HEADER, clientSecretBasicAuthScheme);
         } else if (clientJwtKey != null) {
-            formBody.add(OidcConstants.CLIENT_ASSERTION_TYPE, OidcConstants.JWT_BEARER_CLIENT_ASSERTION_TYPE);
-            formBody.add(OidcConstants.CLIENT_ASSERTION, OidcCommonUtils.signJwtWithKey(oidcConfig, clientJwtKey));
+            String jwt = OidcCommonUtils.signJwtWithKey(oidcConfig, metadata.getTokenUri(), clientJwtKey);
+            if (OidcCommonUtils.isClientSecretPostJwtAuthRequired(oidcConfig.credentials)) {
+                formBody.add(OidcConstants.CLIENT_ID, oidcConfig.clientId.get());
+                formBody.add(OidcConstants.CLIENT_SECRET, jwt);
+            } else {
+                formBody.add(OidcConstants.CLIENT_ASSERTION_TYPE, OidcConstants.JWT_BEARER_CLIENT_ASSERTION_TYPE);
+                formBody.add(OidcConstants.CLIENT_ASSERTION, jwt);
+            }
         } else if (OidcCommonUtils.isClientSecretPostAuthRequired(oidcConfig.credentials)) {
             formBody.add(OidcConstants.CLIENT_ID, oidcConfig.clientId.get());
             formBody.add(OidcConstants.CLIENT_SECRET, OidcCommonUtils.clientSecret(oidcConfig.credentials));
@@ -113,7 +127,7 @@ public class OidcProviderClient {
         Uni<HttpResponse<Buffer>> response = request.sendBuffer(OidcCommonUtils.encodeForm(formBody))
                 .onFailure(ConnectException.class)
                 .retry()
-                .atMost(3);
+                .atMost(oidcConfig.connectionRetryCount).onFailure().transform(t -> t.getCause());
         return response.onItem();
     }
 
@@ -125,21 +139,38 @@ public class OidcProviderClient {
         return new AuthorizationCodeTokens(idToken, accessToken, refreshToken);
     }
 
-    private JsonObject getUserInfo(HttpResponse<Buffer> resp) {
-        return getJsonObject(resp);
+    private UserInfo getUserInfo(HttpResponse<Buffer> resp) {
+        return new UserInfo(getString(resp));
     }
 
-    private JsonObject getTokenIntrospection(HttpResponse<Buffer> resp) {
-        return getJsonObject(resp);
+    private TokenIntrospection getTokenIntrospection(HttpResponse<Buffer> resp) {
+        return new TokenIntrospection(getString(resp));
     }
 
-    private JsonObject getJsonObject(HttpResponse<Buffer> resp) {
+    private static JsonObject getJsonObject(HttpResponse<Buffer> resp) {
         if (resp.statusCode() == 200) {
             return resp.bodyAsJsonObject();
         } else {
-            String errorMessage = resp.bodyAsString();
-            LOG.debugf("Request has failed: status: %d, error message: %s", resp.statusCode(), errorMessage);
-            throw new OIDCException(errorMessage);
+            throw responseException(resp);
         }
+    }
+
+    private static String getString(HttpResponse<Buffer> resp) {
+        if (resp.statusCode() == 200) {
+            return resp.bodyAsString();
+        } else {
+            throw responseException(resp);
+        }
+    }
+
+    private static OIDCException responseException(HttpResponse<Buffer> resp) {
+        String errorMessage = resp.bodyAsString();
+        LOG.debugf("Request has failed: status: %d, error message: %s", resp.statusCode(), errorMessage);
+        throw new OIDCException(errorMessage);
+    }
+
+    @Override
+    public void close() {
+        client.close();
     }
 }

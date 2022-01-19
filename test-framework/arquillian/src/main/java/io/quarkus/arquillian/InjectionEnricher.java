@@ -46,14 +46,15 @@ public class InjectionEnricher implements TestEnricher {
     @Override
     public Object[] resolve(Method method) {
         //we need to resolve from inside the
-        if (method.getParameterTypes().length > 0) {
+        if (method.getParameterCount() > 0) {
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             try {
                 CreationContextHolder holder = getCreationalContext();
                 ClassLoader cl = appClassloader.get() != null ? appClassloader.get() : getClass().getClassLoader();
                 Thread.currentThread().setContextClassLoader(cl);
                 Class<?> c = cl.loadClass(IsolatedEnricher.class.getName());
-                BiFunction<Method, Object, Object[]> function = (BiFunction<Method, Object, Object[]>) c.newInstance();
+                BiFunction<Method, Object, Object[]> function = (BiFunction<Method, Object, Object[]>) c
+                        .getDeclaredConstructor().newInstance();
                 return function.apply(method, holder.creationalContext);
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -68,7 +69,8 @@ public class InjectionEnricher implements TestEnricher {
         try {
             ClassLoader cl = appClassloader.get() != null ? appClassloader.get() : getClass().getClassLoader();
             Class<?> c = cl.loadClass(IsolatedCreationContextCreator.class.getName());
-            Supplier<Map.Entry<Closeable, Object>> supplier = (Supplier<Map.Entry<Closeable, Object>>) c.newInstance();
+            Supplier<Map.Entry<Closeable, Object>> supplier = (Supplier<Map.Entry<Closeable, Object>>) c
+                    .getDeclaredConstructor().newInstance();
             Map.Entry<Closeable, Object> val = supplier.get();
             return new CreationContextHolder(val.getKey(), val.getValue());
         } catch (Exception e) {
@@ -130,7 +132,7 @@ public class InjectionEnricher implements TestEnricher {
 
         @Override
         public Object[] apply(Method method, Object creationalContext) {
-            Object[] values = new Object[method.getParameterTypes().length];
+            Object[] values = new Object[method.getParameterCount()];
 
             // TestNG - we want to skip resolution if a non-arquillian dataProvider is used
             boolean hasNonArquillianDataProvider = false;
@@ -154,15 +156,15 @@ public class InjectionEnricher implements TestEnricher {
             if (beanManager == null) {
                 return values;
             }
+            Class<?>[] parameterTypes = method.getParameterTypes();
             try {
                 // obtain the same method definition but from the TCCL
                 method = getClass().getClassLoader()
                         .loadClass(method.getDeclaringClass().getName())
-                        .getMethod(method.getName(), convertToCL(method.getParameterTypes(), getClass().getClassLoader()));
+                        .getMethod(method.getName(), convertToCL(parameterTypes, getClass().getClassLoader()));
             } catch (Throwable t) {
                 throw new RuntimeException(t);
             }
-            Class<?>[] parameterTypes = method.getParameterTypes();
             for (int i = 0; i < parameterTypes.length; i++) {
                 try {
                     values[i] = getInstanceByType(beanManager, i, method, (CreationalContext<?>) creationalContext);

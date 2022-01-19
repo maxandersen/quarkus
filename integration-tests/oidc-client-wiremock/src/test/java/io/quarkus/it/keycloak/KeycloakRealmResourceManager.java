@@ -35,19 +35,35 @@ public class KeycloakRealmResourceManager implements QuarkusTestResourceLifecycl
                         .withHeader("Content-Type", MediaType.APPLICATION_JSON)
                         .withBody(
                                 "{\"access_token\":\"access_token_1\", \"expires_in\":4, \"refresh_token\":\"refresh_token_1\"}")));
+        server.stubFor(WireMock.post("/non-standard-tokens")
+                .withHeader("X-Custom", matching("XCustomHeaderValue"))
+                .withRequestBody(matching("grant_type=password&username=alice&password=alice&extra_param=extra_param_value"))
+                .willReturn(WireMock
+                        .aResponse()
+                        .withHeader("Content-Type", MediaType.APPLICATION_JSON)
+                        .withBody(
+                                "{\"accessToken\":\"access_token_n\", \"expiresIn\":\"4\", \"refreshToken\":\"refresh_token_n\"}")));
+
         server.stubFor(WireMock.post("/tokens")
                 .withRequestBody(matching("grant_type=refresh_token&refresh_token=refresh_token_1"))
                 .willReturn(WireMock
                         .aResponse()
                         .withHeader("Content-Type", MediaType.APPLICATION_JSON)
                         .withBody(
-                                "{\"access_token\":\"access_token_2\", \"expires_in\":4, \"refresh_token\":\"refresh_token_1\"}")));
+                                "{\"access_token\":\"access_token_2\", \"expires_in\":4, \"refresh_token\":\"refresh_token_2\", \"refresh_expires_in\":1}")));
+
+        server.stubFor(WireMock.post("/refresh-token-only")
+                .withRequestBody(matching("grant_type=refresh_token&refresh_token=shared_refresh_token"))
+                .willReturn(WireMock
+                        .aResponse()
+                        .withHeader("Content-Type", MediaType.APPLICATION_JSON)
+                        .withBody(
+                                "{\"access_token\":\"temp_access_token\", \"expires_in\":4}")));
 
         LOG.infof("Keycloak started in mock mode: %s", server.baseUrl());
 
         Map<String, String> conf = new HashMap<>();
-        conf.put("quarkus.oidc-client.auth-server-url", server.baseUrl());
-        conf.put("keycloak-url", server.baseUrl());
+        conf.put("keycloak.url", server.baseUrl());
         return conf;
     }
 

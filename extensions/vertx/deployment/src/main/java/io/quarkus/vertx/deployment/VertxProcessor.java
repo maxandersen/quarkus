@@ -11,6 +11,7 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
+import org.jboss.jandex.Type.Kind;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -23,6 +24,7 @@ import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
@@ -39,6 +41,7 @@ import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.vertx.ConsumeEvent;
@@ -53,7 +56,6 @@ class VertxProcessor {
     @BuildStep
     void featureAndCapability(BuildProducer<FeatureBuildItem> feature, BuildProducer<CapabilityBuildItem> capability) {
         feature.produce(new FeatureBuildItem(Feature.VERTX));
-        capability.produce(new CapabilityBuildItem(Capability.RESTEASY_JSON));
     }
 
     @BuildStep
@@ -114,8 +116,13 @@ class VertxProcessor {
                     List<Type> params = method.parameters();
                     if (params.size() != 1) {
                         throw new IllegalStateException(String.format(
-                                "Event consumer business method must accept exactly one parameter: %s [method: %s, bean:%s",
+                                "An event consumer business method must accept exactly one parameter: %s [method: %s, bean:%s]",
                                 params, method, bean));
+                    }
+                    if (method.returnType().kind() != Kind.VOID && VertxConstants.isMessage(params.get(0).name())) {
+                        throw new IllegalStateException(String.format(
+                                "An event consumer business method that accepts io.vertx.core.eventbus.Message or io.vertx.mutiny.core.eventbus.Message must return void [method: %s, bean:%s]",
+                                method, bean));
                     }
                     messageConsumerBusinessMethods
                             .produce(new EventConsumerBusinessMethodItem(bean, method, consumeEvent));
@@ -142,4 +149,12 @@ class VertxProcessor {
         }
     }
 
+    @BuildStep
+    void faultToleranceIntegration(Capabilities capabilities, BuildProducer<ServiceProviderBuildItem> serviceProvider) {
+        if (capabilities.isPresent(Capability.SMALLRYE_FAULT_TOLERANCE)) {
+            serviceProvider.produce(new ServiceProviderBuildItem(
+                    "io.smallrye.faulttolerance.core.event.loop.EventLoop",
+                    "io.smallrye.faulttolerance.vertx.VertxEventLoop"));
+        }
+    }
 }

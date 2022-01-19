@@ -2,7 +2,6 @@ package io.quarkus.qute.runtime;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -27,7 +26,6 @@ import io.quarkus.qute.Template;
 import io.quarkus.qute.TemplateInstance;
 import io.quarkus.qute.TemplateInstanceBase;
 import io.quarkus.qute.Variant;
-import io.quarkus.qute.api.ResourcePath;
 import io.quarkus.qute.runtime.QuteRecorder.QuteContext;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -73,15 +71,11 @@ public class TemplateProducer {
 
     @Produces
     @Location("ignored")
-    @ResourcePath("ignored")
     Template getTemplate(InjectionPoint injectionPoint) {
         String path = null;
         for (Annotation qualifier : injectionPoint.getQualifiers()) {
             if (qualifier.annotationType().equals(Location.class)) {
                 path = ((Location) qualifier).value();
-                break;
-            } else if (qualifier.annotationType().equals(ResourcePath.class)) {
-                path = ((ResourcePath) qualifier).value();
                 break;
             }
         }
@@ -146,7 +140,7 @@ public class TemplateProducer {
             this.variants = variants;
             this.engine = engine;
             if (variants != null) {
-                setAttribute(TemplateInstance.VARIANTS, new ArrayList<>(variants.variantToTemplate.keySet()));
+                setAttribute(TemplateInstance.VARIANTS, List.copyOf(variants.variantToTemplate.keySet()));
             }
         }
 
@@ -177,11 +171,13 @@ public class TemplateProducer {
 
         private TemplateInstance templateInstance() {
             TemplateInstance instance = template().instance();
-            instance.data(data());
+            if (dataMap != null) {
+                dataMap.forEach(instance::data);
+            } else if (data != null) {
+                instance.data(data);
+            }
             if (!attributes.isEmpty()) {
-                for (Entry<String, Object> entry : attributes.entrySet()) {
-                    instance.setAttribute(entry.getKey(), entry.getValue());
-                }
+                attributes.forEach(instance::setAttribute);
             }
             return instance;
         }

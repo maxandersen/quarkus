@@ -20,4 +20,14 @@ public class JPAFunctionalityTest {
         RestAssured.when().get("/jpa-oracle/testfunctionality").then().body(is("OK"));
     }
 
+    @Test
+    public void testSerializationFromServlet() throws Exception {
+        RestAssured.when().get("/jpa-oracle/testserialization").then().body(is("Hello from Serialization Test"));
+    }
+
+    @Test
+    public void testLdapFromServlet() throws Exception {
+        RestAssured.when().get("/jpa-oracle/testldap").then().body(is("OK"));
+    }
+
 }

@@ -1,9 +1,11 @@
 package io.quarkus.hibernate.orm.runtime;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
@@ -11,11 +13,13 @@ import javax.persistence.spi.PersistenceProvider;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.sql.DataSource;
 
+import org.hibernate.boot.registry.StandardServiceInitiator;
 import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
+import org.hibernate.service.Service;
 import org.hibernate.service.internal.ProvidedService;
 import org.jboss.logging.Logger;
 
@@ -172,8 +176,11 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
             RuntimeSettings.Builder runtimeSettingsBuilder = new RuntimeSettings.Builder(buildTimeSettings,
                     integrationSettings);
 
-            // Inject the datasource
-            injectDataSource(persistenceUnitName, recordedState.getDataSource(), runtimeSettingsBuilder);
+            Optional<String> dataSourceName = recordedState.getDataSource();
+            if (dataSourceName.isPresent()) {
+                // Inject the datasource
+                injectDataSource(persistenceUnitName, dataSourceName.get(), runtimeSettingsBuilder);
+            }
 
             // Inject runtime configuration if the persistence unit was defined by Quarkus configuration
             if (!recordedState.isFromPersistenceXml()) {
@@ -193,8 +200,8 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
 
             RuntimeSettings runtimeSettings = runtimeSettingsBuilder.build();
 
-            StandardServiceRegistry standardServiceRegistry = rewireMetadataAndExtractServiceRegistry(
-                    runtimeSettings, recordedState);
+            StandardServiceRegistry standardServiceRegistry = rewireMetadataAndExtractServiceRegistry(runtimeSettings,
+                    recordedState, persistenceUnitName);
 
             final Object cdiBeanManager = Arc.container().beanManager();
             final Object validatorFactory = Arc.container().instance("quarkus-hibernate-validator-factory").get();
@@ -204,26 +211,39 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
                     persistenceUnitName,
                     standardServiceRegistry /* Mostly ignored! (yet needs to match) */,
                     runtimeSettings,
-                    validatorFactory, cdiBeanManager, recordedState.getMultiTenancyStrategy());
+                    validatorFactory, cdiBeanManager);
         }
 
         log.debug("Found no matching persistence units");
         return null;
     }
 
-    private StandardServiceRegistry rewireMetadataAndExtractServiceRegistry(RuntimeSettings runtimeSettings,
-            RecordedState rs) {
+    private StandardServiceRegistry rewireMetadataAndExtractServiceRegistry(RuntimeSettings runtimeSettings, RecordedState rs,
+            String persistenceUnitName) {
         PreconfiguredServiceRegistryBuilder serviceRegistryBuilder = new PreconfiguredServiceRegistryBuilder(rs);
 
         runtimeSettings.getSettings().forEach((key, value) -> {
             serviceRegistryBuilder.applySetting(key, value);
         });
 
-        for (ProvidedService<?> providedService : rs.getProvidedServices()) {
-            serviceRegistryBuilder.addService(providedService);
+        Set<Class<?>> runtimeInitiatedServiceClasses = new HashSet<>();
+        for (HibernateOrmIntegrationRuntimeDescriptor descriptor : integrationRuntimeDescriptors
+                .getOrDefault(persistenceUnitName, Collections.emptyList())) {
+            Optional<HibernateOrmIntegrationRuntimeInitListener> listenerOptional = descriptor.getInitListener();
+            if (listenerOptional.isPresent()) {
+                for (StandardServiceInitiator<?> serviceInitiator : listenerOptional.get().contributeServiceInitiators()) {
+                    Class<? extends Service> serviceClass = serviceInitiator.getServiceInitiated();
+                    runtimeInitiatedServiceClasses.add(serviceClass);
+                    serviceRegistryBuilder.addInitiator(serviceInitiator);
+                }
+            }
         }
 
-        // TODO serviceRegistryBuilder.addInitiator( )
+        for (ProvidedService<?> providedService : rs.getProvidedServices()) {
+            if (!runtimeInitiatedServiceClasses.contains(providedService.getServiceRole())) {
+                serviceRegistryBuilder.addService(providedService);
+            }
+        }
 
         StandardServiceRegistryImpl standardServiceRegistry = serviceRegistryBuilder.buildNewServiceRegistry();
         return standardServiceRegistry;
@@ -340,6 +360,28 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
             runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_HALT_ON_ERROR, "true");
         }
 
+        //Never append on existing scripts:
+        runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_SCRIPTS_CREATE_APPEND, "false");
+
+        runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_SCRIPTS_ACTION,
+                persistenceUnitConfig.scripts.generation.generation);
+
+        if (persistenceUnitConfig.scripts.generation.createTarget.isPresent()) {
+            runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_SCRIPTS_CREATE_TARGET,
+                    persistenceUnitConfig.scripts.generation.createTarget.get());
+        }
+
+        if (persistenceUnitConfig.scripts.generation.dropTarget.isPresent()) {
+            runtimeSettingsBuilder.put(AvailableSettings.HBM2DDL_SCRIPTS_DROP_TARGET,
+                    persistenceUnitConfig.scripts.generation.dropTarget.get());
+        }
+
+        persistenceUnitConfig.database.defaultCatalog.ifPresent(
+                catalog -> runtimeSettingsBuilder.put(AvailableSettings.DEFAULT_CATALOG, catalog));
+
+        persistenceUnitConfig.database.defaultSchema.ifPresent(
+                schema -> runtimeSettingsBuilder.put(AvailableSettings.DEFAULT_SCHEMA, schema));
+
         // Logging
         if (persistenceUnitConfig.log.sql) {
             runtimeSettingsBuilder.put(AvailableSettings.SHOW_SQL, "true");
@@ -352,6 +394,11 @@ public final class FastBootHibernatePersistenceProvider implements PersistencePr
         if (persistenceUnitConfig.log.jdbcWarnings.isPresent()) {
             runtimeSettingsBuilder.put(AvailableSettings.LOG_JDBC_WARNINGS,
                     persistenceUnitConfig.log.jdbcWarnings.get().toString());
+        }
+
+        if (persistenceUnitConfig.log.queriesSlowerThanMs.isPresent()) {
+            runtimeSettingsBuilder.put(AvailableSettings.LOG_SLOW_QUERY,
+                    persistenceUnitConfig.log.queriesSlowerThanMs.get());
         }
     }
 

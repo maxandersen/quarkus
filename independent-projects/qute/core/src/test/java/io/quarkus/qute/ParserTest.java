@@ -1,5 +1,6 @@
 package io.quarkus.qute;
 
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -164,15 +165,11 @@ public class ParserTest {
             }
 
         })).build();
-        try {
-            engine.getTemplate("foo.html");
-            fail("No parser error found");
-        } catch (TemplateException expected) {
-            assertNotNull(expected.getOrigin());
-            assertEquals(
-                    "Parser error in template [foo.html] on line 1: mandatory section parameters not declared for {#if}: [Parameter [name=condition, defaultValue=null, optional=false]]",
-                    expected.getMessage());
-        }
+        assertThatExceptionOfType(TemplateException.class)
+                .isThrownBy(() -> engine.getTemplate("foo.html"))
+                .withMessage(
+                        "Parser error in template [foo.html] on line 1: mandatory section parameters not declared for {#if}: [condition]")
+                .hasFieldOrProperty("origin");
     }
 
     @Test
@@ -191,6 +188,8 @@ public class ParserTest {
                 "false");
         assertParams("(item.name == 'foo') and (item.name is false)", "(item.name == 'foo')", "and", "(item.name is false)");
         assertParams("(item.name != 'foo') || (item.name == false)", "(item.name != 'foo')", "||", "(item.name == false)");
+        assertParams("foo.codePointCount(0, foo.length) baz=bar", "foo.codePointCount(0, foo.length)", "baz=bar");
+        assertParams("foo.codePointCount( 0 , foo.length( 1)) baz=bar", "foo.codePointCount( 0 , foo.length( 1))", "baz=bar");
     }
 
     @Test
@@ -206,11 +205,8 @@ public class ParserTest {
     public void testCdata() {
         Engine engine = Engine.builder().addDefaults().build();
         String jsSnippet = "<script>const foo = function(){alert('bar');};</script>";
-        try {
-            engine.parse("Hello {name} " + jsSnippet);
-            fail();
-        } catch (Exception expected) {
-        }
+        assertThatExceptionOfType(Exception.class)
+                .isThrownBy(() -> engine.parse("Hello {name} " + jsSnippet));
         assertEquals("Hello world <script>const foo = function(){alert('bar');};</script>", engine.parse("Hello {name} {["
                 + jsSnippet
                 + "]}").data("name", "world").render());
@@ -229,7 +225,7 @@ public class ParserTest {
                 + "\n"
                 + " {! My comment !} \n"
                 + "  {#for i in 5}\n" // -> standalone
-                + "{index}:\n"
+                + "{i_index}:\n"
                 + "{/} "; // -> standalone
         assertEquals("\n0:\n1:\n2:\n3:\n4:\n", engine.parse(content).render());
         assertEquals("bar\n", engine.parse("{foo}\n").data("foo", "bar").render());
@@ -248,12 +244,9 @@ public class ParserTest {
         assertTrue(Parser.isValidIdentifier("foo["));
         assertTrue(Parser.isValidIdentifier("foo^"));
         Engine engine = Engine.builder().addDefaults().build();
-        try {
-            engine.parse("{foo\nfoo}");
-            fail();
-        } catch (Exception expected) {
-            assertTrue(expected.getMessage().contains("Invalid identifier found"), expected.toString());
-        }
+        assertThatExceptionOfType(TemplateException.class)
+                .isThrownBy(() -> engine.parse("{foo\nfoo}"))
+                .withMessage("Parser error on line 1: invalid identifier found {foo\nfoo}");
     }
 
     @Test
@@ -347,6 +340,47 @@ public class ParserTest {
         Expression nameToUpperCase = find(expressions, "name.toUpperCase");
         assertExpr(expressions, "upperCase.length", 2, "upperCase<set#" + nameToUpperCase.getGeneratedId() + ">.length");
         assertEquals(":3:5", loopLetLoopLet.data("foo", new Foo()).render());
+    }
+
+    @Test
+    public void testInvalidNamespaceExpression() {
+        assertParserError("{data: }",
+                "Parser error on line 1: empty expression found {data:}", 1);
+    }
+
+    @Test
+    public void testInvalidVirtualMethod() {
+        assertParserError("{foo.baz()(}",
+                "Parser error on line 1: invalid virtual method in {foo.baz()(}", 1);
+    }
+
+    @Test
+    public void testInvalidBracket() {
+        assertParserError("{foo.baz[}",
+                "Parser error on line 1: invalid bracket notation expression in {foo.baz[}", 1);
+    }
+
+    @Test
+    public void testInvalidParamDeclaration() {
+        assertParserError("{@com.foo }",
+                "Parser error on line 1: invalid parameter declaration {@com.foo }", 1);
+        assertParserError("{@ com.foo }",
+                "Parser error on line 1: invalid parameter declaration {@ com.foo }", 1);
+        assertParserError("{@com.foo.Bar bar baz}",
+                "Parser error on line 1: invalid parameter declaration {@com.foo.Bar bar baz}", 1);
+        assertParserError("{@}",
+                "Parser error on line 1: invalid parameter declaration {@}", 1);
+        assertParserError("{@\n}",
+                "Parser error on line 1: invalid parameter declaration {@\n}", 1);
+    }
+
+    @Test
+    public void testUserTagVirtualMethodParam() {
+        Engine engine = Engine.builder().addDefaults().addValueResolver(new ReflectionValueResolver())
+                .addSectionHelper(new UserTagSectionHelper.Factory("form", "form-template")).build();
+        engine.putTemplate("form-template", engine.parse("{it}"));
+        Template foo = engine.parse("{#form foo.codePointCount(0, foo.length) /}");
+        assertEquals("3", foo.data("foo", "foo").render());
     }
 
     public static class Foo {

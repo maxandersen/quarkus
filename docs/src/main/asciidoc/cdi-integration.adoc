@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - CDI Integration Guide
+= CDI Integration Guide
 
 include::./attributes.adoc[]
 :numbered:
@@ -66,6 +66,8 @@ _Solution_: Use the `AdditionalBeanBuildItem`.
 This build item can be used to specify one or more additional classes to be analyzed during the discovery. 
 Additional bean classes are transparently added to the application index processed by the container.
 
+IMPORTANT: It is not possible to conditionally enable/disable additional beans via the `@IfBuildProfile`, `@UnlessBuildProfile`, `@IfBuildProperty` and `@UnlessBuildProperty` annotations as described in <<cdi-reference.adoc#enable_build_profile>> and <<cdi-reference.adoc#enable_build_properties>>. Extensions should inspect the configuration or the current profile and only produce an `AdditionalBeanBuildItem` if really needed.
+
 .`AdditionalBeanBuildItem` Example
 [source,java]
 ----
@@ -88,9 +90,9 @@ NOTE: If no default scope is specified the `@Dependent` pseudo-scope is used.
 
 === _Reason 2_: Class Is Discovered but Has No Bean Defining Annotation
 
-In Quarkus, the application is represented by a single bean archive with the https://docs.jboss.org/cdi/spec/2.0/cdi-spec.html#default_bean_discovery[bean discovery mode `annotated`, window="_blank"].
-Therefore, bean classes that don't have a https://docs.jboss.org/cdi/spec/2.0/cdi-spec.html#bean_defining_annotations[bean defining annotation, window="_blank"] are ignored.
-Bean defining annotations are declared on the class-level and incluce scopes, stereotypes and `@Interceptor`.
+In Quarkus, the application is represented by a single bean archive with the https://jakarta.ee/specifications/cdi/2.0/cdi-spec-2.0.html#default_bean_discovery[bean discovery mode `annotated`, window="_blank"].
+Therefore, bean classes that don't have a https://jakarta.ee/specifications/cdi/2.0/cdi-spec-2.0.html#bean_defining_annotations[bean defining annotation, window="_blank"] are ignored.
+Bean defining annotations are declared on the class-level and include scopes, stereotypes and `@Interceptor`.
 
 _Solution 1_: Use the `AutoAddScopeBuildItem`. This build item can be used to add a scope to a class that meets certain conditions.
 
@@ -158,7 +160,7 @@ _Solution_: Use the `AdditionalBeanBuildItem` as described in <<additional_bean_
 == Use Case - I Need To Transform Metadata
 
 In some cases, it's useful to be able to modify the metadata.
-Quarkus provides a powerful alternative to https://docs.jboss.org/cdi/spec/2.0/cdi-spec.html#process_annotated_type[`javax.enterprise.inject.spi.ProcessAnnotatedType`, window="_blank"].
+Quarkus provides a powerful alternative to https://jakarta.ee/specifications/cdi/2.0/cdi-spec-2.0.html#process_annotated_type[`javax.enterprise.inject.spi.ProcessAnnotatedType`, window="_blank"].
 With an `AnnotationsTransformerBuildItem` it's possible to override the annotations that exist on bean classes.
 
 For example, you might want to add an interceptor binding to a specific bean class.
@@ -249,7 +251,7 @@ void doSomethingWithNamedBeans(SynthesisFinishedBuildItem synthesisFinished, Bui
 Sometimes it is practical to be able to register a _synthetic bean_.
 Bean attributes of a synthetic bean are not derived from a Java class, method or field.
 Instead, all the attributes are defined by an extension.
-In regular CDI, this could be achieved using the https://docs.jboss.org/cdi/spec/2.0/cdi-spec.html#after_bean_discovery[`AfterBeanDiscovery.addBean()`, window="_blank"] methods.
+In regular CDI, this could be achieved using the https://jakarta.ee/specifications/cdi/2.0/cdi-spec-2.0.html#after_bean_discovery[`AfterBeanDiscovery.addBean()`, window="_blank"] methods.
 
 _Solution_: If you need to register a synthetic bean then use the `SyntheticBeanBuildItem`.
 
@@ -448,9 +450,8 @@ We are going to use `InterceptorBindingRegistrarBuildItem` to get it done.
 InterceptorBindingRegistrarBuildItem addInterceptorBindings() {
     return new InterceptorBindingRegistrarBuildItem(new InterceptorBindingRegistrar() {
         @Override
-        public Map<DotName, Set<String>> registerAdditionalBindings() {
-            return Collections.singletonMap(DotName.createSimple(NotAnInterceptorBinding.class.getName()),
-                                        Collections.emptySet());
+        public List<InterceptorBinding> getAdditionalBindings() {
+            return List.of(InterceptorBinding.of(NotAnInterceptorBinding.class));
         }
     });
 }

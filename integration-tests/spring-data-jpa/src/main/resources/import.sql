@@ -34,6 +34,9 @@ INSERT INTO person(id, name, age, joined, active, address_id) VALUES (4, 'DeMar'
 INSERT INTO person(id, name, age, joined, active, address_id) VALUES (5, 'DeMar', 20, '2019-05-05', true, NULL);
 INSERT INTO person(id, name, age, joined, active, address_id) VALUES (6, null , 22, '2019-06-06', true, NULL);
 
+INSERT INTO phone_call(area_code, number, duration, agent_first_name, agent_last_name) VALUES ('1234', '56789', 25, 'General', 'Specific');
+INSERT INTO phone_call(area_code, number, duration, agent_first_name, agent_last_name) VALUES ('1010', '11111', 13, 'Major', 'Minor');
+
 INSERT INTO post(id, title, bypass, posted, organization) VALUES (1, 'Quarkus first public release!', false, '2019-03-01 12:00:00.000', 'RH');
 INSERT INTO post(id, title, bypass, posted, organization) VALUES (2, 'Quarkus 0.12.0 released', false, '2019-04-01 12:00:00.000', 'RH');
 INSERT INTO post(id, title, bypass, posted, organization) VALUES (3, 'Quarkus 0.20 released', false, '2019-06-01 12:00:00.000', 'RH');
@@ -81,3 +84,8 @@ INSERT INTO employee(id, user_id, first_name, last_name, team_id) VALUES (102, '
 INSERT INTO MotorCar(id, brand, model) VALUES (1, 'Monteverdi', 'Hai 450');
 INSERT INTO MotorCar(id, brand, model) VALUES (2, 'Rinspeed', 'iChange');
 INSERT INTO MotorCar(id, brand, model) VALUES (3, 'Rinspeed', 'Oasis');
+
+INSERT INTO CatalogValue(id, key, displayName, type) VALUES (1, 'DE-BY', 'Bavaria', 'federalState');
+INSERT INTO CatalogValue(id, key, displayName, type) VALUES (2, 'DE-SN', 'Saxony', 'federalState');
+INSERT INTO CatalogValue(id, key, displayName, type) VALUES (3, 'DE', 'Germany', 'country');
+INSERT INTO CatalogValue(id, key, displayName, type) VALUES (4, 'FR', 'France', 'country');

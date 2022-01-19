@@ -2,6 +2,7 @@ package io.quarkus.deployment.configuration;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 
@@ -23,11 +24,12 @@ public class DefaultValuesConfigurationSource implements ConfigSource {
         return Collections.emptyMap();
     }
 
+    public Set<String> getPropertyNames() {
+        return Collections.emptySet();
+    }
+
     public String getValue(final String propertyName) {
-        if (!propertyName.startsWith("quarkus.")) {
-            return null;
-        }
-        final Container match = leafs.match(propertyName.substring(8));
+        final Container match = leafs.match(propertyName);
         if (match == null) {
             return null;
         }

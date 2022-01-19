@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -51,6 +52,9 @@ public class TestEndpoint {
     @Path("model")
     @Transactional
     public String testModel() {
+        Person.flush();
+        Assertions.assertNotNull(Person.getEntityManager());
+
         List<Person> persons = Person.findAll().list();
         Assertions.assertEquals(0, persons.size());
 
@@ -101,6 +105,11 @@ public class TestEndpoint {
         Assertions.assertEquals(person, Person.findAll().singleResult());
 
         persons = Person.find("name = ?1", "stef").list();
+        Assertions.assertEquals(1, persons.size());
+        Assertions.assertEquals(person, persons.get(0));
+
+        // full form
+        persons = Person.find("FROM Person2 WHERE name = ?1", "stef").list();
         Assertions.assertEquals(1, persons.size());
         Assertions.assertEquals(person, persons.get(0));
 
@@ -161,10 +170,63 @@ public class TestEndpoint {
         Assertions.assertEquals(person, persons.get(0));
         Assertions.assertEquals(1, Person.find("#Person.getByName", Parameters.with("name", "stef")).count());
         Assertions.assertThrows(PanacheQueryException.class, () -> Person.find("#Person.namedQueryNotFound").list());
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> Person.find("#Person.getByName", Sort.by("name"), Parameters.with("name", "stef")));
         NamedQueryEntity.find("#NamedQueryMappedSuperClass.getAll").list();
         NamedQueryEntity.find("#NamedQueryEntity.getAll").list();
         NamedQueryWith2QueriesEntity.find("#NamedQueryWith2QueriesEntity.getAll1").list();
         NamedQueryWith2QueriesEntity.find("#NamedQueryWith2QueriesEntity.getAll2").list();
+
+        Assertions.assertEquals(1, Person.count("#Person.countAll"));
+        Assertions.assertEquals(1, Person.count("#Person.countByName", Parameters.with("name", "stef").map()));
+        Assertions.assertEquals(1, Person.count("#Person.countByName", Parameters.with("name", "stef")));
+        Assertions.assertEquals(1, Person.count("#Person.countByName.ordinal", "stef"));
+
+        Assertions.assertEquals(1, Person.update("#Person.updateAllNames", Parameters.with("name", "stef2").map()));
+        persons = Person.find("#Person.getByName", Parameters.with("name", "stef2")).list();
+        Assertions.assertEquals(1, persons.size());
+
+        Assertions.assertEquals(1, Person.update("#Person.updateAllNames", Parameters.with("name", "stef3")));
+        persons = Person.find("#Person.getByName", Parameters.with("name", "stef3")).list();
+        Assertions.assertEquals(1, persons.size());
+
+        Assertions.assertEquals(1, Person.update("#Person.updateNameById",
+                Parameters.with("name", "stef2").and("id", person.id).map()));
+        persons = Person.find("#Person.getByName", Parameters.with("name", "stef2")).list();
+        Assertions.assertEquals(1, persons.size());
+
+        Assertions.assertEquals(1, Person.update("#Person.updateNameById",
+                Parameters.with("name", "stef3").and("id", person.id)));
+        persons = Person.find("#Person.getByName", Parameters.with("name", "stef3")).list();
+        Assertions.assertEquals(1, persons.size());
+
+        Assertions.assertEquals(1, Person.update("#Person.updateNameById.ordinal", "stef", person.id));
+        persons = Person.find("#Person.getByName", Parameters.with("name", "stef")).list();
+        Assertions.assertEquals(1, persons.size());
+
+        Dog.deleteAll();
+        Assertions.assertEquals(1, Person.delete("#Person.deleteAll"));
+        Assertions.assertEquals(0, Person.find("").list().size());
+
+        person = makeSavedPerson();
+        Dog.deleteAll();
+        Assertions.assertEquals(1, Person.find("").list().size());
+        Assertions.assertEquals(1, Person.delete("#Person.deleteById", Parameters.with("id", person.id).map()));
+        Assertions.assertEquals(0, Person.find("").list().size());
+
+        person = makeSavedPerson();
+        Dog.deleteAll();
+        Assertions.assertEquals(1, Person.find("").list().size());
+        Assertions.assertEquals(1, Person.delete("#Person.deleteById", Parameters.with("id", person.id)));
+        Assertions.assertEquals(0, Person.find("").list().size());
+
+        person = makeSavedPerson();
+        Dog.deleteAll();
+        Assertions.assertEquals(1, Person.find("").list().size());
+        Assertions.assertEquals(1, Person.delete("#Person.deleteById.ordinal", person.id));
+        Assertions.assertEquals(0, Person.find("").list().size());
+
+        person = makeSavedPerson();
 
         //empty query
         persons = Person.find("").list();
@@ -204,6 +266,13 @@ public class TestEndpoint {
         person = makeSavedPerson();
         Assertions.assertEquals(1, Dog.delete("owner = :owner", Parameters.with("owner", person)));
         Assertions.assertEquals(1, Person.delete("name", "stef"));
+        // full form
+        person = makeSavedPerson();
+        Assertions.assertEquals(1, Dog.delete("FROM Dog WHERE owner = :owner", Parameters.with("owner", person)));
+        Assertions.assertEquals(1, Person.delete("FROM Person2 WHERE name = ?1", "stef"));
+        person = makeSavedPerson();
+        Assertions.assertEquals(1, Dog.delete("DELETE FROM Dog WHERE owner = :owner", Parameters.with("owner", person)));
+        Assertions.assertEquals(1, Person.delete("DELETE FROM Person2 WHERE name = ?1", "stef"));
 
         Assertions.assertEquals(0, Person.deleteAll());
 
@@ -273,6 +342,7 @@ public class TestEndpoint {
         makeSavedPerson("p1");
         makeSavedPerson("p2");
 
+        // full form
         int updateByIndexParameter = Person.update("update from Person2 p set p.name = 'stefNEW' where p.name = ?1", "stefp1");
         Assertions.assertEquals(1, updateByIndexParameter, "More than one Person updated");
 
@@ -285,6 +355,7 @@ public class TestEndpoint {
         makeSavedPerson("p1");
         makeSavedPerson("p2");
 
+        // less full form
         updateByIndexParameter = Person.update("from Person2 p set p.name = 'stefNEW' where p.name = ?1", "stefp1");
         Assertions.assertEquals(1, updateByIndexParameter, "More than one Person updated");
 
@@ -342,6 +413,7 @@ public class TestEndpoint {
         makeSavedPerson("p1");
         makeSavedPerson("p2");
 
+        // full form
         int updateByIndexParameter = personDao.update("update from Person2 p set p.name = 'stefNEW' where p.name = ?1",
                 "stefp1");
         Assertions.assertEquals(1, updateByIndexParameter, "More than one Person updated");
@@ -355,6 +427,7 @@ public class TestEndpoint {
         makeSavedPerson("p1");
         makeSavedPerson("p2");
 
+        // less full form
         updateByIndexParameter = personDao.update("from Person2 p set p.name = 'stefNEW' where p.name = ?1", "stefp1");
         Assertions.assertEquals(1, updateByIndexParameter, "More than one Person updated");
 
@@ -528,6 +601,9 @@ public class TestEndpoint {
     @Path("model-dao")
     @Transactional
     public String testModelDao() {
+        personDao.flush();
+        Assertions.assertNotNull(personDao.getEntityManager());
+
         List<Person> persons = personDao.findAll().list();
         Assertions.assertEquals(0, persons.size());
 
@@ -577,6 +653,11 @@ public class TestEndpoint {
         Assertions.assertEquals(person, personDao.findAll().singleResultOptional().get());
 
         persons = personDao.find("name = ?1", "stef").list();
+        Assertions.assertEquals(1, persons.size());
+        Assertions.assertEquals(person, persons.get(0));
+
+        // full form
+        persons = personDao.find("FROM Person2 WHERE name = ?1", "stef").list();
         Assertions.assertEquals(1, persons.size());
         Assertions.assertEquals(person, persons.get(0));
 
@@ -632,6 +713,8 @@ public class TestEndpoint {
         Assertions.assertEquals(1, persons.size());
         Assertions.assertEquals(person, persons.get(0));
         Assertions.assertThrows(PanacheQueryException.class, () -> personDao.find("#Person.namedQueryNotFound").list());
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> personDao.find("#Person.getByName", Sort.by("name"), Parameters.with("name", "stef")));
         namedQueryRepository.find("#NamedQueryMappedSuperClass.getAll").list();
         namedQueryRepository.find("#NamedQueryEntity.getAll").list();
         namedQueryWith2QueriesRepository.find("#NamedQueryWith2QueriesEntity.getAll1").list();
@@ -671,6 +754,13 @@ public class TestEndpoint {
         person = makeSavedPerson();
         Assertions.assertEquals(1, dogDao.delete("owner = :owner", Parameters.with("owner", person)));
         Assertions.assertEquals(1, personDao.delete("name", "stef"));
+        // full form
+        person = makeSavedPerson();
+        Assertions.assertEquals(1, dogDao.delete("FROM Dog WHERE owner = :owner", Parameters.with("owner", person)));
+        Assertions.assertEquals(1, personDao.delete("FROM Person2 WHERE name = ?1", "stef"));
+        person = makeSavedPerson();
+        Assertions.assertEquals(1, dogDao.delete("DELETE FROM Dog WHERE owner = :owner", Parameters.with("owner", person)));
+        Assertions.assertEquals(1, personDao.delete("DELETE FROM Person2 WHERE name = ?1", "stef"));
 
         Assertions.assertEquals(0, personDao.deleteAll());
 
@@ -1112,6 +1202,17 @@ public class TestEndpoint {
         Assertions.assertEquals("stef", dogDto.ownerName);
         owner.delete();
 
+        CatOwner catOwner = new CatOwner("Julie");
+        catOwner.persist();
+        Cat bubulle = new Cat("Bubulle", catOwner);
+        bubulle.persist();
+
+        CatDto catDto = Cat.findAll().project(CatDto.class).firstResult();
+        Assertions.assertEquals("Julie", catDto.ownerName);
+
+        Cat.deleteAll();
+        CatOwner.deleteAll();
+
         return "OK";
     }
 
@@ -1282,9 +1383,9 @@ public class TestEndpoint {
     public String testBug8254() {
         CatOwner owner = new CatOwner("8254");
         owner.persist();
-        new Cat(owner).persist();
-        new Cat(owner).persist();
-        new Cat(owner).persist();
+        new Cat("Cat 1", owner).persist();
+        new Cat("Cat 2", owner).persist();
+        new Cat("Cat 3", owner).persist();
 
         // This used to fail with an invalid query "SELECT COUNT(*) SELECT DISTINCT cat.owner FROM Cat cat WHERE cat.owner = ?1"
         // Should now result in a valid query "SELECT COUNT(DISTINCT cat.owner) FROM Cat cat WHERE cat.owner = ?1"
@@ -1302,6 +1403,9 @@ public class TestEndpoint {
         assertEquals(3L, Cat.find("FROM Cat WHERE owner = ?1", owner).count());
         assertEquals(3L, Cat.find("owner", owner).count());
         assertEquals(1L, CatOwner.find("name = ?1", "8254").count());
+
+        Cat.deleteAll();
+        CatOwner.deleteAll();
 
         return "OK";
     }
@@ -1361,6 +1465,55 @@ public class TestEndpoint {
         // these should be unaffected
         assertEquals(3, Person.count());
         assertEquals(3, Person.listAll().size());
+
+        Person.deleteAll();
+
+        return "OK";
+    }
+
+    @GET
+    @Path("testFilterWithCollections")
+    @Transactional
+    public String testFilterWithCollections() {
+        Person.deleteAll();
+
+        Person stefPerson = new Person();
+        stefPerson.name = "Stef";
+        stefPerson.persist();
+
+        Person josePerson = new Person();
+        josePerson.name = "Jose";
+        josePerson.persist();
+
+        Person victorPerson = new Person();
+        victorPerson.name = "Victor";
+        victorPerson.persist();
+
+        assertEquals(3, Person.count());
+
+        List<String> namesParameter = Arrays.asList("Jose", "Victor");
+
+        // Try with different collection types
+        List<Object> collectionsValues = Arrays.asList(
+                // Using directly a list:
+                namesParameter,
+                // Using another collection,
+                new HashSet<>(namesParameter),
+                // Using array
+                namesParameter.toArray(new String[namesParameter.size()]));
+
+        for (Object collectionValue : collectionsValues) {
+            // should be filtered
+            List<Person> found = Person.findAll(Sort.by("id")).filter("Person.name.in",
+                    Parameters.with("names", collectionValue))
+                    .list();
+            assertEquals(2, found.size(),
+                    "Expected 2 entries when using parameter " + collectionValue.getClass());
+            assertTrue(found.stream().anyMatch(p -> p.name.contains("Jose")),
+                    "Jose was not found when using parameter " + collectionValue.getClass());
+            assertTrue(found.stream().anyMatch(p -> p.name.contains("Victor")),
+                    "Victor was not found when using parameter " + collectionValue.getClass());
+        }
 
         Person.deleteAll();
 

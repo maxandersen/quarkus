@@ -3,12 +3,12 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Using Security with JPA
+= Using Security with JPA
 
 include::./attributes.adoc[]
 
 This guide demonstrates how your Quarkus application can use a database to store your user identities with 
-link:hibernate-orm[Hibernate ORM] or link:hibernate-orm-panache[Hibernate ORM with Panache].
+xref:hibernate-orm.adoc[Hibernate ORM] or xref:hibernate-orm-panache.adoc[Hibernate ORM with Panache].
 
 
 == Prerequisites
@@ -17,7 +17,7 @@ To complete this guide, you need:
 
 * less than 15 minutes
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 
 == Architecture
@@ -47,7 +47,7 @@ First, we need a new project. Create a new project with the following command:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=security-jpa-quickstart \
     -Dextensions="security-jpa,jdbc-postgresql,resteasy,hibernate-orm-panache" \
@@ -417,4 +417,4 @@ it in production.
 
 == References
 
-* link:security[Quarkus Security]
+* xref:security.adoc[Quarkus Security]

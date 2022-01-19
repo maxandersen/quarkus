@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Writing Your Own Extension
+= Writing Your Own Extension
 
 :numbered:
 :sectnums:
@@ -17,7 +17,7 @@ Quarkus extensions add a new developer focused behavior to the core offering, an
 This means that metadata is only processed once at build time, which both saves on startup time, and also on memory
 usage as the classes etc that are used for processing are not loaded (or even present) in the runtime JVM.
 
-NOTE: This is an in-depth documentation, see the link:building-my-first-extension[building my first extension] if you need an introduction.
+NOTE: This is an in-depth documentation, see the xref:building-my-first-extension.adoc[building my first extension] if you need an introduction.
 
 == Extension philosophy
 
@@ -68,6 +68,10 @@ Less common properties can live in the library namespace.
 To fully enable the close world assumptions that Quarkus can optimize best, it is better to consider configuration options as build time settled vs overridable at runtime.
 Of course properties like host, port, password should be overridable at runtime.
 But many properties like enable caching or setting the JDBC driver can safely require a rebuild of the application.
+
+==== Static Init Config
+
+If the extension provides additional Config Sources and if these are required during Static Init, these must be registered with `StaticInitConfigSourceProviderBuildItem`. Configuration in Static Init does not scan for additional sources to avoid double initialization at application startup time.
 
 ////
 === API
@@ -369,7 +373,7 @@ Pushing as much as possible into the `@Record(STATIC_INIT)` phase allows for two
 that method. If config is read at runtime, Substrate cannot reason about the contents of the config and so needs to keep all features in case they are required.
 
 
-=== Maven setup
+=== Project setup
 
 Your extension project should be setup as a multi-module project with two submodules:
 
@@ -377,12 +381,23 @@ Your extension project should be setup as a multi-module project with two submod
 
 2. A runtime submodule that contains the runtime behavior that will provide the extension behavior in the native executable or runtime JVM.
 
-TIP: You may want to use the `create-extension` mojo of `io.quarkus:quarkus-maven-plugin` to create these Maven modules - see the next section.
-
 Your runtime artifact should depend on `io.quarkus:quarkus-core`, and possibly the runtime artifacts of other Quarkus
 modules if you want to use functionality provided by them.
-You will also need to include the `io.quarkus:quarkus-bootstrap-maven-plugin` to generate the Quarkus extension descriptor included into the runtime artifact, if you are using the Quarkus parent pom it will automatically inherit the correct configuration.
+Your deployment time module should depend on `io.quarkus:quarkus-core-deployment`, your runtime artifact,
+and possibly the deployment artifacts of other Quarkus modules if you want to use functionality provided by them.
+
+[WARNING]
+====
+Under no circumstances can the runtime module depend on a deployment artifact. This would result
+in pulling all the deployment time code into runtime scope, which defeats the purpose of having the split.
+====
+
+==== Using Maven
+
+You will need to include the `io.quarkus:quarkus-bootstrap-maven-plugin` to generate the Quarkus extension descriptor included into the runtime artifact, if you are using the Quarkus parent pom it will automatically inherit the correct configuration.
 Furthermore, you'll need to configure the `maven-compiler-plugin` to detect the `quarkus-extension-processor` annotation processor.
+
+TIP: You may want to use the `create-extension` mojo of `io.quarkus.platform:quarkus-maven-plugin` to create these Maven modules - see the next section.
 
 NOTE: By convention the deployment time artifact has the `-deployment` suffix, and the runtime artifact
 has no suffix (and is what the end user adds to their project).
@@ -432,15 +447,7 @@ has no suffix (and is what the end user adds to their project).
 
 NOTE: The above `maven-compiler-plugin` configuration requires version 3.5+.
 
-[WARNING]
-====
-Under no circumstances can the runtime module depend on a deployment artifact. This would result
-in pulling all the deployment time code into runtime scope, which defeats the purpose of having the split.
-====
-
-Your deployment time module should depend on `io.quarkus:quarkus-core-deployment`, your runtime artifact,
-and possibly the deployment artifacts of other Quarkus modules if you want to use functionality provided by them.
-You will also need to configure the `maven-compiler-plugin` to detect the `quarkus-extension-processor` annotation processor.
+You will also need to configure the `maven-compiler-plugin` of the deployment module to detect the `quarkus-extension-processor` annotation processor.
 
 [source%nowrap,xml]
 ----
@@ -469,7 +476,7 @@ You will also need to configure the `maven-compiler-plugin` to detect the `quark
 </build>
 ----
 
-==== Create new Quarkus Core extension modules using Maven
+===== Create new Quarkus Core extension modules using Maven
 
 Quarkus provides `create-extension` Maven Mojo to initialize your extension project.
 
@@ -480,7 +487,7 @@ It will try to auto-detect its options:
 * in other cases it will use the 'Standalone' extension layout and defaults.
 * we may introduce other layout types in the future.
 
-TIP: You may not specify any parameter to use the interactive mode: `mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create-extension -N`
+TIP: You may not specify any parameter to use the interactive mode: `mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create-extension -N`
 
 As and example, let's add a new extension called `my-ext` to the Quarkus source tree:
 
@@ -488,7 +495,7 @@ As and example, let's add a new extension called `my-ext` to the Quarkus source 
 ----
 git clone https://github.com/quarkusio/quarkus.git
 cd quarkus
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create-extension -N \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create-extension -N \
     -DextensionId=my-ext \
     -Dname="My Extension"
 ----
@@ -534,6 +541,34 @@ So you may consider omitting explicit `name` in some cases.
 // The following link should point to the mojo page once https://github.com/quarkusio/quarkusio.github.io/issues/265 is fixed
 Please refer to https://github.com/quarkusio/quarkus/blob/{quarkus-version}/devtools/maven/src/main/java/io/quarkus/maven/CreateExtensionMojo.java[CreateExtensionMojo JavaDoc] for all the available options of the mojo.
 
+==== Using Gradle
+
+You will need to apply the `io.quarkus.extension` plugin in the `runtime` module of your extension project.
+The plugin includes the `extensionDescriptor` task that will generate `META-INF/quarkus-extension.properties` and `META-INF/quarkus-extension.yml` files.
+The plugin also enables the `io.quarkus:quarkus-extension-processor` annotation processor in both `deployment` and `runtime` modules.
+The name of the deployment module can be configured in the plugin by setting the `deploymentArtifact` property. The property is set to `deployment` by default:
+
+[source,groovy,subs=attributes+]
+----
+plugins {
+    id 'java'
+    id 'io.quarkus.extensions'
+}
+
+quarkusExtension {
+    deploymentArtifact = 'deployment'
+}
+
+dependencies {
+    implementation platform('io.quarkus:quarkus-bom:{quarkus-version}')
+}
+----
+
+[WARNING]
+====
+This plugin is still experimental, it does not validate the extension dependencies as the equivalent Maven plugin does.
+====
+
 === Build Step Processors
 
 Work is done at augmentation time by _build steps_ which produce and consume _build items_.  The build steps found in
@@ -542,9 +577,8 @@ to produce the final build artifact(s).
 
 ==== Build steps
 
-A _build step_ is a method which is annotated with the `@io.quarkus.deployment.annotations.BuildStep` annotation.  Each
-build step may <<consuming-values,consume>> items that are produced by earlier stages, and <<producing-values,produce>> items
-that can be consumed by later stages. Build steps are normally only run when they produce a build item that is
+A _build step_ is a non-static method which is annotated with the `@io.quarkus.deployment.annotations.BuildStep` annotation.  
+Each build step may <<consuming-values,consume>> items that are produced by earlier stages, and <<producing-values,produce>> items that can be consumed by later stages. Build steps are normally only run when they produce a build item that is
 ultimately consumed by another step.
 
 Build steps are normally placed on plain classes within an extension's deployment module.  The classes are automatically
@@ -905,8 +939,6 @@ to be 'Application Archives', and will therefore get indexed. This is done via t
 example the ArC extension registers `META-INF/beans.xml`, which means that all archives on the class path with a `beans.xml`
 file will be indexed.
 
-NOTE: `BuildStep.applicationArchiveMarkers()` is deprecated and will be removed at some point post Quarkus 1.1. Extensions are encouraged to use `io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem` instead.
-
 ==== Using Thread's Context Class Loader
 
 The build step will be run with a TCCL that can load user classes from the deployment in a transformer-safe way.
@@ -963,6 +995,12 @@ and add them to the reflective hierarchy for `BUILD_TIME` analysis.
 
 ----
 
+==== Visualizing build step dependencies
+
+It can occasionally be useful to see a visual representation of the interactions between the various build steps. For such cases, adding `-Djboss.builder.graph-output=build.dot` when building an application
+will result in the creation of the `build.dot` file in the project's root directory. See link:https://graphviz.org/resources/[this] for a list of software that can open the file and show the actual visual representation.
+
+[[configuration]]
 === Configuration
 
 Configuration in Quarkus is based on SmallRye Config, an implementation of the MicroProfile Config specification.
@@ -1007,6 +1045,9 @@ extensions may use the full range of configuration types made available by Small
 * `java.nio.file.Path`
 * `io.quarkus.runtime.configuration.MemorySize` to represent data sizes
 * `java.net.InetSocketAddress`, `java.net.InetAddress` and `org.wildfly.common.net.CidrAddress`
+* `java.util.Locale` where the string value is an IETF BCP 47 language tag
+* `java.nio.charset.Charset` where the string value is a canonical name or an alias
+* `java.time.ZoneId` where the string value is parsed via `java.time.ZoneId.of(String)`
 * A `List` or `Optional` of any of the above types
 * `OptionalInt`, `OptionalLong`, `OptionalDouble`
 
@@ -1410,6 +1451,13 @@ The following objects can be passed to recorders:
 - Any arbitrary object via the `io.quarkus.deployment.recording.RecorderContext#registerSubstitution(Class, Class, Class)` mechanism
 - Arrays, Lists and Maps of the above
 
+==== Injecting Configuration into Recorders
+
+Configuration objects with phase `RUNTIME` or `BUILD_AND_RUNTIME_FIXED` can be injected into recorders via constructor
+injection. Just create a constructor that takes the configuration objects the recorder needs. If the recorder has multiple
+constructors you can annotate the one you want Quarkus to use with `@Inject`. If the recorder wants to inject runtime config
+but is also used at static init time then it needs to inject a `RuntimeValue<ConfigObject>`, this value will only be set
+when the runtime methods are being invoked.
 
 ==== RecorderContext
 
@@ -1451,11 +1499,11 @@ TODO: config integration
 
 As a CDI based runtime, Quarkus extensions often make CDI beans available as part of the extension behavior.
 However, Quarkus DI solution does not support CDI Portable Extensions.
-Instead, Quarkus extensions can make use of various link:cdi-reference[Build Time Extension Points].
+Instead, Quarkus extensions can make use of various xref:cdi-reference.adoc[Build Time Extension Points].
 
-=== Quarkus DEV UI
+=== Quarkus Dev UI
 
-You can make your extension support the link:dev-ui[Quarkus DEV UI] for a greater developer experience.
+You can make your extension support the xref:dev-ui.adoc[Quarkus Dev UI] for a greater developer experience.
 
 === Extension-defined endpoints
 
@@ -1502,7 +1550,7 @@ Given a default non-application endpoint root of `/q`, this will create an endpo
 Absolute paths also have an impact on nested endpoints. If the above called `nestedRoute("custom-endpoint", "/deep")`, 
 the resulting endpoint will be found at `/deep`.
 
-Refer to the link:all-config#quarkus-vertx-http_quarkus.http.non-application-root-path[Quarkus Vertx HTTP configuration reference]
+Refer to the xref:all-config.adoc#quarkus-vertx-http_quarkus.http.non-application-root-path[Quarkus Vertx HTTP configuration reference]
 for details on how the non-application root path is configured.
 
 === Extension Health Check
@@ -1515,7 +1563,7 @@ In order to provide a health check, you should do the following:
 
 - Import the `quarkus-smallrye-health` extension as an **optional** dependency in your runtime module so it will not impact the size of the application if
 health check is not included.
-- Create your health check following the link:smallrye-health[SmallRye Health] guide. We advise providing only
+- Create your health check following the xref:smallrye-health.adoc[SmallRye Health] guide. We advise providing only
 readiness check for an extension (liveness check is designed to express the fact that an application is up and needs to be lightweight).
 - Import the `quarkus-smallrye-health-spi` library in your deployment module.
 - Add a build step in your deployment module that produces a `HealthBuildItem`.
@@ -1761,7 +1809,7 @@ The Jackson extension will then use the produced build item to register a module
 
 If you need more customization capabilities than registering a module,
 you can produce a CDI bean that implements `io.quarkus.jackson.ObjectMapperCustomizer` via an `AdditionalBeanBuildItem`.
-More info about customizing Jackson can be found on the JSON guide link:rest-json#configuring-json-support[Configuring JSON support]
+More info about customizing Jackson can be found on the JSON guide xref:rest-json.adoc#configuring-json-support[Configuring JSON support]
 
 ==== Customizing JSON-B
 First, add an *optional* dependency to `quarkus-jsonb` on your extension's runtime module.
@@ -1813,7 +1861,31 @@ The JSON-B extension will then use the produced build item to register your seri
 
 If you need more customization capabilities than registering a serializer or a deserializer,
 you can produce a CDI bean that implements `io.quarkus.jsonb.JsonbConfigCustomizer` via an `AdditionalBeanBuildItem`.
-More info about customizing JSON-B can be found on the JSON guide link:rest-json#configuring-json-support[Configuring JSON support]
+More info about customizing JSON-B can be found on the JSON guide xref:rest-json.adoc#configuring-json-support[Configuring JSON support]
+
+=== Integrating with Development Mode
+
+There are various APIS that you can use to integrate with development mode, and to get information about the current state.
+
+==== Handling restarts
+
+When Quarkus is starting the `io.quarkus.deployment.builditem.LiveReloadBuildItem` is guaranteed to be present that gives
+information about this start, in particular:
+
+- Is this a clean start or a live reload
+- If this is a live reload which changed files / classes triggered the reload
+
+It also provides a global context map you can use to store information between restarts, without needing to resort to
+static fields.
+
+==== Triggering Live Reload
+
+Live reload is generally triggered by a HTTP request, however not all applications are HTTP applications and some extensions
+may want to trigger live reload based on other events. To do this you need to implement `io.quarkus.dev.spi.HotReplacementSetup`
+in your runtime module, and add a `META-INF/services/io.quarkus.dev.spi.HotReplacementSetup` that lists your implementation.
+
+On startup the `setupHotDeployment` method will be called, and you can use the provided `io.quarkus.dev.spi.HotReplacementContext`
+to initiate a scan for changed files.
 
 === Testing Extensions
 
@@ -1842,7 +1914,7 @@ import java.util.List;
 import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
-import org.eclipse.microprofile.health.Health;
+import org.eclipse.microprofile.health.Liveness;
 import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import io.quarkus.test.QuarkusUnitTest;
@@ -1865,7 +1937,7 @@ public class FailingUnitTest {
             );
 
     @Inject                                                                             // <3>
-    @Health
+    @Liveness
     Instance<HealthCheck> checks;
 
     @Test
@@ -1898,7 +1970,7 @@ If you want to test that an extension properly fails at build time, use the `set
 
 package io.quarkus.hibernate.orm;
 
-import io.quarkus.deployment.configuration.ConfigurationError;
+import io.quarkus.runtime.configuration.ConfigurationException;
 import io.quarkus.test.QuarkusUnitTest;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -1910,8 +1982,8 @@ public class PersistenceAndQuarkusConfigTest {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setExpectedException(ConfigurationError.class)                     <1>
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .setExpectedException(ConfigurationException.class)                     <1>
+            .withApplicationRoot((jar) -> jar
                     .addAsManifestResource("META-INF/some-persistence.xml", "persistence.xml")
                     .addAsResource("application.properties"));
 
@@ -2177,11 +2249,11 @@ If multiple extensions register a feature of the same name the build fails.
 
 The feature name should also map to a label in the extension's `devtools/common/src/main/filtered/extensions.json` entry so that
 the feature name displayed by the startup line matches a label that one can used to select the extension when creating a project
-using the Quarkus maven plugin as shown in this example taken from the link:rest-json[Writing JSON REST Services] guide where the `resteasy-jackson` feature is referenced:
+using the Quarkus maven plugin as shown in this example taken from the xref:rest-json.adoc[Writing JSON REST Services] guide where the `resteasy-jackson` feature is referenced:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=rest-json \
     -DclassName="org.acme.rest.json.FruitResource" \
@@ -2226,7 +2298,7 @@ Capabilities should follow the naming conventions of Java packages; e.g. `io.qua
 Capabilities provided by core extensions should be listed in the `io.quarkus.deployment.Capability` enum and their name should always start with the `io.quarkus` prefix.
 
 ==== Bean Defining Annotations
-The CDI layer processes CDI beans that are either explicitly registered or that it discovers based on bean defining annotations as defined in http://docs.jboss.org/cdi/spec/2.0/cdi-spec.html#bean_defining_annotations[2.5.1. Bean defining annotations]. You can expand this set of annotations to include annotations your extension processes using a `BeanDefiningAnnotationBuildItem` as shown in this `TestProcessor#registerBeanDefinningAnnotations` example:
+The CDI layer processes CDI beans that are either explicitly registered or that it discovers based on bean defining annotations as defined in https://jakarta.ee/specifications/cdi/2.0/cdi-spec-2.0.html#bean_defining_annotations[2.5.1. Bean defining annotations]. You can expand this set of annotations to include annotations your extension processes using a `BeanDefiningAnnotationBuildItem` as shown in this `TestProcessor#registerBeanDefinningAnnotations` example:
 
 .Register a Bean Defining Annotation
 [source,java]
@@ -3041,9 +3113,32 @@ Then, at the end of your documentation, include the extensive documentation:
 
 Finally, generate the documentation and check it out.
 
+[[ecosystem-ci]]
 == Continuous testing of your extension
 
 In order to make it easy for extension authors to test their extensions daily against the latest snapshot of Quarkus, Quarkus has introduced
-the notion of Ecosystem CI. The Ecosystem CI link:https://github.com/quarkusio/quarkus-ecosystem-ci/blob/master/README.adoc[README]
+the notion of Ecosystem CI. The Ecosystem CI link:https://github.com/quarkusio/quarkus-ecosystem-ci/blob/main/README.adoc[README]
 has all the details on how to set up a GitHub Actions job to take advantage of this capability, while this link:https://www.youtube.com/watch?v=VpbRA1n0hHQ[video] provides an overview
 of what the process looks like.
+
+== Publish your extension in registry.quarkus.io
+
+Before publishing your extension to the xref:tooling.adoc[Quarkus tooling], make sure that the following requirements are met:
+
+* The `quarkus-extension.yaml` file (in the extension's `runtime/` module) has the minimum metadata set:
+** `name`
+** `description` (unless you have it already set in the `runtime/pom.xml`'s `<description>` element, which is the recommended approach)
+
+* Your extension is published in Maven Central
+
+* Your extension repository is configured to use the <<ecosystem-ci, Ecosystem CI>>.
+
+Then you must create a pull request adding a `your-extension.yaml` file in the `extensions/` directory in the link:https://github.com/quarkusio/quarkus-extension-catalog[Quarkus Extension Catalog]. The YAML must have the following structure:
+
+```yaml
+group-id: <YOUR_EXTENSION_RUNTIME_GROUP_ID>
+artifact-id: <YOUR_EXTENSION_RUNTIME_ARTIFACT_ID>
+```
+
+That's all. Once the pull request is merged, a scheduled job will check Maven Central for new versions and update the xref:extension-registry-user.adoc[Quarkus Extension Registry].
+

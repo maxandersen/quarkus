@@ -3,6 +3,7 @@ package io.quarkus.smallrye.jwt.deployment;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
@@ -22,11 +23,10 @@ import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
+import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -36,6 +36,7 @@ import io.quarkus.smallrye.jwt.runtime.auth.JsonWebTokenCredentialProducer;
 import io.quarkus.smallrye.jwt.runtime.auth.JwtPrincipalProducer;
 import io.quarkus.smallrye.jwt.runtime.auth.MpJwtValidator;
 import io.quarkus.smallrye.jwt.runtime.auth.RawOptionalClaimCreator;
+import io.quarkus.vertx.http.deployment.SecurityInformationBuildItem;
 import io.smallrye.jwt.algorithm.KeyEncryptionAlgorithm;
 import io.smallrye.jwt.algorithm.SignatureAlgorithm;
 import io.smallrye.jwt.auth.cdi.ClaimValueProducer;
@@ -56,11 +57,16 @@ class SmallRyeJwtProcessor {
     private static final DotName CLAIM_NAME = DotName.createSimple(Claim.class.getName());
     private static final DotName CLAIMS_NAME = DotName.createSimple(Claims.class.getName());
 
-    SmallRyeJWTConfig config;
+    SmallRyeJwtBuildTimeConfig config;
 
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.JWT);
+    @BuildStep(onlyIf = IsEnabled.class)
+    ExtensionSslNativeSupportBuildItem enableSslInNative() {
+        return new ExtensionSslNativeSupportBuildItem(Feature.SMALLRYE_JWT);
+    }
+
+    @BuildStep(onlyIf = IsEnabled.class)
+    public void provideSecurityInformation(BuildProducer<SecurityInformationBuildItem> securityInformationProducer) {
+        securityInformationProducer.produce(SecurityInformationBuildItem.JWT());
     }
 
     /**
@@ -145,9 +151,9 @@ class SmallRyeJwtProcessor {
                 continue;
             }
             AnnotationInstance claimQualifier = injectionPoint.getRequiredQualifier(CLAIM_NAME);
-            if (claimQualifier != null && injectionPoint.getRequiredType().name().equals(DotNames.PROVIDER)) {
+            if (claimQualifier != null && injectionPoint.getType().name().equals(DotNames.PROVIDER)) {
                 // Classes from javax.json are handled specially
-                Type actualType = injectionPoint.getRequiredType().asParameterizedType().arguments().get(0);
+                Type actualType = injectionPoint.getRequiredType();
                 if (actualType.name().equals(DotNames.OPTIONAL) && !actualType.name().toString()
                         .startsWith("javax.json")) {
                     additionalTypes.add(actualType);
@@ -166,5 +172,13 @@ class SmallRyeJwtProcessor {
                         AnnotationValue.createEnumValue("standard", CLAIMS_NAME, "UNKNOWN") }));
         configurator.creator(RawOptionalClaimCreator.class);
         beanConfigurator.produce(new BeanConfiguratorBuildItem(configurator));
+    }
+
+    public static class IsEnabled implements BooleanSupplier {
+        SmallRyeJwtBuildTimeConfig config;
+
+        public boolean getAsBoolean() {
+            return config.enabled;
+        }
     }
 }

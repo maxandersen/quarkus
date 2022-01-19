@@ -25,6 +25,7 @@ import org.jboss.logging.Logger;
 import io.agroal.api.AgroalDataSource;
 import io.agroal.api.AgroalPoolInterceptor;
 import io.agroal.api.configuration.AgroalConnectionPoolConfiguration.ConnectionValidator;
+import io.agroal.api.configuration.AgroalConnectionPoolConfiguration.TransactionRequirement;
 import io.agroal.api.configuration.AgroalDataSourceConfiguration;
 import io.agroal.api.configuration.AgroalDataSourceConfiguration.DataSourceImplementation;
 import io.agroal.api.configuration.supplier.AgroalConnectionFactoryConfigurationSupplier;
@@ -171,13 +172,24 @@ public class DataSources {
         if (dataSourceSupport.disableSslSupport) {
             agroalConnectionConfigurer.disableSslSupport(resolvedDbKind, dataSourceConfiguration);
         }
+        //we use a custom cache for two reasons:
+        //fast thread local cache should be faster
+        //and it prevents a thread local leak
+        try {
+            Class.forName("io.netty.util.concurrent.FastThreadLocal", true, Thread.currentThread().getContextClassLoader());
+            dataSourceConfiguration.connectionPoolConfiguration().connectionCache(new QuarkusNettyConnectionCache());
+        } catch (ClassNotFoundException e) {
+            dataSourceConfiguration.connectionPoolConfiguration().connectionCache(new QuarkusSimpleConnectionCache());
+        }
 
         agroalConnectionConfigurer.setExceptionSorter(resolvedDbKind, dataSourceConfiguration);
 
         // Explicit reference to bypass reflection need of the ServiceLoader used by AgroalDataSource#from
         AgroalDataSourceConfiguration agroalConfiguration = dataSourceConfiguration.get();
         AgroalDataSource dataSource = new io.agroal.pool.DataSource(agroalConfiguration,
-                new AgroalEventLoggingListener(dataSourceName));
+                new AgroalEventLoggingListener(dataSourceName,
+                        agroalConfiguration.connectionPoolConfiguration()
+                                .transactionRequirement() == TransactionRequirement.WARN));
         log.debugv("Started datasource {0} connected to {1}", dataSourceName,
                 agroalConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
 
@@ -267,6 +279,9 @@ public class DataSources {
         if (dataSourceJdbcRuntimeConfig.backgroundValidationInterval.isPresent()) {
             poolConfiguration.validationTimeout(dataSourceJdbcRuntimeConfig.backgroundValidationInterval.get());
         }
+        if (dataSourceJdbcRuntimeConfig.foregroundValidationInterval.isPresent()) {
+            poolConfiguration.idleValidationTimeout(dataSourceJdbcRuntimeConfig.foregroundValidationInterval.get());
+        }
         if (dataSourceJdbcRuntimeConfig.validationQuerySql.isPresent()) {
             String validationQuery = dataSourceJdbcRuntimeConfig.validationQuerySql.get();
             poolConfiguration.connectionValidator(new ConnectionValidator() {
@@ -292,6 +307,11 @@ public class DataSources {
         if (dataSourceJdbcRuntimeConfig.maxLifetime.isPresent()) {
             poolConfiguration.maxLifetime(dataSourceJdbcRuntimeConfig.maxLifetime.get());
         }
+        if (dataSourceJdbcRuntimeConfig.transactionRequirement.isPresent()) {
+            poolConfiguration.transactionRequirement(dataSourceJdbcRuntimeConfig.transactionRequirement.get());
+        }
+        poolConfiguration.enhancedLeakReport(dataSourceJdbcRuntimeConfig.extendedLeakReport);
+        poolConfiguration.flushOnClose(dataSourceJdbcRuntimeConfig.flushOnClose);
     }
 
     public DataSourceBuildTimeConfig getDataSourceBuildTimeConfig(String dataSourceName) {
@@ -362,4 +382,5 @@ public class DataSources {
             }
         }
     }
+
 }

@@ -9,14 +9,21 @@ on:
       jdkVersion:
         description: 'JDK version'
         required: true
-        # switch to 17-ea once 16 has been fixed and is running in regular CI
         # make sure to keep the default of JDK_VERSION in sync!
-        default: '16'
+        default: '18-ea'
+      jdkDistribution:
+        description: 'JDK distribution'
+        required: true
+        # make sure to keep the default of JDK_DIST in sync!
+        # might need to use 'zulu' until 'temurin' dist is available
+        default: 'temurin'
 
 env:
-  JDK_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.jdkVersion || '16' }}
+  JDK_VERSION: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.jdkVersion || '18-ea' }}
+  JDK_DIST: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.jdkDistribution || 'temurin' }}
   # Workaround testsuite locale issue
   LANG: en_US.UTF-8
+  MAVEN_OPTS: -Xmx2g -XX:MaxMetaspaceSize=1g
   JVM_TEST_MAVEN_OPTS: "-e -B --settings .github/mvn-settings.xml -Dtest-containers -Dstart-containers -Dformat.skip"
   DB_USER: hibernate_orm_test
   DB_PASSWORD: hibernate_orm_test
@@ -32,9 +39,9 @@ jobs:
     steps:
 
       - name: Set up JDK
-        # AdoptOpenJDK does not seem to provide EA builds, so use the standard action which provides a Zulu JDK
-        uses: actions/setup-java@v1
+        uses: actions/setup-java@v2
         with:
+          distribution: ${{ env.JDK_DIST }}
           java-version: ${{ env.JDK_VERSION }}
       - name: Print Java version
         shell: bash
@@ -71,7 +78,7 @@ jobs:
         # -fae to try to gather as many failures as possible
         # (but not maven.test.failure.ignore because test report generation is buggy)
         run: |
-          mvn $JVM_TEST_MAVEN_OPTS -Dtcks install -fae
+          ./mvnw $JVM_TEST_MAVEN_OPTS -Dtcks install -fae
       # Test reports disabled due to: https://github.com/ScaCap/action-surefire-report/issues/39
       #- name: Publish Test Report
       #  if: always()
@@ -104,14 +111,14 @@ jobs:
         shell: bash
         run: rm -r ~/.m2/repository/io/quarkus
       - name: Report status
-        uses: jbangdev/jbang-action@v0.69.2
         if: "always() && github.repository == 'quarkusio/quarkus' && github.event_name != 'workflow_dispatch'"
-        with:
-          script: .github/NativeBuildReport.java
-          scriptargs: |
-            issueNumber=15867
-            runId=${{ github.run_id }}
-            status=${{ job.status }}
-            token=${{ secrets.GITHUB_API_TOKEN }}
-            issueRepo=${{ github.repository }}
+        shell: bash
+        run: |
+          curl -Ls https://sh.jbang.dev | bash -s - app setup
+          ~/.jbang/bin/jbang .github/NativeBuildReport.java \
+            issueNumber=15867 \
+            runId=${{ github.run_id }} \
+            status=${{ job.status }} \
+            token=${{ secrets.GITHUB_API_TOKEN }} \
+            issueRepo=${{ github.repository }} \
             thisRepo=${{ github.repository }}

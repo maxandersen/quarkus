@@ -1,13 +1,17 @@
 package io.quarkus.devtools.testing;
 
+import io.quarkus.bootstrap.resolver.maven.options.BootstrapMavenOptions;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -49,6 +53,20 @@ public final class WrapperRunner {
                     throw new IllegalStateException("No wrapper linked to buildtool: " + buildtool);
             }
         }
+
+        public static Wrapper detect(Path projectDir) {
+            for (Wrapper value : Wrapper.values()) {
+                final File file = projectDir.resolve(value.getExec()).toFile();
+                if (file.isFile() && file.canExecute()) {
+                    return value;
+                }
+            }
+            throw new IllegalStateException("No supported wrapper that can be executed found in this directory: " + projectDir);
+        }
+    }
+
+    public static int run(Path projectDir) {
+        return run(projectDir, Wrapper.detect(projectDir));
     }
 
     public static int run(Path projectDir, Wrapper wrapper) {
@@ -56,8 +74,14 @@ public final class WrapperRunner {
         command.add(projectDir.resolve(wrapper.getExec()).toAbsolutePath().toString());
         command.addAll(Arrays.asList(wrapper.getCmdArgs()));
 
-        if (System.getProperties().containsKey("maven.repo.local")) {
-            command.add("-Dmaven.repo.local=" + System.getProperty("maven.repo.local"));
+        propagateSystemPropertyIfSet("maven.repo.local", command);
+
+        if (wrapper == Wrapper.MAVEN) {
+            final String mavenSettings = getMavenSettingsArg();
+            if (mavenSettings != null) {
+                command.add("-s");
+                command.add(mavenSettings);
+            }
         }
 
         try {
@@ -78,6 +102,26 @@ public final class WrapperRunner {
             throw new UncheckedIOException(e);
         }
         return -1;
+    }
+
+    private static String getMavenSettingsArg() {
+        final String mavenSettings = System.getProperty("maven.settings");
+        if (mavenSettings != null) {
+            return Files.exists(Paths.get(mavenSettings)) ? mavenSettings : null;
+        }
+        return BootstrapMavenOptions.newInstance().getOptionValue(BootstrapMavenOptions.ALTERNATE_USER_SETTINGS);
+    }
+
+    private static void propagateSystemPropertyIfSet(String name, List<String> command) {
+        if (System.getProperties().containsKey(name)) {
+            final StringBuilder buf = new StringBuilder();
+            buf.append("-D").append(name);
+            final String value = System.getProperty(name);
+            if (value != null && !value.isEmpty()) {
+                buf.append("=").append(value);
+            }
+            command.add(buf.toString());
+        }
     }
 
     private static void streamToSysOutSysErr(final Process process) {

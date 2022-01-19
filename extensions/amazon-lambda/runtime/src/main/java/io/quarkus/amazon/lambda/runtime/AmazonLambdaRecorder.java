@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkus.amazon.lambda.runtime.handlers.S3EventInputReader;
 import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 
@@ -35,6 +36,12 @@ public class AmazonLambdaRecorder {
     private static LambdaInputReader objectReader;
     private static LambdaOutputWriter objectWriter;
 
+    private final LambdaConfig config;
+
+    public AmazonLambdaRecorder(LambdaConfig config) {
+        this.config = config;
+    }
+
     public void setStreamHandlerClass(Class<? extends RequestStreamHandler> handler, BeanContainer container) {
         streamHandlerClass = handler;
         beanContainer = container;
@@ -45,10 +52,11 @@ public class AmazonLambdaRecorder {
         beanContainer = container;
         ObjectMapper objectMapper = AmazonLambdaMapperRecorder.objectMapper;
         Method handlerMethod = discoverHandlerMethod(handlerClass);
-        if (handlerMethod.getParameterTypes()[0].equals(S3Event.class)) {
+        Class<?> parameterType = handlerMethod.getParameterTypes()[0];
+        if (parameterType.equals(S3Event.class)) {
             objectReader = new S3EventInputReader(objectMapper);
         } else {
-            objectReader = new JacksonInputReader(objectMapper.readerFor(handlerMethod.getParameterTypes()[0]));
+            objectReader = new JacksonInputReader(objectMapper.readerFor(parameterType));
         }
         objectWriter = new JacksonOutputWriter(objectMapper.writerFor(handlerMethod.getReturnType()));
     }
@@ -78,9 +86,11 @@ public class AmazonLambdaRecorder {
         Method method = null;
         for (int i = 0; i < methods.length && method == null; i++) {
             if (methods[i].getName().equals("handleRequest")) {
-                final Class<?>[] types = methods[i].getParameterTypes();
-                if (types.length == 2 && !types[0].equals(Object.class)) {
-                    method = methods[i];
+                if (methods[i].getParameterCount() == 2) {
+                    final Class<?>[] types = methods[i].getParameterTypes();
+                    if (!types[0].equals(Object.class)) {
+                        method = methods[i];
+                    }
                 }
             }
         }
@@ -97,8 +107,7 @@ public class AmazonLambdaRecorder {
             Map<String, Class<? extends RequestHandler<?, ?>>> namedHandlerClasses,
             List<Class<? extends RequestStreamHandler>> unamedStreamHandlerClasses,
             Map<String, Class<? extends RequestStreamHandler>> namedStreamHandlerClasses,
-            BeanContainer container,
-            LambdaConfig config) {
+            BeanContainer container) {
 
         Class<? extends RequestHandler<?, ?>> handlerClass = null;
         Class<? extends RequestStreamHandler> handlerStreamClass = null;
@@ -145,9 +154,9 @@ public class AmazonLambdaRecorder {
     }
 
     @SuppressWarnings("rawtypes")
-    public void startPollLoop(ShutdownContext context) {
+    public void startPollLoop(ShutdownContext context, LaunchMode launchMode) {
         AbstractLambdaPollLoop loop = new AbstractLambdaPollLoop(AmazonLambdaMapperRecorder.objectMapper,
-                AmazonLambdaMapperRecorder.cognitoIdReader, AmazonLambdaMapperRecorder.clientCtxReader) {
+                AmazonLambdaMapperRecorder.cognitoIdReader, AmazonLambdaMapperRecorder.clientCtxReader, launchMode) {
 
             @Override
             protected Object processRequest(Object input, AmazonLambdaContext context) throws Exception {

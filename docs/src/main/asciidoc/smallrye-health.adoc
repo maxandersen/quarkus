@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - SmallRye Health
+= SmallRye Health
 
 include::./attributes.adoc[]
 
@@ -21,7 +21,7 @@ To complete this guide, you need:
 
 * less than 15 minutes
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 
 == Architecture
@@ -47,7 +47,7 @@ First, we need a new project. Create a new project with the following command:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=microprofile-health-quickstart \
     -Dextensions="smallrye-health"
@@ -80,6 +80,7 @@ Importing the `smallrye-health` extension directly exposes three REST endpoints:
 
 - `/q/health/live` - The application is up and running.
 - `/q/health/ready` - The application is ready to serve requests.
+- `/q/health/started` - The application is started.
 - `/q/health` - Accumulating all health check procedures in the application.
  
 To check that the `smallrye-health` extension is working as expected:
@@ -193,6 +194,37 @@ More information about which health check procedures should be used in which sit
 is detailed in the MicroProfile Health specification. Generally, the liveness 
 procedures determine whether the application should be restarted while readiness 
 procedures determine whether it makes sense to contact the application with requests.
+
+== Adding a startup health check procedure
+
+The third and final type of health check procedures is startup. Startup procedures are defined as an option for slow starting containers (should not be needed in Quarkus) to delay the invocations of liveness probe which will take over from startup once the startup responds UP for the first time. Startup health checks are defined with the `@Startup` qualifier.
+
+NOTE: Please make sure that you import the microprofile `org.eclipse.microprofile.health.Startup` annotation since there is an unfortunate clash with `io.quarkus.runtime.Startup`.
+
+Create `org.acme.microprofile.health.StartupHealthCheck` class:
+
+[source,java]
+----
+package org.acme.microprofile.health;
+
+import org.eclipse.microprofile.health.HealthCheck;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+import org.eclipse.microprofile.health.Startup;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@Startup
+@ApplicationScoped
+public class StartupHealthCheck implements HealthCheck {
+
+    @Override
+    public HealthCheckResponse call() {
+        return HealthCheckResponse.up("Startup health check");
+    }
+}
+----
+
+The startup health check will be available either at `http://localhost:8080/q/health/started` or together with other health check procedure at `http://localhost:8080/q/health`.
 
 == Negative health check procedures
 
@@ -320,12 +352,46 @@ error along with the health check response.
         }
 ----
 
+== Context propagation into the health check invocations
+
+For the perfomance reasons the context (e.g., CDI or security context) is not propagated into each health check invocation. However, if you need to enable this functionality you can set the config property `quarkus.smallrye-health.context-propagation=true` to allow the context propagation into every health check call.
+
+== Reactive health checks
+
+MicroProfile Health currently doesn't support returning reactive types, but SmallRye Health does.
+
+If you want to provide a reactive health check, you can implement the `io.smallrye.health.api.AsyncHealthCheck` interface instead of the `org.eclipse.microprofile.health.HealthCheck` one.
+The `io.smallrye.health.api.AsyncHealthCheck` interface allows you to return a `Uni<HealthCheckResponse>`.
+
+The following example shows a reactive liveness check:
+
+[source,java]
+----
+import io.smallrye.health.api.AsyncHealthCheck;
+
+import org.eclipse.microprofile.health.Liveness;
+import org.eclipse.microprofile.health.HealthCheckResponse;
+
+import javax.enterprise.context.ApplicationScoped;
+
+@Liveness
+@ApplicationScoped
+public class LivenessAsync implements AsyncHealthCheck {
+
+    @Override
+    public Uni<HealthCheckResponse> call() {
+        return Uni.createFrom().item(HealthCheckResponse.up("liveness-reactive"))
+                .onItem().delayIt().by(Duration.ofMillis(10));
+    }
+}
+----
+
 == Extension health checks
 
 Some extension may provide default health checks, including the extension will automatically register its health checks.
 
 For example, `quarkus-agroal` that is used to manage Quarkus datasource(s) automatically register a readiness health check
-that will validate each datasources: link:datasource#datasource-health-check[Datasource Health Check].
+that will validate each datasources: xref:datasource.adoc#datasource-health-check[Datasource Health Check].
 
 You can disable extension health check via the property `quarkus.health.extensions.enabled` so none will be automatically registered.
 

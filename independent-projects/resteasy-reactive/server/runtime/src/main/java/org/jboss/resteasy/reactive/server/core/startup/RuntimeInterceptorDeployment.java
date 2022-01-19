@@ -95,7 +95,8 @@ public class RuntimeInterceptorDeployment {
         for (Map.Entry<ResourceInterceptor<ContainerRequestFilter>, ContainerRequestFilter> entry : globalRequestInterceptorsMap
                 .entrySet()) {
             globalRequestInterceptorHandlers
-                    .add(new ResourceRequestFilterHandler(entry.getValue(), false, entry.getKey().isNonBlockingRequired()));
+                    .add(new ResourceRequestFilterHandler(entry.getValue(), false, entry.getKey().isNonBlockingRequired(),
+                            entry.getKey().isReadBody()));
         }
 
         InterceptorHandler globalInterceptorHandler = null;
@@ -266,19 +267,15 @@ public class RuntimeInterceptorDeployment {
             return responseFilterHandlers;
         }
 
-        public List<ServerRestHandler> setupInterceptorHandler() {
+        public ServerRestHandler setupInterceptorHandler() {
             List<ServerRestHandler> handlers = new ArrayList<>();
             if (method.getNameBindingNames().isEmpty() && methodSpecificReaderInterceptorsMap.isEmpty()
                     && methodSpecificWriterInterceptorsMap.isEmpty()) {
-                if (globalInterceptorHandler != null) {
-                    handlers.add(globalInterceptorHandler);
-                }
+                return globalInterceptorHandler;
             } else if (nameReaderInterceptorsMap.isEmpty() && nameWriterInterceptorsMap.isEmpty()
                     && methodSpecificReaderInterceptorsMap.isEmpty() && methodSpecificWriterInterceptorsMap.isEmpty()) {
                 // in this case there are no filters that match the qualifiers, so let's just reuse the global handler
-                if (globalInterceptorHandler != null) {
-                    handlers.add(globalInterceptorHandler);
-                }
+                return globalInterceptorHandler;
             } else {
                 TreeMap<ResourceInterceptor<ReaderInterceptor>, ReaderInterceptor> readerInterceptorsToUse = buildInterceptorMap(
                         globalReaderInterceptorsMap, nameReaderInterceptorsMap, methodSpecificReaderInterceptorsMap, method,
@@ -302,9 +299,8 @@ public class RuntimeInterceptorDeployment {
                         writers[idx++] = i;
                     }
                 }
-                handlers.add(new InterceptorHandler(writers, readers));
+                return new InterceptorHandler(writers, readers);
             }
-            return handlers;
         }
 
         public List<ResourceRequestFilterHandler> setupRequestFilterHandler() {
@@ -331,10 +327,33 @@ public class RuntimeInterceptorDeployment {
                 for (Map.Entry<ResourceInterceptor<ContainerRequestFilter>, ContainerRequestFilter> entry : interceptorsToUse
                         .entrySet()) {
                     handlers.add(
-                            new ResourceRequestFilterHandler(entry.getValue(), false, entry.getKey().isNonBlockingRequired()));
+                            new ResourceRequestFilterHandler(entry.getValue(), false, entry.getKey().isNonBlockingRequired(),
+                                    entry.getKey().isNonBlockingRequired()));
                 }
             }
             return handlers;
+        }
+
+        public boolean hasWriterInterceptors() {
+            if (method.getNameBindingNames().isEmpty() && methodSpecificReaderInterceptorsMap.isEmpty()
+                    && methodSpecificWriterInterceptorsMap.isEmpty()) {
+                if (globalInterceptorHandler != null) {
+                    return globalInterceptorHandler.hasWriterInterceptors();
+                }
+            } else if (nameReaderInterceptorsMap.isEmpty() && nameWriterInterceptorsMap.isEmpty()
+                    && methodSpecificReaderInterceptorsMap.isEmpty() && methodSpecificWriterInterceptorsMap.isEmpty()) {
+                // in this case there are no filters that match the qualifiers, so let's just reuse the global handler
+                if (globalInterceptorHandler != null) {
+                    return globalInterceptorHandler.hasWriterInterceptors();
+                }
+            } else {
+                // this is not optimal at all, but this method is only used for return types of AsyncFile so limited impact
+                TreeMap<ResourceInterceptor<WriterInterceptor>, WriterInterceptor> writerInterceptorsToUse = buildInterceptorMap(
+                        globalWriterInterceptorsMap, nameWriterInterceptorsMap, methodSpecificWriterInterceptorsMap, method,
+                        false);
+                return !writerInterceptorsToUse.isEmpty();
+            }
+            return false;
         }
     }
 

@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  * <p>
  * A template extension method:
  * <ul>
- * <li>must not be private</li>
+ * <li>must not be private,</li>
  * <li>must be static,</li>
  * <li>must not return {@code void}.</li>
  * </ul>
@@ -102,11 +102,12 @@ public @interface TemplateExtension {
      * extension methods declared on different classes cannot share the same namespace.
      * 
      * @return the namespace
+     * @see NamespaceResolver#getNamespace()
      */
     String namespace() default "";
 
     /**
-     * Used to annotated a template extension method parameter that should be obtained via
+     * Used to annotate a template extension method parameter that should be obtained via
      * {@link TemplateInstance#getAttribute(String)}. The parameter type must be {@link java.lang.Object}.
      * 
      * <pre>

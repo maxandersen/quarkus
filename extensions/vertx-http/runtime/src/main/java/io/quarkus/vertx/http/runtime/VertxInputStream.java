@@ -10,6 +10,7 @@ import java.util.Deque;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.quarkus.runtime.BlockingOperationNotAllowedException;
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
@@ -131,7 +132,7 @@ public class VertxInputStream extends InputStream {
             throw new IOException("Stream is closed");
         }
         if (finished) {
-            return -1;
+            return 0;
         }
 
         return exchange.readBytesAvailable();
@@ -140,7 +141,7 @@ public class VertxInputStream extends InputStream {
     @Override
     public void close() throws IOException {
         if (closed) {
-            throw new IOException("Stream is closed");
+            return;
         }
         closed = true;
         try {
@@ -239,7 +240,7 @@ public class VertxInputStream extends InputStream {
 
                     try {
                         if (Context.isOnEventLoopThread()) {
-                            throw new IOException("Attempting a blocking read on io thread");
+                            throw new BlockingOperationNotAllowedException("Attempting a blocking read on io thread");
                         }
                         waiting = true;
                         request.connection().wait(rem);
@@ -294,7 +295,12 @@ public class VertxInputStream extends InputStream {
                 return 0;
             }
 
-            return Integer.parseInt(length);
+            try {
+                return Integer.parseInt(length);
+            } catch (NumberFormatException e) {
+                Long.parseLong(length); // ignore the value as can only return an int anyway
+                return Integer.MAX_VALUE;
+            }
         }
     }
 

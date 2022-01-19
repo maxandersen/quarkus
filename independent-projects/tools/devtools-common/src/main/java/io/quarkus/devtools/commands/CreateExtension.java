@@ -49,7 +49,7 @@ public class CreateExtension {
 
     public static final String DEFAULT_QUARKIVERSE_PARENT_GROUP_ID = "io.quarkiverse";
     public static final String DEFAULT_QUARKIVERSE_PARENT_ARTIFACT_ID = "quarkiverse-parent";
-    public static final String DEFAULT_QUARKIVERSE_PARENT_VERSION = "6";
+    public static final String DEFAULT_QUARKIVERSE_PARENT_VERSION = "9";
     public static final String DEFAULT_QUARKIVERSE_NAMESPACE_ID = "quarkus-";
 
     private static final String DEFAULT_SUREFIRE_PLUGIN_VERSION = "3.0.0-M5";
@@ -57,7 +57,6 @@ public class CreateExtension {
 
     private final QuarkusExtensionCodestartProjectInputBuilder builder = QuarkusExtensionCodestartProjectInput.builder();
     private final Path baseDir;
-    private final CreateExtensionCommandHandler handler = new CreateExtensionCommandHandler();
 
     private final EnhancedDataMap data = new EnhancedDataMap();
 
@@ -189,7 +188,12 @@ public class CreateExtension {
         return this;
     }
 
-    public QuarkusCommandOutcome execute() throws QuarkusCommandException {
+    public CreateExtension messageWriter(MessageWriter log) {
+        this.log = log;
+        return this;
+    }
+
+    public CreateExtensionCommandHandler prepare() throws QuarkusCommandException {
         final Path workingDir = resolveWorkingDir(baseDir);
         final Model baseModel = resolveModel(baseDir);
         final LayoutType layoutType = detectLayoutType(baseModel, data.getStringValue(GROUP_ID).orElse(null));
@@ -208,7 +212,7 @@ public class CreateExtension {
                 resolveExtensionPackage(data.getRequiredStringValue(GROUP_ID), extensionId));
 
         final String groupId = data.getRequiredStringValue(GROUP_ID);
-        Model itTestModel;
+        final Model itTestModel;
         String extensionDirName = runtimeArtifactId;
         switch (layoutType) {
             case QUARKUS_CORE:
@@ -264,12 +268,17 @@ public class CreateExtension {
             final Path extensionsDir = workingDir.resolve(extensionsRelativeDir);
             final Path itTestDir = workingDir.resolve(itTestRelativeDir);
             final Path bomDir = workingDir.resolve(bomRelativeDir);
-            return handler.execute(log, groupId, runtimeArtifactId, builder.build(),
+            return new CreateExtensionCommandHandler(groupId, runtimeArtifactId, builder.build(),
                     extensionsDir.resolve(extensionDirName),
                     extensionsDir,
                     itTestDir, bomDir);
         }
-        return handler.execute(log, groupId, runtimeArtifactId, builder.build(), workingDir.resolve(extensionDirName));
+        return new CreateExtensionCommandHandler(groupId, runtimeArtifactId, builder.build(),
+                workingDir.resolve(extensionDirName));
+    }
+
+    public QuarkusCommandOutcome execute() throws QuarkusCommandException {
+        return prepare().execute(log);
     }
 
     private String resolveExtensionId() {

@@ -4,6 +4,8 @@ import static io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSea
 import static io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchConfigUtil.addBackendIndexConfig;
 import static io.quarkus.hibernate.search.orm.elasticsearch.runtime.HibernateSearchConfigUtil.addConfig;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -11,16 +13,17 @@ import java.util.function.Supplier;
 
 import javax.enterprise.inject.literal.NamedLiteral;
 
-import org.graalvm.home.Version;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.boot.Metadata;
+import org.hibernate.boot.registry.StandardServiceInitiator;
 import org.hibernate.boot.spi.BootstrapContext;
 import org.hibernate.search.backend.elasticsearch.cfg.ElasticsearchBackendSettings;
 import org.hibernate.search.backend.elasticsearch.cfg.ElasticsearchIndexSettings;
 import org.hibernate.search.engine.cfg.BackendSettings;
 import org.hibernate.search.engine.cfg.EngineSettings;
 import org.hibernate.search.mapper.orm.Search;
+import org.hibernate.search.mapper.orm.bootstrap.impl.HibernateSearchPreIntegrationService;
 import org.hibernate.search.mapper.orm.bootstrap.spi.HibernateOrmIntegrationBooter;
 import org.hibernate.search.mapper.orm.cfg.HibernateOrmMapperSettings;
 import org.hibernate.search.mapper.orm.mapping.SearchMapping;
@@ -41,24 +44,27 @@ import io.quarkus.runtime.annotations.Recorder;
 public class HibernateSearchElasticsearchRecorder {
 
     public HibernateOrmIntegrationStaticInitListener createStaticInitListener(
-            HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig) {
-        return new HibernateSearchIntegrationStaticInitListener(buildTimeConfig);
+            HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig,
+            List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners) {
+        return new HibernateSearchIntegrationStaticInitListener(buildTimeConfig, integrationStaticInitListeners);
     }
 
-    public HibernateOrmIntegrationStaticInitListener createDisabledListener() {
+    public HibernateOrmIntegrationStaticInitListener createDisabledStaticInitListener() {
         return new HibernateSearchIntegrationDisabledListener();
     }
 
     public HibernateOrmIntegrationRuntimeInitListener createRuntimeInitListener(
-            HibernateSearchElasticsearchRuntimeConfig runtimeConfig, String persistenceUnitName) {
+            HibernateSearchElasticsearchRuntimeConfig runtimeConfig, String persistenceUnitName,
+            List<HibernateOrmIntegrationRuntimeInitListener> integrationRuntimeInitListeners) {
         HibernateSearchElasticsearchRuntimeConfigPersistenceUnit puConfig = PersistenceUnitUtil
                 .isDefaultPersistenceUnit(persistenceUnitName)
                         ? runtimeConfig.defaultPersistenceUnit
                         : runtimeConfig.persistenceUnits.get(persistenceUnitName);
-        if (puConfig == null) {
-            return null;
-        }
-        return new HibernateSearchIntegrationRuntimeInitListener(puConfig);
+        return new HibernateSearchIntegrationRuntimeInitListener(puConfig, integrationRuntimeInitListeners);
+    }
+
+    public HibernateOrmIntegrationRuntimeInitListener createDisabledRuntimeInitListener() {
+        return new HibernateSearchIntegrationRuntimeInitListener(null, Collections.emptyList());
     }
 
     public Supplier<SearchMapping> searchMappingSupplier(String persistenceUnitName, boolean isDefaultPersistenceUnit) {
@@ -112,13 +118,14 @@ public class HibernateSearchElasticsearchRecorder {
     private static final class HibernateSearchIntegrationStaticInitListener
             implements HibernateOrmIntegrationStaticInitListener {
 
-        private static final Version GRAAL_VM_VERSION_21 = Version.create(21);
-
         private final HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig;
+        private final List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners;
 
         private HibernateSearchIntegrationStaticInitListener(
-                HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig) {
+                HibernateSearchElasticsearchBuildTimeConfigPersistenceUnit buildTimeConfig,
+                List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners) {
             this.buildTimeConfig = buildTimeConfig;
+            this.integrationStaticInitListeners = integrationStaticInitListeners;
         }
 
         @Override
@@ -127,28 +134,34 @@ public class HibernateSearchElasticsearchRecorder {
                     EngineSettings.BACKGROUND_FAILURE_HANDLER,
                     buildTimeConfig.backgroundFailureHandler);
 
+            addConfig(propertyCollector,
+                    HibernateOrmMapperSettings.COORDINATION_STRATEGY,
+                    buildTimeConfig.coordination.strategy);
+
             contributeBackendBuildTimeProperties(propertyCollector, null, buildTimeConfig.defaultBackend);
 
             for (Entry<String, ElasticsearchBackendBuildTimeConfig> backendEntry : buildTimeConfig.namedBackends.backends
                     .entrySet()) {
                 contributeBackendBuildTimeProperties(propertyCollector, backendEntry.getKey(), backendEntry.getValue());
             }
+
+            for (HibernateOrmIntegrationStaticInitListener listener : integrationStaticInitListeners) {
+                listener.contributeBootProperties(propertyCollector);
+            }
         }
 
         @Override
         public void onMetadataInitialized(Metadata metadata, BootstrapContext bootstrapContext,
                 BiConsumer<String, Object> propertyCollector) {
-            Version graalVMVersion = Version.getCurrent();
-            boolean isGraalVM20OrBelow = !graalVMVersion.isSnapshot() // isSnapshot() will be true on OpenJDK
-                    && graalVMVersion.compareTo(GRAAL_VM_VERSION_21) < 0;
             HibernateOrmIntegrationBooter booter = HibernateOrmIntegrationBooter.builder(metadata, bootstrapContext)
-                    .valueReadHandleFactory(
-                            // GraalVM 20 or below doesn't support method handles
-                            isGraalVM20OrBelow ? ValueReadHandleFactory.usingJavaLangReflect()
-                                    // GraalVM 21+ and OpenJDK can handle the default (method handles)
-                                    : null)
+                    // MethodHandles don't work at all in GraalVM 20 and below, and seem unreliable on GraalVM 21
+                    .valueReadHandleFactory(ValueReadHandleFactory.usingJavaLangReflect())
                     .build();
             booter.preBoot(propertyCollector);
+
+            for (HibernateOrmIntegrationStaticInitListener listener : integrationStaticInitListeners) {
+                listener.onMetadataInitialized(metadata, bootstrapContext, propertyCollector);
+            }
         }
 
         private void contributeBackendBuildTimeProperties(BiConsumer<String, Object> propertyCollector, String backendName,
@@ -177,6 +190,12 @@ public class HibernateSearchElasticsearchRecorder {
         private void contributeBackendIndexBuildTimeProperties(BiConsumer<String, Object> propertyCollector,
                 String backendName, String indexName, ElasticsearchIndexBuildTimeConfig indexConfig) {
             addBackendIndexConfig(propertyCollector, backendName, indexName,
+                    ElasticsearchIndexSettings.SCHEMA_MANAGEMENT_SETTINGS_FILE,
+                    indexConfig.schemaManagement.settingsFile);
+            addBackendIndexConfig(propertyCollector, backendName, indexName,
+                    ElasticsearchIndexSettings.SCHEMA_MANAGEMENT_MAPPING_FILE,
+                    indexConfig.schemaManagement.mappingFile);
+            addBackendIndexConfig(propertyCollector, backendName, indexName,
                     ElasticsearchIndexSettings.ANALYSIS_CONFIGURER,
                     indexConfig.analysis.configurer);
         }
@@ -186,14 +205,26 @@ public class HibernateSearchElasticsearchRecorder {
             implements HibernateOrmIntegrationRuntimeInitListener {
 
         private final HibernateSearchElasticsearchRuntimeConfigPersistenceUnit runtimeConfig;
+        private final List<HibernateOrmIntegrationRuntimeInitListener> integrationRuntimeInitListeners;
 
         private HibernateSearchIntegrationRuntimeInitListener(
-                HibernateSearchElasticsearchRuntimeConfigPersistenceUnit runtimeConfig) {
+                HibernateSearchElasticsearchRuntimeConfigPersistenceUnit runtimeConfig,
+                List<HibernateOrmIntegrationRuntimeInitListener> integrationRuntimeInitListeners) {
             this.runtimeConfig = runtimeConfig;
+            this.integrationRuntimeInitListeners = integrationRuntimeInitListeners;
         }
 
         @Override
         public void contributeRuntimeProperties(BiConsumer<String, Object> propertyCollector) {
+            if (runtimeConfig == null) {
+                return;
+            }
+            if (!runtimeConfig.enabled) {
+                addConfig(propertyCollector, HibernateOrmMapperSettings.ENABLED, false);
+                // Do not process other properties: Hibernate Search is disabled anyway.
+                return;
+            }
+
             addConfig(propertyCollector,
                     HibernateOrmMapperSettings.SCHEMA_MANAGEMENT_STRATEGY,
                     runtimeConfig.schemaManagement.strategy);
@@ -209,6 +240,9 @@ public class HibernateSearchElasticsearchRecorder {
             addConfig(propertyCollector,
                     HibernateOrmMapperSettings.QUERY_LOADING_FETCH_SIZE,
                     runtimeConfig.queryLoading.fetchSize);
+            addConfig(propertyCollector,
+                    HibernateOrmMapperSettings.MULTI_TENANCY_TENANT_IDS,
+                    runtimeConfig.multiTenancy.tenantIds);
 
             contributeBackendRuntimeProperties(propertyCollector, null,
                     runtimeConfig.defaultBackend);
@@ -216,6 +250,10 @@ public class HibernateSearchElasticsearchRecorder {
             for (Entry<String, ElasticsearchBackendRuntimeConfig> backendEntry : runtimeConfig.namedBackends.backends
                     .entrySet()) {
                 contributeBackendRuntimeProperties(propertyCollector, backendEntry.getKey(), backendEntry.getValue());
+            }
+
+            for (HibernateOrmIntegrationRuntimeInitListener integrationRuntimeInitListener : integrationRuntimeInitListeners) {
+                integrationRuntimeInitListener.contributeRuntimeProperties(propertyCollector);
             }
         }
 
@@ -241,6 +279,8 @@ public class HibernateSearchElasticsearchRecorder {
                     elasticsearchBackendConfig.maxConnectionsPerRoute);
             addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.THREAD_POOL_SIZE,
                     elasticsearchBackendConfig.threadPool.size);
+            addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.VERSION_CHECK_ENABLED,
+                    elasticsearchBackendConfig.versionCheck);
 
             addBackendConfig(propertyCollector, backendName, ElasticsearchBackendSettings.DISCOVERY_ENABLED,
                     elasticsearchBackendConfig.discovery.enabled);
@@ -280,6 +320,16 @@ public class HibernateSearchElasticsearchRecorder {
             addBackendIndexConfig(propertyCollector, backendName, indexName,
                     ElasticsearchIndexSettings.INDEXING_MAX_BULK_SIZE,
                     indexConfig.indexing.maxBulkSize);
+        }
+
+        @Override
+        public List<StandardServiceInitiator<?>> contributeServiceInitiators() {
+            return List.of(
+                    // One of the purposes of this service is to provide configuration to Hibernate Search,
+                    // so it absolutely must be updated with the runtime configuration.
+                    // The service must be initiated even if Hibernate Search is disabled,
+                    // because it's also responsible for determining that Hibernate Search is disabled.
+                    new HibernateSearchPreIntegrationService.Initiator());
         }
     }
 }

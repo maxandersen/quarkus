@@ -8,11 +8,14 @@ import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
  */
 public class SseResponseWriterHandler implements ServerRestHandler {
 
+    public static final SseResponseWriterHandler INSTANCE = new SseResponseWriterHandler();
+
     public SseResponseWriterHandler() {
     }
 
     @Override
     public void handle(ResteasyReactiveRequestContext requestContext) throws Exception {
         requestContext.getSseEventSink().sendInitialResponse(requestContext.serverResponse());
+        requestContext.suspend();
     }
 }

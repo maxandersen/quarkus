@@ -2,7 +2,6 @@ package io.quarkus.deployment.builditem;
 
 import java.io.IOException;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -13,6 +12,9 @@ import java.util.List;
 
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.builder.item.SimpleBuildItem;
+import io.quarkus.fs.util.ZipUtils;
+import io.quarkus.paths.PathCollection;
+import io.quarkus.paths.PathList;
 
 public final class ArchiveRootBuildItem extends SimpleBuildItem {
 
@@ -29,7 +31,7 @@ public final class ArchiveRootBuildItem extends SimpleBuildItem {
             return this;
         }
 
-        public Builder addArchiveRoots(PathsCollection paths) {
+        public Builder addArchiveRoots(PathCollection paths) {
             paths.forEach(archiveRoots::add);
             return this;
         }
@@ -57,8 +59,8 @@ public final class ArchiveRootBuildItem extends SimpleBuildItem {
 
     private final Path archiveRoot;
     private final Collection<Path> excludedFromIndexing;
-    private final PathsCollection rootDirs;
-    private final PathsCollection paths;
+    private final PathCollection rootDirs;
+    private final PathCollection paths;
 
     public ArchiveRootBuildItem(Path appClassesDir) {
         this(appClassesDir, appClassesDir);
@@ -73,35 +75,40 @@ public final class ArchiveRootBuildItem extends SimpleBuildItem {
         if (!Files.isDirectory(archiveRoot)) {
             throw new IllegalArgumentException(archiveRoot + " does not point to the application output directory");
         }
-        this.rootDirs = PathsCollection.of(archiveRoot);
-        this.paths = PathsCollection.of(archiveLocation);
+        this.rootDirs = PathList.of(archiveRoot);
+        this.paths = PathList.of(archiveLocation);
         this.archiveRoot = archiveRoot;
         this.excludedFromIndexing = excludedFromIndexing;
     }
 
     private ArchiveRootBuildItem(Builder builder, QuarkusBuildCloseablesBuildItem buildCloseables) throws IOException {
         this.excludedFromIndexing = builder.excludedFromIndexing;
-        final PathsCollection.Builder rootDirs = PathsCollection.builder();
-        final PathsCollection.Builder paths = PathsCollection.builder();
-        for (Path root : builder.archiveRoots) {
-            paths.add(root);
-            if (Files.isDirectory(root)) {
-                rootDirs.add(root);
-            } else {
-                final FileSystem fs = buildCloseables.add(FileSystems.newFileSystem(root, null));
-                fs.getRootDirectories().forEach(rootDirs::add);
+        if (!builder.archiveRoots.isEmpty()) {
+            final PathList.Builder rootDirs = PathList.builder();
+            final PathList.Builder paths = PathList.builder();
+            for (Path root : builder.archiveRoots) {
+                paths.add(root);
+                if (Files.isDirectory(root)) {
+                    rootDirs.add(root);
+                } else {
+                    final FileSystem fs = buildCloseables.add(ZipUtils.newFileSystem(root));
+                    fs.getRootDirectories().forEach(rootDirs::add);
+                }
             }
+            this.rootDirs = rootDirs.build();
+            this.paths = paths.build();
+            this.archiveRoot = this.rootDirs.iterator().next();
+        } else {
+            this.paths = this.rootDirs = PathsCollection.of();
+            this.archiveRoot = null;
         }
-        this.rootDirs = rootDirs.build();
-        this.paths = paths.build();
-        this.archiveRoot = this.rootDirs.iterator().next();
     }
 
     /**
      * If this archive is a jar file it will return the path to the jar file on the file system,
      * otherwise it will return the directory that this corresponds to.
      *
-     * @deprecated in favor of {@link #getPaths()}
+     * @deprecated in favor of {@link #getResolvedPaths()}
      */
     @Deprecated
     public Path getArchiveLocation() {
@@ -119,7 +126,7 @@ public final class ArchiveRootBuildItem extends SimpleBuildItem {
      * jar, but rather a path to the root of the mounted {@link com.sun.nio.zipfs.ZipFileSystem}
      *
      * @return The archive root.
-     * @deprecated in favor of {@link #getRootDirs()}
+     * @deprecated in favor of {@link #getRootDirectories()}
      */
     @Deprecated
     public Path getArchiveRoot() {
@@ -128,14 +135,41 @@ public final class ArchiveRootBuildItem extends SimpleBuildItem {
 
     /**
      * Collection of path representing the archive's root directories. If there is a JAR among the paths
-     * (returned by {@link #getPaths()} this method will return the path to the root of the mounted
+     * (returned by {@link #getResolvedPaths()} this method will return the path to the root of the mounted
+     * {@link java.nio.file.ZipFileSystem}
+     * instead.
+     * 
+     * @deprecated in favor of {@link #getRootDirectories()}
+     *
+     * @return Collection of path representing the archive's root directories.
+     */
+    @Deprecated
+    public PathsCollection getRootDirs() {
+        return PathsCollection.from(rootDirs);
+    }
+
+    /**
+     * Collection of path representing the archive's root directories. If there is a JAR among the paths
+     * (returned by {@link #getResolvedPaths()} this method will return the path to the root of the mounted
      * {@link java.nio.file.ZipFileSystem}
      * instead.
      *
      * @return Collection of path representing the archive's root directories.
      */
-    public PathsCollection getRootDirs() {
+    public PathCollection getRootDirectories() {
         return rootDirs;
+    }
+
+    /**
+     * Collection of paths that collectively constitute the application archive's content.
+     * 
+     * @deprecated in favor of {@link #getResolvedPaths()}
+     *
+     * @return collection of paths that collectively constitute the application archive content.
+     */
+    @Deprecated
+    public PathsCollection getPaths() {
+        return PathsCollection.from(paths);
     }
 
     /**
@@ -143,7 +177,7 @@ public final class ArchiveRootBuildItem extends SimpleBuildItem {
      *
      * @return collection of paths that collectively constitute the application archive content.
      */
-    public PathsCollection getPaths() {
+    public PathCollection getResolvedPaths() {
         return paths;
     }
 

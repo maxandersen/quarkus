@@ -3,6 +3,7 @@ package io.quarkus.hibernate.orm.deployment;
 import java.util.Map;
 import java.util.Optional;
 
+import io.quarkus.hibernate.orm.runtime.PersistenceUnitUtil;
 import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
@@ -41,6 +42,15 @@ public class HibernateOrmConfig {
     public Optional<Boolean> statistics;
 
     /**
+     * Whether session metrics should be appended into the server log for each Hibernate session. This
+     * only has effect if statistics are enabled (`quarkus.hibernate-orm.statistics`). The default is false
+     * (which means both `statistics` and `log-session-metrics` need to be enabled for the session metrics
+     * to appear in the log).
+     */
+    @ConfigItem
+    public Optional<Boolean> logSessionMetrics;
+
+    /**
      * Whether or not metrics are published if a metrics extension is enabled.
      */
     @ConfigItem(name = "metrics.enabled")
@@ -52,6 +62,13 @@ public class HibernateOrmConfig {
                 log.isAnyPropertySet() ||
                 statistics.isPresent() ||
                 metricsEnabled;
+    }
+
+    public static String puPropertyKey(String puName, String radical) {
+        String prefix = PersistenceUnitUtil.isDefaultPersistenceUnit(puName)
+                ? "quarkus.hibernate-orm."
+                : "quarkus.hibernate-orm.\"" + puName + "\".";
+        return prefix + radical;
     }
 
     @ConfigGroup

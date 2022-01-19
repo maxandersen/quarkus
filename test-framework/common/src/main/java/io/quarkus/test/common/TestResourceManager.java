@@ -2,6 +2,7 @@ package io.quarkus.test.common;
 
 import java.io.Closeable;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -9,17 +10,18 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.function.Predicate;
 
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.jboss.jandex.AnnotationInstance;
@@ -30,12 +32,12 @@ import org.jboss.jandex.IndexView;
 
 public class TestResourceManager implements Closeable {
 
-    private static final int ANNOTATION = 0x00002000;
+    public static final String CLOSEABLE_NAME = TestResourceManager.class.getName() + ".closeable";
 
     private final List<TestResourceEntry> sequentialTestResourceEntries;
     private final List<TestResourceEntry> parallelTestResourceEntries;
     private final List<TestResourceEntry> allTestResourceEntries;
-    private Map<String, String> oldSystemProps;
+    private final Map<String, String> configProperties = new ConcurrentHashMap<>();
     private boolean started = false;
     private boolean hasPerTestResources = false;
 
@@ -45,6 +47,13 @@ public class TestResourceManager implements Closeable {
 
     public TestResourceManager(Class<?> testClass, Class<?> profileClass, List<TestResourceClassEntry> additionalTestResources,
             boolean disableGlobalTestResources) {
+        this(testClass, profileClass, additionalTestResources, disableGlobalTestResources, Collections.emptyMap(),
+                Optional.empty());
+    }
+
+    public TestResourceManager(Class<?> testClass, Class<?> profileClass, List<TestResourceClassEntry> additionalTestResources,
+            boolean disableGlobalTestResources, Map<String, String> devServicesProperties,
+            Optional<String> containerNetworkId) {
         this.parallelTestResourceEntries = new ArrayList<>();
         this.sequentialTestResourceEntries = new ArrayList<>();
 
@@ -61,12 +70,34 @@ public class TestResourceManager implements Closeable {
 
         this.allTestResourceEntries = new ArrayList<>(sequentialTestResourceEntries);
         this.allTestResourceEntries.addAll(parallelTestResourceEntries);
+        DevServicesContext context = new DevServicesContext() {
+            @Override
+            public Map<String, String> devServicesProperties() {
+                return devServicesProperties;
+            }
+
+            @Override
+            public Optional<String> containerNetworkId() {
+                return containerNetworkId;
+            }
+        };
+        for (var i : allTestResourceEntries) {
+            if (i.getTestResource() instanceof DevServicesContext.ContextAware) {
+                ((DevServicesContext.ContextAware) i.getTestResource()).setIntegrationTestContext(context);
+            }
+        }
     }
 
-    public void init() {
+    public void init(String testProfileName) {
         for (TestResourceEntry entry : allTestResourceEntries) {
             try {
                 QuarkusTestResourceLifecycleManager testResource = entry.getTestResource();
+                testResource.setContext(new QuarkusTestResourceLifecycleManager.Context() {
+                    @Override
+                    public String testProfile() {
+                        return testProfileName;
+                    }
+                });
                 if (testResource instanceof QuarkusTestResourceConfigurableLifecycleManager
                         && entry.getConfigAnnotation() != null) {
                     ((QuarkusTestResourceConfigurableLifecycleManager<Annotation>) testResource)
@@ -82,75 +113,36 @@ public class TestResourceManager implements Closeable {
 
     public Map<String, String> start() {
         started = true;
-        Map<String, String> ret = new ConcurrentHashMap<>();
-        ExecutorService executor = newExecutor(parallelTestResourceEntries.size() + 1);
+        Map<String, String> allProps = new ConcurrentHashMap<>();
+        int taskSize = parallelTestResourceEntries.size() + 1;
+        ExecutorService executor = Executors.newFixedThreadPool(taskSize);
+        List<Runnable> tasks = new ArrayList<>(taskSize);
+        for (TestResourceEntry entry : parallelTestResourceEntries) {
+            tasks.add(new TestResourceEntryRunnable(entry, allProps));
+        }
+        tasks.add(new TestResourceEntryRunnable(sequentialTestResourceEntries, allProps));
+
         try {
-            List<Future> startFutures = new ArrayList<>();
-            for (TestResourceEntry entry : parallelTestResourceEntries) {
-                Future startFuture = executor.submit(() -> {
-                    try {
-                        Map<String, String> start = entry.getTestResource().start();
-                        if (start != null) {
-                            ret.putAll(start);
-                        }
-                    } catch (Exception e) {
-                        throw new RuntimeException("Unable to start Quarkus test resource " + entry.getTestResource(), e);
-                    }
-                });
-                startFutures.add(startFuture);
-
-            }
-
-            Future sequentialStartFuture = executor.submit(() -> {
-                for (TestResourceEntry entry : sequentialTestResourceEntries) {
-                    try {
-                        Map<String, String> start = entry.getTestResource().start();
-                        if (start != null) {
-                            ret.putAll(start);
-                        }
-                    } catch (Exception e) {
-                        throw new RuntimeException("Unable to start Quarkus test resource " + entry.getTestResource(), e);
-                    }
-                }
-            });
-            startFutures.add(sequentialStartFuture);
-
-            waitForAllFutures(startFutures);
-
-            oldSystemProps = new HashMap<>();
-            for (Map.Entry<String, String> i : ret.entrySet()) {
-                oldSystemProps.put(i.getKey(), System.getProperty(i.getKey()));
-                if (i.getValue() == null) {
-                    System.clearProperty(i.getKey());
-                } else {
-                    System.setProperty(i.getKey(), i.getValue());
-                }
-            }
+            // convert the tasks into an array of CompletableFuture
+            CompletableFuture
+                    .allOf(
+                            tasks.stream()
+                                    .map(task -> CompletableFuture.runAsync(task, executor))
+                                    .toArray(CompletableFuture[]::new))
+                    // this returns when all tasks complete
+                    .join();
         } finally {
             executor.shutdown();
         }
-
-        return ret;
-
-    }
-
-    private void waitForAllFutures(List<Future> startFutures) {
-        for (Future future : startFutures) {
-            try {
-                future.get();
-            } catch (CancellationException | InterruptedException | ExecutionException e) {
-                throw new RuntimeException("Error waiting for test resource future to finish.", e);
-            }
-        }
-    }
-
-    private ExecutorService newExecutor(int poolSize) {
-        return Executors.newFixedThreadPool(poolSize);
+        configProperties.putAll(allProps);
+        return allProps;
     }
 
     public void inject(Object testInstance) {
         for (TestResourceEntry entry : allTestResourceEntries) {
-            entry.getTestResource().inject(testInstance);
+            QuarkusTestResourceLifecycleManager quarkusTestResourceLifecycleManager = entry.getTestResource();
+            quarkusTestResourceLifecycleManager.inject(testInstance);
+            quarkusTestResourceLifecycleManager.inject(new DefaultTestInjector(testInstance));
         }
     }
 
@@ -159,17 +151,6 @@ public class TestResourceManager implements Closeable {
             return;
         }
         started = false;
-        if (oldSystemProps != null) {
-            for (Map.Entry<String, String> e : oldSystemProps.entrySet()) {
-                if (e.getValue() == null) {
-                    System.clearProperty(e.getKey());
-                } else {
-                    System.setProperty(e.getKey(), e.getValue());
-                }
-
-            }
-        }
-        oldSystemProps = null;
         for (TestResourceEntry entry : allTestResourceEntries) {
             try {
                 entry.getTestResource().stop();
@@ -182,10 +163,15 @@ public class TestResourceManager implements Closeable {
             cpr.releaseConfig(cpr.getConfig());
         } catch (Throwable ignored) {
         }
+        configProperties.clear();
+    }
+
+    public Map<String, String> getConfigProperties() {
+        return configProperties;
     }
 
     private Set<TestResourceClassEntry> initParallelTestResources(Set<TestResourceClassEntry> uniqueEntries) {
-        Set<TestResourceClassEntry> remainingUniqueEntries = new HashSet<>(uniqueEntries);
+        Set<TestResourceClassEntry> remainingUniqueEntries = new LinkedHashSet<>(uniqueEntries);
         for (TestResourceClassEntry entry : uniqueEntries) {
             if (entry.isParallel()) {
                 TestResourceEntry testResourceEntry = buildTestResourceEntry(entry);
@@ -207,7 +193,7 @@ public class TestResourceManager implements Closeable {
     }
 
     private Set<TestResourceClassEntry> initSequentialTestResources(Set<TestResourceClassEntry> uniqueEntries) {
-        Set<TestResourceClassEntry> remainingUniqueEntries = new HashSet<>(uniqueEntries);
+        Set<TestResourceClassEntry> remainingUniqueEntries = new LinkedHashSet<>(uniqueEntries);
         for (TestResourceClassEntry entry : uniqueEntries) {
             if (!entry.isParallel()) {
                 TestResourceEntry testResourceEntry = buildTestResourceEntry(entry);
@@ -253,7 +239,7 @@ public class TestResourceManager implements Closeable {
     private Set<TestResourceClassEntry> getUniqueTestResourceClassEntries(Class<?> testClass, Class<?> profileClass,
             List<TestResourceClassEntry> additionalTestResources) {
         IndexView index = TestClassIndexer.readIndex(testClass);
-        Set<TestResourceClassEntry> uniqueEntries = new HashSet<>();
+        Set<TestResourceClassEntry> uniqueEntries = new LinkedHashSet<>();
         // reload the test and profile classes in the right CL
         Class<?> testClassFromTCCL;
         Class<?> profileClassFromTCCL;
@@ -314,37 +300,44 @@ public class TestResourceManager implements Closeable {
 
     private void collectMetaAnnotations(Class<?> testClassFromTCCL, Set<TestResourceClassEntry> uniqueEntries) {
         while (!testClassFromTCCL.getName().equals("java.lang.Object")) {
-            for (Annotation reflAnnotation : testClassFromTCCL.getAnnotations()) {
-                for (Annotation annotationAnnotation : reflAnnotation.annotationType().getAnnotations()) {
-                    if (annotationAnnotation.annotationType() == QuarkusTestResource.class) {
-                        QuarkusTestResource testResource = (QuarkusTestResource) annotationAnnotation;
-
-                        // NOTE: we don't need to check restrictToAnnotatedClass because by design config-based annotations
-                        // are not discovered outside the test class, so they're restricted
-                        Class<? extends QuarkusTestResourceLifecycleManager> testResourceClass = testResource.value();
-
-                        ResourceArg[] argsAnnotationValue = testResource.initArgs();
-                        Map<String, String> args;
-                        if (argsAnnotationValue.length == 0) {
-                            args = Collections.emptyMap();
-                        } else {
-                            args = new HashMap<>();
-                            for (ResourceArg arg : argsAnnotationValue) {
-                                args.put(arg.name(), arg.value());
-                            }
-                        }
-
-                        boolean isParallel = testResource.parallel();
-
+            for (Annotation metaAnnotation : testClassFromTCCL.getAnnotations()) {
+                for (Annotation ann : metaAnnotation.annotationType().getAnnotations()) {
+                    if (ann.annotationType() == QuarkusTestResource.class) {
+                        addTestResourceEntry((QuarkusTestResource) ann, metaAnnotation, uniqueEntries);
                         hasPerTestResources = true;
-                        uniqueEntries.add(new TestResourceClassEntry(testResourceClass, args, reflAnnotation, isParallel));
-
+                        break;
+                    } else if (ann.annotationType() == QuarkusTestResource.List.class) {
+                        for (QuarkusTestResource quarkusTestResource : ((QuarkusTestResource.List) ann).value()) {
+                            addTestResourceEntry(quarkusTestResource, metaAnnotation, uniqueEntries);
+                        }
+                        hasPerTestResources = true;
                         break;
                     }
                 }
             }
             testClassFromTCCL = testClassFromTCCL.getSuperclass();
         }
+    }
+
+    private void addTestResourceEntry(QuarkusTestResource quarkusTestResource, Annotation originalAnnotation,
+            Set<TestResourceClassEntry> uniqueEntries) {
+
+        // NOTE: we don't need to check restrictToAnnotatedClass because by design config-based annotations
+        // are not discovered outside the test class, so they're restricted
+        Class<? extends QuarkusTestResourceLifecycleManager> testResourceClass = quarkusTestResource.value();
+
+        ResourceArg[] argsAnnotationValue = quarkusTestResource.initArgs();
+        Map<String, String> args;
+        if (argsAnnotationValue.length == 0) {
+            args = Collections.emptyMap();
+        } else {
+            args = new HashMap<>();
+            for (ResourceArg arg : argsAnnotationValue) {
+                args.put(arg.name(), arg.value());
+            }
+        }
+        uniqueEntries
+                .add(new TestResourceClassEntry(testResourceClass, args, originalAnnotation, quarkusTestResource.parallel()));
     }
 
     @SuppressWarnings("unchecked")
@@ -364,7 +357,7 @@ public class TestResourceManager implements Closeable {
             testClasses.add(testClass.getName());
             testClass = testClass.getSuperclass();
         }
-        Set<AnnotationInstance> testResourceAnnotations = new HashSet<>();
+        Set<AnnotationInstance> testResourceAnnotations = new LinkedHashSet<>();
         for (AnnotationInstance annotation : index.getAnnotations(DotName.createSimple(QuarkusTestResource.class.getName()))) {
             if (keepTestResourceAnnotation(annotation, annotation.target().asClass(), testClasses)) {
                 testResourceAnnotations.add(annotation);
@@ -389,7 +382,7 @@ public class TestResourceManager implements Closeable {
     }
 
     private boolean keepTestResourceAnnotation(AnnotationInstance annotation, ClassInfo targetClass, Set<String> testClasses) {
-        if (isAnnotation(targetClass)) {
+        if (targetClass.isAnnotation()) {
             // meta-annotations have already been handled in collectMetaAnnotations
             return false;
         }
@@ -398,10 +391,6 @@ public class TestResourceManager implements Closeable {
             return testClasses.contains(targetClass.name().toString('.'));
         }
         return true;
-    }
-
-    private boolean isAnnotation(ClassInfo info) {
-        return (info.flags() & ANNOTATION) != 0;
     }
 
     public static class TestResourceClassEntry {
@@ -441,6 +430,36 @@ public class TestResourceManager implements Closeable {
         }
     }
 
+    private static class TestResourceEntryRunnable implements Runnable {
+        private final List<TestResourceEntry> entries;
+        private final Map<String, String> allProps;
+
+        public TestResourceEntryRunnable(TestResourceEntry entry,
+                Map<String, String> allProps) {
+            this(Collections.singletonList(entry), allProps);
+        }
+
+        public TestResourceEntryRunnable(List<TestResourceEntry> entries,
+                Map<String, String> allProps) {
+            this.entries = entries;
+            this.allProps = allProps;
+        }
+
+        @Override
+        public void run() {
+            for (TestResourceEntry entry : entries) {
+                try {
+                    Map<String, String> start = entry.getTestResource().start();
+                    if (start != null) {
+                        allProps.putAll(start);
+                    }
+                } catch (Exception e) {
+                    throw new RuntimeException("Unable to start Quarkus test resource " + entry.getTestResource(), e);
+                }
+            }
+        }
+    }
+
     private static class TestResourceEntry {
 
         private final QuarkusTestResourceLifecycleManager testResource;
@@ -469,6 +488,39 @@ public class TestResourceManager implements Closeable {
         public Annotation getConfigAnnotation() {
             return configAnnotation;
         }
+    }
+
+    // visible for testing
+    static class DefaultTestInjector implements QuarkusTestResourceLifecycleManager.TestInjector {
+
+        // visible for testing
+        final Object testInstance;
+
+        private DefaultTestInjector(Object testInstance) {
+            this.testInstance = testInstance;
+        }
+
+        @Override
+        public void injectIntoFields(Object fieldValue, Predicate<Field> predicate) {
+            Class<?> c = testInstance.getClass();
+            while (c != Object.class) {
+                for (Field f : c.getDeclaredFields()) {
+                    if (predicate.test(f)) {
+                        f.setAccessible(true);
+                        try {
+                            f.set(testInstance, fieldValue);
+                            return;
+                        } catch (Exception e) {
+                            throw new RuntimeException("Unable to set field '" + f.getName()
+                                    + "' using 'QuarkusTestResourceLifecycleManager.TestInjector' ", e);
+                        }
+                    }
+                }
+                c = c.getSuperclass();
+            }
+            // no need to warn here because it's perfectly valid to have tests that don't use the injected fields
+        }
+
     }
 
 }

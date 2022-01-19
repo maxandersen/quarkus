@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
 import java.nio.file.Files;
@@ -20,6 +19,9 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.IndexReader;
 import org.jboss.jandex.IndexWriter;
 import org.jboss.jandex.Indexer;
+import org.jboss.jandex.UnsupportedVersion;
+
+import io.quarkus.fs.util.ZipUtils;
 
 public final class TestClassIndexer {
 
@@ -33,7 +35,7 @@ public final class TestClassIndexer {
             if (Files.isDirectory(testClassesLocation)) {
                 indexTestClassesDir(indexer, testClassesLocation);
             } else {
-                try (FileSystem jarFs = FileSystems.newFileSystem(testClassesLocation, null)) {
+                try (FileSystem jarFs = ZipUtils.newFileSystem(testClassesLocation)) {
                     for (Path p : jarFs.getRootDirectories()) {
                         indexTestClassesDir(indexer, p);
                     }
@@ -60,6 +62,8 @@ public final class TestClassIndexer {
         if (path.toFile().exists()) {
             try (FileInputStream fis = new FileInputStream(path.toFile())) {
                 return new IndexReader(fis).read();
+            } catch (UnsupportedVersion e) {
+                throw new UnsupportedVersion("Can't read Jandex index from " + path + ": " + e.getMessage());
             } catch (IOException e) {
                 // be lenient since the error is recoverable
                 return indexTestClasses(testClass);

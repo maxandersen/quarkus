@@ -1,6 +1,7 @@
 package io.quarkus.smallrye.context.deployment;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,7 +20,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.ManagedExecutorInitializedBuildItem;
+import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationProvider;
 import io.quarkus.smallrye.context.runtime.SmallRyeContextPropagationRecorder;
@@ -45,8 +46,8 @@ class SmallRyeContextPropagationProcessor {
         for (Class<?> provider : ServiceUtil.classesNamedIn(Thread.currentThread().getContextClassLoader(),
                 "META-INF/services/" + ThreadContextProvider.class.getName())) {
             try {
-                discoveredProviders.add((ThreadContextProvider) provider.newInstance());
-            } catch (InstantiationException | IllegalAccessException e) {
+                discoveredProviders.add((ThreadContextProvider) provider.getDeclaredConstructor().newInstance());
+            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
                 throw new RuntimeException("Failed to instantiate declared ThreadContextProvider class: " + provider.getName(),
                         e);
             }
@@ -54,8 +55,8 @@ class SmallRyeContextPropagationProcessor {
         for (Class<?> extension : ServiceUtil.classesNamedIn(Thread.currentThread().getContextClassLoader(),
                 "META-INF/services/" + ContextManagerExtension.class.getName())) {
             try {
-                discoveredExtensions.add((ContextManagerExtension) extension.newInstance());
-            } catch (InstantiationException | IllegalAccessException e) {
+                discoveredExtensions.add((ContextManagerExtension) extension.getDeclaredConstructor().newInstance());
+            } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
                 throw new RuntimeException("Failed to instantiate declared ThreadContextProvider class: " + extension.getName(),
                         e);
             }
@@ -68,12 +69,12 @@ class SmallRyeContextPropagationProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     void build(SmallRyeContextPropagationRecorder recorder,
             ExecutorBuildItem executorBuildItem,
+            ShutdownContextBuildItem shutdownContextBuildItem,
             BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<ManagedExecutorInitializedBuildItem> managedExecutorInitialized,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans) {
         feature.produce(new FeatureBuildItem(Feature.SMALLRYE_CONTEXT_PROPAGATION));
 
-        recorder.configureRuntime(executorBuildItem.getExecutorProxy());
+        recorder.configureRuntime(executorBuildItem.getExecutorProxy(), shutdownContextBuildItem);
 
         // Synthetic bean for ManagedExecutor
         syntheticBeans.produce(
@@ -84,8 +85,5 @@ class SmallRyeContextPropagationProcessor {
                         .unremovable()
                         .supplier(recorder.initializeManagedExecutor(executorBuildItem.getExecutorProxy()))
                         .setRuntimeInit().done());
-
-        // This should be removed at some point after Quarkus 1.7
-        managedExecutorInitialized.produce(new ManagedExecutorInitializedBuildItem());
     }
 }

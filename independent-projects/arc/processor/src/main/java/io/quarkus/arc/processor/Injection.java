@@ -35,12 +35,6 @@ public class Injection {
 
     private static final Logger LOGGER = Logger.getLogger(Injection.class);
 
-    /**
-     *
-     * @param beanTarget
-     * @param beanDeployment
-     * @return the list of injections
-     */
     static List<Injection> forBean(AnnotationTarget beanTarget, BeanInfo declaringBean, BeanDeployment beanDeployment,
             InjectionPointModifier transformer) {
         if (Kind.CLASS.equals(beanTarget.kind())) {
@@ -148,7 +142,7 @@ public class Injection {
     }
 
     static Injection forDisposer(MethodInfo disposerMethod, ClassInfo beanClass, BeanDeployment beanDeployment,
-            InjectionPointModifier transformer) {
+            InjectionPointModifier transformer, BeanInfo declaringBean) {
         return new Injection(disposerMethod, InjectionPointInfo.fromMethod(disposerMethod, beanClass, beanDeployment,
                 annotations -> annotations.stream().anyMatch(a -> a.name().equals(DotNames.DISPOSES)), transformer));
     }
@@ -186,13 +180,25 @@ public class Injection {
         return target;
     }
 
+    public void init(BeanInfo targetBean) {
+        for (InjectionPointInfo injectionPoint : injectionPoints) {
+            injectionPoint.setTargetBean(targetBean);
+        }
+    }
+
     private static List<AnnotationInstance> getAllInjectionPoints(BeanDeployment beanDeployment, ClassInfo beanClass,
             DotName name, boolean skipConstructors) {
         List<AnnotationInstance> injectAnnotations = new ArrayList<>();
         for (FieldInfo field : beanClass.fields()) {
             AnnotationInstance inject = beanDeployment.getAnnotation(field, name);
             if (inject != null) {
-                injectAnnotations.add(inject);
+                if (Modifier.isFinal(field.flags()) || Modifier.isStatic(field.flags())) {
+                    LOGGER.warn("An injection field must be non-static and non-final - ignoring: "
+                            + field.declaringClass().name() + "#"
+                            + field.name());
+                } else {
+                    injectAnnotations.add(inject);
+                }
             }
         }
         for (MethodInfo method : beanClass.methods()) {

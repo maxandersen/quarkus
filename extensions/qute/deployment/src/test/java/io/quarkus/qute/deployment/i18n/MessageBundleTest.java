@@ -6,13 +6,12 @@ import java.util.Locale;
 
 import javax.inject.Inject;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.qute.Engine;
+import io.quarkus.qute.Qute;
 import io.quarkus.qute.Template;
 import io.quarkus.qute.i18n.Localized;
 import io.quarkus.qute.i18n.MessageBundles;
@@ -22,7 +21,7 @@ public class MessageBundleTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(AppMessages.class, OtherMessages.class, AlphaMessages.class, Item.class)
                     .addAsResource(new StringAsset(
                             "{msg:hello} {msg:hello_name('Jachym')} {msg:hello_with_if_section(3)} {alpha:hello-alpha} {alpha:hello_alpha} {alpha:hello-with-param('foo')}"),
@@ -76,6 +75,17 @@ public class MessageBundleTest {
         assertEquals("Dot test!", engine.parse("{msg:['dot.test']}").render());
         assertEquals("Hello world! Hello Malachi Constant!",
                 engine.getTemplate("dynamic").data("key", "hello_fullname").data("surname", "Constant").render());
+
+        assertEquals("There are no files on C.",
+                engine.parse("{msg:files(0,'C')}").render());
+        assertEquals("There is one file on D.",
+                engine.parse("{msg:files(1,'D')}").render());
+        assertEquals("There are 100 files on E.",
+                engine.parse("{msg:files(100,'E')}").render());
+
+        // Test the convenient Qute class
+        assertEquals("There are no files on C.", Qute.fmt("{msg:files(0,'C')}").render());
+        assertEquals("Hallo Welt!", Qute.fmt("{msg:hello}").attribute("locale", Locale.GERMAN).render());
     }
 
 }

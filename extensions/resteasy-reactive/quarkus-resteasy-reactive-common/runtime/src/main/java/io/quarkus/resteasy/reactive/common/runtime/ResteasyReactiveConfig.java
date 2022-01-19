@@ -1,12 +1,14 @@
 package io.quarkus.resteasy.reactive.common.runtime;
 
+import java.util.Optional;
+
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.configuration.MemorySize;
 import io.smallrye.common.annotation.Experimental;
 
-@ConfigRoot(phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED, name = "rest")
+@ConfigRoot(phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED, name = "resteasy-reactive")
 public class ResteasyReactiveConfig {
 
     /**
@@ -15,6 +17,15 @@ public class ResteasyReactiveConfig {
      */
     @ConfigItem(defaultValue = "10k")
     public MemorySize inputBufferSize;
+
+    /**
+     * The size of the output stream response buffer. If a response is larger than this and no content-length
+     * is provided then the request will be chunked.
+     *
+     * Larger values may give slight performance increases for large responses, at the expense of more memory usage.
+     */
+    @ConfigItem(defaultValue = "8191")
+    public int outputBufferSize;
 
     /**
      * By default we assume a default produced media type of "text/plain"
@@ -41,4 +52,19 @@ public class ResteasyReactiveConfig {
      */
     @ConfigItem(defaultValue = "true")
     public boolean buildTimeConditionAware;
+
+    /**
+     * If set to true, access to all JAX-RS resources will be denied by default
+     *
+     * Use quarkus.security.jaxrs.deny-unannotated-endpoints instead
+     */
+    @Deprecated(forRemoval = true)
+    @ConfigItem(name = "deny-unannotated-endpoints")
+    public Optional<Boolean> denyJaxRs;
+
+    /**
+     * Whether or not duplicate endpoints should trigger error at startup
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean failOnDuplicate;
 }

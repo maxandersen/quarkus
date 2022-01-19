@@ -16,7 +16,8 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.InvocationCallback;
 import javax.ws.rs.core.GenericType;
 import javax.ws.rs.core.Response;
-import org.jboss.resteasy.reactive.client.spi.ClientRestHandler;
+import org.jboss.resteasy.reactive.RestResponse;
+import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
 import org.jboss.resteasy.reactive.common.util.types.Types;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
@@ -27,22 +28,23 @@ public class AsyncInvokerImpl implements AsyncInvoker, CompletionStageRxInvoker 
     final HttpClient httpClient;
     final URI uri;
     final RequestSpec requestSpec;
+    final ConfigurationImpl configuration;
     final Map<String, Object> properties;
     final ClientImpl restClient;
-    final ClientRestHandler[] handlerChain;
-    final ClientRestHandler[] abortHandlerChain;
+    final HandlerChain handlerChain;
     final ThreadSetupAction requestContext;
 
     public AsyncInvokerImpl(ClientImpl restClient, HttpClient httpClient, URI uri, RequestSpec requestSpec,
-            Map<String, Object> properties, ClientRestHandler[] handlerChain, ClientRestHandler[] abortHandlerChain,
+            ConfigurationImpl configuration,
+            Map<String, Object> properties, HandlerChain handlerChain,
             ThreadSetupAction requestContext) {
         this.restClient = restClient;
         this.httpClient = httpClient;
         this.uri = uri;
         this.requestSpec = new RequestSpec(requestSpec);
+        this.configuration = configuration;
         this.properties = new HashMap<>(properties);
         this.handlerChain = handlerChain;
-        this.abortHandlerChain = abortHandlerChain;
         this.requestContext = requestContext;
     }
 
@@ -254,7 +256,9 @@ public class AsyncInvokerImpl implements AsyncInvoker, CompletionStageRxInvoker 
             boolean registerBodyHandler) {
         RestClientRequestContext restClientRequestContext = new RestClientRequestContext(restClient, httpClient, httpMethodName,
                 uri, requestSpec.configuration, requestSpec.headers,
-                entity, responseType, registerBodyHandler, properties, handlerChain, abortHandlerChain, requestContext);
+                entity, responseType, registerBodyHandler, properties, handlerChain.createHandlerChain(configuration),
+                handlerChain.createAbortHandlerChain(configuration),
+                handlerChain.createAbortHandlerChainWithoutResponseFilters(), requestContext);
         restClientRequestContext.run();
         return restClientRequestContext;
     }
@@ -277,12 +281,22 @@ public class AsyncInvokerImpl implements AsyncInvoker, CompletionStageRxInvoker 
     public <T> CompletableFuture<T> mapResponse(CompletableFuture<Response> res, Class<?> responseType) {
         if (responseType.equals(Response.class)) {
             return (CompletableFuture<T>) res;
+        } else if (responseType.equals(RestResponse.class)) {
+            return res.thenApply(new Function<>() {
+                @Override
+                public T apply(Response response) {
+                    return (T) RestResponse.ResponseBuilder.create(response.getStatusInfo(), response.getEntity())
+                            .replaceAll(response.getHeaders()).build();
+                }
+            });
+        } else {
+            return res.thenApply(new Function<>() {
+                @Override
+                public T apply(Response response) {
+                    return (T) response.getEntity();
+                }
+            });
         }
-        return res.thenApply(new Function<Response, T>() {
-            @Override
-            public T apply(Response response) {
-                return (T) response.getEntity();
-            }
-        });
+
     }
 }

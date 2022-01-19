@@ -11,11 +11,12 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -25,6 +26,8 @@ import io.dekorate.utils.Clients;
 import io.dekorate.utils.Serialization;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.KubernetesList;
+import io.fabric8.kubernetes.api.model.Service;
+import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Route;
@@ -42,7 +45,7 @@ import io.quarkus.deployment.pkg.builditem.DeploymentResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.kubernetes.client.deployment.KubernetesClientErrorHandler;
 import io.quarkus.kubernetes.client.spi.KubernetesClientBuildItem;
-import io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem;
+import io.quarkus.kubernetes.spi.KubernetesOptionalResourceDefinitionBuildItem;
 
 public class KubernetesDeployer {
 
@@ -60,7 +63,7 @@ public class KubernetesDeployer {
         Optional<String> activeContainerImageCapability = ContainerImageCapabilitiesUtil
                 .getActiveContainerImageCapability(capabilities);
 
-        if (!activeContainerImageCapability.isPresent()) {
+        if (activeContainerImageCapability.isEmpty()) {
             // we can't thrown an exception here, because it could prevent the Kubernetes resources from being generated
             return;
         }
@@ -77,6 +80,7 @@ public class KubernetesDeployer {
             OutputTargetBuildItem outputTarget,
             OpenshiftConfig openshiftConfig,
             ApplicationInfoBuildItem applicationInfo,
+            List<KubernetesOptionalResourceDefinitionBuildItem> optionalResourceDefinitions,
             BuildProducer<DeploymentResultBuildItem> deploymentResult,
             // needed to ensure that this step runs after the container image has been built
             @SuppressWarnings("unused") List<ArtifactResultBuildItem> artifactResults) {
@@ -85,10 +89,10 @@ public class KubernetesDeployer {
             return;
         }
 
-        if (!selectedDeploymentTarget.isPresent()) {
+        if (selectedDeploymentTarget.isEmpty()) {
 
-            if (!ContainerImageCapabilitiesUtil
-                    .getActiveContainerImageCapability(capabilities).isPresent()) {
+            if (ContainerImageCapabilitiesUtil
+                    .getActiveContainerImageCapability(capabilities).isEmpty()) {
                 throw new RuntimeException(
                         "A Kubernetes deployment was requested but no extension was found to build a container image. Consider adding one of following extensions: "
                                 + CONTAINER_IMAGE_EXTENSIONS_STR + ".");
@@ -100,7 +104,7 @@ public class KubernetesDeployer {
         final KubernetesClient client = Clients.fromConfig(kubernetesClient.getClient().getConfiguration());
         deploymentResult
                 .produce(deploy(selectedDeploymentTarget.get().getEntry(), client, outputTarget.getOutputDirectory(),
-                        openshiftConfig, applicationInfo));
+                        openshiftConfig, applicationInfo, optionalResourceDefinitions));
     }
 
     /**
@@ -120,6 +124,7 @@ public class KubernetesDeployer {
         final DeploymentTargetEntry selectedTarget;
 
         boolean checkForMissingRegistry = true;
+        boolean checkForNamespaceGroupAlignment = true;
         List<String> userSpecifiedDeploymentTargets = KubernetesConfigUtil.getUserSpecifiedDeploymentTargets();
         if (userSpecifiedDeploymentTargets.isEmpty()) {
             selectedTarget = targets.getEntriesSortedByPriority().get(0);
@@ -144,7 +149,12 @@ public class KubernetesDeployer {
         }
 
         if (OPENSHIFT.equals(selectedTarget.getName())) {
-            checkForMissingRegistry = Capability.CONTAINER_IMAGE_S2I.getName().equals(activeContainerImageCapability);
+            checkForMissingRegistry = Capability.CONTAINER_IMAGE_S2I.equals(activeContainerImageCapability)
+                    || Capability.CONTAINER_IMAGE_OPENSHIFT.equals(activeContainerImageCapability);
+            if (!targets.getEntriesSortedByPriority().get(0).getKind().equals("DeploymentConfig")) {
+                checkForNamespaceGroupAlignment = true;
+            }
+
         } else if (MINIKUBE.equals(selectedTarget.getName())) {
             checkForMissingRegistry = false;
         }
@@ -155,17 +165,23 @@ public class KubernetesDeployer {
                             + " because \"quarkus.container-image.registry\" has not been set. The Kubernetes deployment will only work properly"
                             + " if the cluster is using the local Docker daemon. For that reason 'ImagePullPolicy' is being force-set to 'IfNotPresent'.");
         }
-        return selectedTarget;
-    }
 
-    private Optional<KubernetesDeploymentTargetBuildItem> getOptionalDeploymentTarget(
-            List<KubernetesDeploymentTargetBuildItem> deploymentTargets, String name) {
-        return deploymentTargets.stream().filter(d -> name.equals(d.getName())).findFirst();
+        //This might also be applicable in other scenarios too (e.g. Knative on Openshift), so we might need to make it slightly more generic.
+        if (checkForNamespaceGroupAlignment) {
+            Config config = Config.autoConfigure(null);
+            if (config.getNamespace() != null && !config.getNamespace().equals(containerImageInfo.getGroup())) {
+                log.warn("An openshift deployment was requested, but the container image group:" + containerImageInfo.getGroup()
+                        + " is not aligned with the currently selected project:" + config.getNamespace() + "."
+                        + "it is strongly advised to align them, or else the image might not be reachable.");
+            }
+        }
+        return selectedTarget;
     }
 
     private DeploymentResultBuildItem deploy(DeploymentTargetEntry deploymentTarget,
             KubernetesClient client, Path outputDir,
-            OpenshiftConfig openshiftConfig, ApplicationInfoBuildItem applicationInfo) {
+            OpenshiftConfig openshiftConfig, ApplicationInfoBuildItem applicationInfo,
+            List<KubernetesOptionalResourceDefinitionBuildItem> optionalResourceDefinitions) {
         String namespace = Optional.ofNullable(client.getNamespace()).orElse("default");
         log.info("Deploying to " + deploymentTarget.getName().toLowerCase() + " server: " + client.getMasterUrl()
                 + " in namespace: " + namespace + ".");
@@ -174,11 +190,24 @@ public class KubernetesDeployer {
 
         try (FileInputStream fis = new FileInputStream(manifest)) {
             KubernetesList list = Serialization.unmarshalAsList(fis);
-            distinct(list.getItems()).forEach(i -> {
-                if (KNATIVE.equals(deploymentTarget.getName().toLowerCase())) {
-                    client.resource(i).inNamespace(namespace).deletingExisting().createOrReplace();
-                } else {
-                    client.resource(i).inNamespace(namespace).createOrReplace();
+            list.getItems().stream().filter(distinctByResourceKey()).forEach(i -> {
+                final var r = client.resource(i).inNamespace(namespace);
+                if (shouldDeleteExisting(deploymentTarget, i)) {
+                    r.delete();
+                    r.waitUntilCondition(Objects::isNull, 10, TimeUnit.SECONDS);
+                }
+                try {
+                    r.createOrReplace();
+                } catch (Exception e) {
+                    if (e instanceof InterruptedException) {
+                        throw e;
+                    } else if (isOptional(optionalResourceDefinitions, i)) {
+                        log.warn("Failed to apply: " + i.getKind() + " " + i.getMetadata().getName()
+                                + ", possilby due to missing a CRD apiVersion: " + i.getApiVersion() + " and kind: "
+                                + i.getKind() + ".");
+                    } else {
+                        throw e;
+                    }
                 }
                 log.info("Applied: " + i.getKind() + " " + i.getMetadata().getName() + ".");
             });
@@ -221,13 +250,21 @@ public class KubernetesDeployer {
         }
     }
 
-    public static Predicate<HasMetadata> distictByResourceKey() {
+    private static boolean isOptional(List<KubernetesOptionalResourceDefinitionBuildItem> optionalResourceDefinitions,
+            HasMetadata resource) {
+        return optionalResourceDefinitions.stream()
+                .anyMatch(t -> t.getApiVersion().equals(resource.getApiVersion()) && t.getKind().equals(resource.getKind()));
+    }
+
+    private static boolean shouldDeleteExisting(DeploymentTargetEntry deploymentTarget, HasMetadata resource) {
+        return KNATIVE.equalsIgnoreCase(deploymentTarget.getName())
+                || resource instanceof Service
+                || (Objects.equals("v1", resource.getApiVersion()) && Objects.equals("Service", resource.getKind()));
+    }
+
+    private static Predicate<HasMetadata> distinctByResourceKey() {
         Map<Object, Boolean> seen = new ConcurrentHashMap<>();
         return t -> seen.putIfAbsent(t.getApiVersion() + "/" + t.getKind() + ":" + t.getMetadata().getName(),
                 Boolean.TRUE) == null;
-    }
-
-    private static Collection<HasMetadata> distinct(Collection<HasMetadata> resources) {
-        return resources.stream().filter(distictByResourceKey()).collect(Collectors.toList());
     }
 }

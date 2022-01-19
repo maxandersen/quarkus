@@ -9,7 +9,6 @@ import java.util.OptionalInt;
 
 import org.hibernate.search.backend.elasticsearch.index.IndexStatus;
 import org.hibernate.search.engine.cfg.spi.ParseUtils;
-import org.hibernate.search.mapper.orm.automaticindexing.session.AutomaticIndexingSynchronizationStrategyNames;
 import org.hibernate.search.mapper.orm.schema.management.SchemaManagementStrategyName;
 import org.hibernate.search.mapper.orm.search.loading.EntityLoadingCacheLookupStrategy;
 import org.hibernate.search.util.common.SearchException;
@@ -21,6 +20,12 @@ import io.quarkus.runtime.annotations.ConfigItem;
 
 @ConfigGroup
 public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
+
+    /**
+     * Whether Hibernate Search is enabled.
+     */
+    @ConfigItem(defaultValue = "true")
+    boolean enabled;
 
     /**
      * Default backend
@@ -54,6 +59,12 @@ public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
      */
     @ConfigItem
     AutomaticIndexingConfig automaticIndexing;
+
+    /**
+     * Configuration for multi-tenancy.
+     */
+    @ConfigItem
+    MultiTenancyConfig multiTenancy;
 
     @ConfigGroup
     public static class ElasticsearchNamedBackendsRuntimeConfig {
@@ -137,6 +148,14 @@ public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
          */
         @ConfigItem
         ThreadPoolConfig threadPool;
+
+        /**
+         * Whether Hibernate Search should check the version of the Elasticsearch cluster on startup.
+         * <p>
+         * Set to {@code false} if the Elasticsearch cluster may not be available on startup.
+         */
+        @ConfigItem(name = "version-check.enabled", defaultValue = "true")
+        public boolean versionCheck;
 
         /**
          * The default configuration for the Elasticsearch indexes.
@@ -247,6 +266,15 @@ public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
          * Defines how complete indexing should be before resuming the application thread
          * after a database transaction is committed.
          *
+         * [WARNING]
+         * ====
+         * Indexing synchronization is only relevant when coordination is disabled (which is the default).
+         *
+         * With the <<coordination,`outbox-polling` coordination strategy>>,
+         * indexing happens in background threads and is always asynchronous;
+         * the behavior is equivalent to the `write-sync` synchronization strategy.
+         * ====
+         *
          * Available values:
          *
          * [cols=5]
@@ -294,8 +322,8 @@ public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
          * @asciidoclet
          */
         // @formatter:on
-        @ConfigItem(defaultValue = AutomaticIndexingSynchronizationStrategyNames.WRITE_SYNC)
-        String strategy;
+        @ConfigItem(defaultValueDocumentation = "write-sync")
+        Optional<String> strategy;
     }
 
     @ConfigGroup
@@ -327,10 +355,67 @@ public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
     @ConfigGroup
     public static class SchemaManagementConfig {
 
+        // @formatter:off
         /**
-         * The strategy used for index lifecycle.
+         * The schema management strategy, controlling how indexes and their schema
+         * are created, updated, validated or dropped on startup and shutdown.
+         *
+         * Available values:
+         *
+         * [cols=2]
+         * !===
+         * h!Strategy
+         * h!Definition
+         *
+         * !none
+         * !Do nothing: assume that indexes already exist and that their schema matches Hibernate Search's expectations.
+         *
+         * !validate
+         * !Validate that indexes exist and that their schema matches Hibernate Search's expectations.
+         *
+         * If it does not, throw an exception, but make no attempt to fix the problem.
+         *
+         * !create
+         * !For indexes that do not exist, create them along with their schema.
+         *
+         * For indexes that already exist, do nothing: assume that their schema matches Hibernate Search's expectations.
+         *
+         * !create-or-validate (**default**)
+         * !For indexes that do not exist, create them along with their schema.
+         *
+         * For indexes that already exist, validate that their schema matches Hibernate Search's expectations.
+         *
+         * If it does not, throw an exception, but make no attempt to fix the problem.
+         *
+         * !create-or-update
+         * !For indexes that do not exist, create them along with their schema.
+         *
+         * For indexes that already exist, validate that their schema matches Hibernate Search's expectations;
+         * if it does not match expectations, try to update it.
+         *
+         * **This strategy is unfit for production environments**,
+         * due to several important limitations,
+         * but can be useful when developing.
+         *
+         * !drop-and-create
+         * !For indexes that do not exist, create them along with their schema.
+         *
+         * For indexes that already exist, drop them, then create them along with their schema.
+         *
+         * !drop-and-create-and-drop
+         * !For indexes that do not exist, create them along with their schema.
+         *
+         * For indexes that already exist, drop them, then create them along with their schema.
+         *
+         * Also, drop indexes and their schema on shutdown.
+         * !===
+         *
+         * See https://docs.jboss.org/hibernate/stable/search/reference/en-US/html_single/#mapper-orm-schema-management-strategy[this section of the reference documentation]
+         * for more information.
+         *
+         * @asciidoclet
          */
-        // We can't set an actual default value here: see comment on this class.
+        // @formatter:on
         @ConfigItem(defaultValue = "create-or-validate")
         SchemaManagementStrategyName strategy;
 
@@ -424,5 +509,19 @@ public class HibernateSearchElasticsearchRuntimeConfigPersistenceUnit {
         // We can't set an actual default value here: see comment on this class.
         @ConfigItem(defaultValueDocumentation = "100")
         OptionalInt maxBulkSize;
+    }
+
+    @ConfigGroup
+    public static class MultiTenancyConfig {
+
+        /**
+         * An exhaustive list of all tenant identifiers that may be used by the application when multi-tenancy is enabled.
+         * <p>
+         * Mainly useful when using the {@code outbox-polling} coordination strategy,
+         * since it involves setting up one background processor per tenant.
+         */
+        @ConfigItem
+        Optional<List<String>> tenantIds;
+
     }
 }

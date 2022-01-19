@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Simplified Hibernate ORM with Panache
+= Simplified Hibernate ORM with Panache
 
 include::./attributes.adoc[]
 :config-file: application.properties
@@ -64,7 +64,7 @@ To get started:
 * annotate your entities with `@Entity`
 * make your entities extend `PanacheEntity` (optional if you are using the repository pattern)
 
-Follow the link:hibernate-orm#setting-up-and-configuring-hibernate-orm[Hibernate set-up guide for all configuration].
+Follow the xref:hibernate-orm.adoc#setting-up-and-configuring-hibernate-orm[Hibernate set-up guide for all configuration].
 
 In your `pom.xml`, add the following dependencies:
 
@@ -407,6 +407,80 @@ NOTE: The rest of the documentation show usages based on the active record patte
 but keep in mind that they can be performed with the repository pattern as well.
 The repository pattern examples have been omitted for brevity.
 
+== Writing a JAX-RS resource
+
+First, include one of the RESTEasy extensions to enable JAX-RS endpoints, for example, add the `io.quarkus:quarkus-resteasy-jackson` dependency for JAX-RS and JSON support.
+
+Then, you can create the following resource to create/read/update/delete your Person entity:
+
+[source,java]
+----
+@Path("/persons")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class PersonResource {
+
+    @GET
+    public List<Person> list() {
+        return Person.listAll();
+    }
+
+    @GET
+    @Path("/{id}")
+    public Person get(@PathParam("id") Long id) {
+        return Person.findById(id);
+    }
+
+    @POST
+    @Transactional
+    public Response create(Person person) {
+        person.persist();
+        return Response.created(URI.create("/persons/" + person.id)).build();
+    }
+
+    @PUT
+    @Path("/{id}")
+    @Transactional
+    public Person update(@PathParam("id") Long id, Person person) {
+        Person entity = Person.findById(id);
+        if(entity == null) {
+            throw new NotFoundException();
+        }
+
+        // map all fields from the person parameter to the existing entity
+        entity.name = person.name;
+
+        return entity;
+    }
+
+    @DELETE
+    @Path("/{id}")
+    @Transactional
+    public void delete(@PathParam("id") Long id) {
+        Person entity = Person.findById(id);
+        if(entity == null) {
+            throw new NotFoundException();
+        }
+        entity.delete();
+    }
+
+    @GET
+    @Path("/search/{name}")
+    public Person search(@PathParam("name") String name) {
+        return Person.findByName(name);
+    }
+
+    @GET
+    @Path("/count")
+    public Long count() {
+        return Person.count();
+    }
+}
+----
+
+NOTE: Be careful to use the `@Transactional` annotation on the operations that modify the database,
+you can add the annotation at the class level for simplicity purpose.
+
 == Advanced Query
 
 === Paging
@@ -509,6 +583,12 @@ If your update query does not start with `update`, we support the following addi
 - `set? <singleColumnName>` (and single parameter) which will expand to `update from EntityName set <singleColumnName> = ?`
 - `set? <update-query>` will expand to `update from EntityName set <update-query>`
 
+If your delete query does not start with `delete`, we support the following additional forms:
+
+- `from EntityName ...` which will expand to `delete from EntityName ...`
+- `<singleColumnName>` (and single parameter) which will expand to `delete from EntityName where <singleColumnName> = ?`
+- `<query>` will expand to `delete from EntityName where <query>`
+
 NOTE: You can also write your queries in plain
 link:https://docs.jboss.org/hibernate/orm/5.4/userguide/html_single/Hibernate_User_Guide.html#hql[HQL]:
 
@@ -520,12 +600,18 @@ Order.update("update from Person set name = 'Mortal' where status = ?", Status.A
 
 === Named queries
 
-You can reference a named query instead of a (simplified) HQL query by prefixing its name with the '#' character.
+You can reference a named query instead of a (simplified) HQL query by prefixing its name with the '#' character. You can also use named queries for count, update and delete queries.
 
 [source,java]
 ----
 @Entity
-@NamedQuery(name = "Person.getByName", query = "from Person where name = :name")
+@NamedQueries({
+    @NamedQuery(name = "Person.getByName", query = "from Person where name = ?1"),
+    @NamedQuery(name = "Person.countByStatus", query = "select count(*) from Person p where p.status = :status"),
+    @NamedQuery(name = "Person.updateStatusById", query = "update Person p set p.status = :status where p.id = :id"),
+    @NamedQuery(name = "Person.deleteById", query = "delete from Person p where p.id = ?1")
+})
+
 public class Person extends PanacheEntity {
     public String name;
     public LocalDate birth;
@@ -533,6 +619,18 @@ public class Person extends PanacheEntity {
 
     public static Person findByName(String name){
         return find("#Person.getByName", name).firstResult();
+    }
+
+    public static long countByStatus(Status status) {
+        return count("#Person.countByStatus", Parameters.with("status", status).map());
+    }
+
+    public static long updateStatusById(Status status, long id) {
+        return update("#Person.updateStatusById", Parameters.with("status", status).and("id", id));
+    }
+
+    public static long deleteById(long id) {
+        return delete("#Person.deleteById", id);
     }
 }
 ----
@@ -588,7 +686,8 @@ This is also called **dynamic instantiation** or **constructor expression**, mor
 link:https://docs.jboss.org/hibernate/orm/current/userguide/html_single/Hibernate_User_Guide.html#hql-select-clause[hql select clause]
 
 The projection class needs to be a valid Java Bean and have a constructor that contains all its attributes, this constructor will be used to
-instantiate the projection DTO instead of using the entity class. This must be the only constructor of the class.
+instantiate the projection DTO instead of using the entity class. This class must have a matching constructor with all the class attributes as parameters.
+
 
 [source,java]
 ----
@@ -607,9 +706,10 @@ public class PersonName {
 PanacheQuery<PersonName> query = Person.find("status", Status.Alive).project(PersonName.class);
 ----
 
-1. If you plan to deploy your application as a native executable, you must register manually the projection class for reflection.
+1. The `@RegisterForReflection` annotation instructs Quarkus to keep the class and its members during the native compilation. More details about the `@RegisterForReflection` annotation can be found on  the xref:writing-native-applications-tips.adoc#registerForReflection[native application tips] page.
 2. We use public fields here, but you can use private fields and getters/setters if you prefer.
 3. This constructor will be used by Hibernate, it must be the only constructor in your class and have all the class attributes as parameters.
+
 
 [WARNING]
 ====
@@ -648,7 +748,7 @@ PanacheQuery<DogDto> query = Dog.findAll().project(DogDto.class);
 
 == Multiple Persistence Units
 
-The support for multiple persistence units is described in detail in link:hibernate-orm#multiple-persistence-units[the Hibernate ORM guide].
+The support for multiple persistence units is described in detail in xref:hibernate-orm.adoc#multiple-persistence-units[the Hibernate ORM guide].
 
 When using Panache, things are simple:
 
@@ -876,12 +976,44 @@ public class PanacheFunctionalityTest {
 <1> Be sure to call your `verify` and `do*` methods on `PanacheMock` rather than `Mockito`, otherwise you won't know
 what mock object to pass.
 
+==== Mocking `EntityManager`, `Session` and entity instance methods
+
+If you need to mock entity instance methods, such as `persist()` you can do it by mocking the Hibernate ORM `Session` object:
+
+[source,java]
+----
+@QuarkusTest
+public class PanacheMockingTest {
+
+    @InjectMock
+    Session session;
+
+    @BeforeEach
+    public void setup() {
+        Query mockQuery = Mockito.mock(Query.class);
+        Mockito.doNothing().when(session).persist(Mockito.any());
+        Mockito.when(session.createQuery(Mockito.anyString())).thenReturn(mockQuery);
+        Mockito.when(mockQuery.getSingleResult()).thenReturn(0l);
+    }
+
+    @Test
+    public void testPanacheMocking() {
+        Person p = new Person();
+        // mocked via EntityManager mocking
+        p.persist();
+        Assertions.assertNull(p.id);
+
+        Mockito.verify(session, Mockito.times(1)).persist(Mockito.any());
+    }
+}
+----
+
 === Using the repository pattern
 
 If you are using the repository pattern you can use Mockito directly, using the `quarkus-junit5-mockito` module,
 which makes mocking beans much easier:
 
-[source,java]
+[source,xml]
 ----
 <dependency>
     <groupId>io.quarkus</groupId>
@@ -974,11 +1106,8 @@ reluctantly deal with, such as:
 
 - Duplicating ID logic: most entities need an ID, most people don't care how it's set, because it's not really
 relevant to your model.
-- Dumb getters and setters: since Java lacks support for properties in the language, we have to create fields,
-then generate getters and setters for those fields, even if they don't actually do anything more than read/write
-the fields.
 - Traditional EE patterns advise to split entity definition (the model) from the operations you can do on them
-(DAOs, Repositories), but really that requires an unnatural split between the state and its operations even though
+(DAOs, Repositories), but really that requires a split between the state and its operations even though
 we would never do something like that for regular objects in the Object Oriented architecture, where state and methods
 are in the same class. Moreover, this requires two classes per entity, and requires injection of the DAO or Repository
 where you need to do entity operations, which breaks your edit flow and requires you to get out of the code you're
@@ -992,9 +1121,9 @@ With Panache, we took an opinionated approach to tackle all these problems:
 
 - Make your entities extend `PanacheEntity`: it has an ID field that is auto-generated. If you require
 a custom ID strategy, you can extend `PanacheEntityBase` instead and handle the ID yourself.
-- Use public fields. Get rid of dumb getter and setters. Under the hood, we will generate all getters and setters
-that are missing, and rewrite every access to these fields to use the accessor methods. This way you can still
-write _useful_ accessors when you need them, which will be used even though your entity users still use field accesses.
+- Use public fields. Get rid of dumb getter and setters. Hibernate ORM w/o Panache also doesn't require you to use getters and setters,
+but Panache will additionally generate all getters and setters that are missing, and rewrite every access to these fields to use the accessor methods. This way you can still
+write _useful_ accessors when you need them, which will be used even though your entity users still use field accesses. This implies that from the Hibernate perspective you're using accessors via getters and setters even while it looks like field accessors.
 - With the active record pattern: put all your entity logic in static methods in your entity class and don't create DAOs.
 Your entity superclass comes with lots of super useful static methods, and you can add your own in your entity class.
 Users can just start using your entity `Person` by typing `Person.` and getting completion for all the operations in a single place.
@@ -1008,7 +1137,7 @@ That's all there is to it: with Panache, Hibernate ORM has never looked so trim 
 
 Hibernate ORM with Panache relies on compile-time bytecode enhancements to your entities.
 
-It attempts to identity archives with Panache entities (and consumers of Panache entities)
+It attempts to identify archives with Panache entities (and consumers of Panache entities)
 by the presence of the marker file `META-INF/panache-archive.marker`. Panache includes an
 annotation processor that will automatically create this file in archives that depend on
 Panache (even indirectly). If you have disabled annotation processors you may need to create

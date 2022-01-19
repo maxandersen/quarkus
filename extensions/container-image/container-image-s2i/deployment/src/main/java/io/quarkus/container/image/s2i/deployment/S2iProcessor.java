@@ -39,7 +39,6 @@ import io.fabric8.openshift.api.model.Build;
 import io.fabric8.openshift.api.model.BuildConfig;
 import io.fabric8.openshift.api.model.ImageStream;
 import io.fabric8.openshift.client.OpenShiftClient;
-import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.container.image.deployment.ContainerImageConfig;
 import io.quarkus.container.image.deployment.util.ImageUtil;
 import io.quarkus.container.spi.AvailableContainerImageExtensionBuildItem;
@@ -47,12 +46,10 @@ import io.quarkus.container.spi.BaseImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImagePushRequestBuildItem;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsNormalNotRemoteDev;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.GeneratedFileSystemResourceBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
@@ -65,6 +62,7 @@ import io.quarkus.kubernetes.client.deployment.KubernetesClientErrorHandler;
 import io.quarkus.kubernetes.client.spi.KubernetesClientBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesCommandBuildItem;
 import io.quarkus.kubernetes.spi.KubernetesEnvBuildItem;
+import io.quarkus.maven.dependency.ResolvedDependency;
 
 public class S2iProcessor {
 
@@ -80,11 +78,6 @@ public class S2iProcessor {
         return new AvailableContainerImageExtensionBuildItem(S2I);
     }
 
-    @BuildStep(onlyIf = S2iBuild.class)
-    public CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.CONTAINER_IMAGE_S2I);
-    }
-
     @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, S2iBuild.class }, onlyIfNot = NativeBuild.class)
     public void s2iRequirementsJvm(S2iConfig s2iConfig,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -95,20 +88,18 @@ public class S2iProcessor {
             BuildProducer<BaseImageInfoBuildItem> builderImageProducer,
             BuildProducer<KubernetesCommandBuildItem> commandProducer) {
 
-        final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
+        final Collection<ResolvedDependency> appDeps = curateOutcomeBuildItem.getApplicationModel()
+                .getRuntimeDependencies();
         String outputJarFileName = jarBuildItem.getPath().getFileName().toString();
         String classpath = appDeps.stream()
-                .map(d -> d.getArtifact().getGroupId() + "." + d.getArtifact().getPath().getFileName())
+                .map(d -> d.getGroupId() + "."
+                        + d.getResolvedPaths().getSinglePath().getFileName())
                 .map(s -> concatUnixPaths(s2iConfig.jarDirectory, "lib", s))
                 .collect(Collectors.joining(":"));
 
         String jarFileName = s2iConfig.jarFileName.orElse(outputJarFileName);
         String jarDirectory = s2iConfig.jarDirectory;
         String pathToJar = concatUnixPaths(jarDirectory, jarFileName);
-
-        List<String> args = new ArrayList<>();
-        args.addAll(Arrays.asList("-jar", pathToJar, "-cp", classpath));
-        args.addAll(s2iConfig.jvmArguments);
 
         builderImageProducer.produce(new BaseImageInfoBuildItem(s2iConfig.baseJvmImage));
         Optional<S2iBaseJavaImage> baseImage = S2iBaseJavaImage.findMatching(s2iConfig.baseJvmImage);
@@ -123,7 +114,11 @@ public class S2iProcessor {
         });
 
         if (!baseImage.isPresent()) {
-            commandProducer.produce(new KubernetesCommandBuildItem("java", args.toArray(new String[args.size()])));
+            List<String> cmd = new ArrayList<>();
+            cmd.add("java");
+            cmd.addAll(s2iConfig.jvmArguments);
+            cmd.addAll(Arrays.asList("-jar", pathToJar, "-cp", classpath));
+            commandProducer.produce(KubernetesCommandBuildItem.command(cmd));
         }
     }
 
@@ -165,7 +160,7 @@ public class S2iProcessor {
         });
 
         if (!baseImage.isPresent()) {
-            commandProducer.produce(new KubernetesCommandBuildItem(pathToNativeBinary, nativeArguments.toArray(new String[0])));
+            commandProducer.produce(KubernetesCommandBuildItem.commandWithArgs(pathToNativeBinary, nativeArguments));
         }
     }
 
@@ -181,8 +176,12 @@ public class S2iProcessor {
             // used to ensure that the jar has been built
             JarBuildItem jar) {
 
-        if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
-                && !pushRequest.isPresent()) {
+        if (containerImageConfig.isBuildExplicitlyDisabled()) {
+            return;
+        }
+
+        if (!containerImageConfig.isBuildExplicitlyEnabled() && !containerImageConfig.isPushExplicitlyEnabled()
+                && !buildRequest.isPresent() && !pushRequest.isPresent()) {
             return;
         }
 
@@ -191,9 +190,9 @@ public class S2iProcessor {
                 .filter(r -> r.getName().endsWith("kubernetes" + File.separator + "openshift.yml"))
                 .findFirst();
 
-        if (!openshiftYml.isPresent()) {
+        if (openshiftYml.isEmpty()) {
             LOG.warn(
-                    "No Openshift manifests were generated (most likely due to the fact that the service is not an HTTP service) so no s2i process will be taking place");
+                    "No Openshift manifests were generated so no s2i process will be taking place");
             return;
         }
 
@@ -217,8 +216,12 @@ public class S2iProcessor {
             BuildProducer<ArtifactResultBuildItem> artifactResultProducer,
             NativeImageBuildItem nativeImage) {
 
-        if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
-                && !pushRequest.isPresent()) {
+        if (containerImageConfig.isBuildExplicitlyDisabled()) {
+            return;
+        }
+
+        if (!containerImageConfig.isBuildExplicitlyEnabled() && !containerImageConfig.isPushExplicitlyEnabled()
+                && !buildRequest.isPresent() && !pushRequest.isPresent()) {
             return;
         }
 
@@ -231,9 +234,9 @@ public class S2iProcessor {
                 .filter(r -> r.getName().endsWith("kubernetes" + File.separator + "openshift.yml"))
                 .findFirst();
 
-        if (!openshiftYml.isPresent()) {
+        if (openshiftYml.isEmpty()) {
             LOG.warn(
-                    "No Openshift manifests were generated (most likely due to the fact that the service is not an HTTP service) so no s2i process will be taking place");
+                    "No Openshift manifests were generated so no s2i process will be taking place");
             return;
         }
 
@@ -292,8 +295,6 @@ public class S2iProcessor {
                     } catch (IllegalArgumentException e) {
                         // We should ignore that, as its expected to be thrown when item is actually
                         // deleted.
-                    } catch (InterruptedException e) {
-                        s2iException(e);
                     }
                 } else if (i instanceof ImageStream) {
                     ImageStream is = (ImageStream) i;
@@ -368,8 +369,6 @@ public class S2iProcessor {
             try {
                 client.builds().withName(buildName).waitUntilCondition(b -> !RUNNING.equalsIgnoreCase(b.getStatus().getPhase()),
                         s2iConfig.buildTimeout.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                s2iException(e);
             } finally {
                 try {
                     watch.close();

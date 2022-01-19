@@ -1,7 +1,10 @@
 package org.jboss.resteasy.reactive.common.model;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.Produces;
 import org.jboss.resteasy.reactive.RestSseElementType;
 
 /**
@@ -21,7 +24,7 @@ public class ResourceMethod {
     private String path;
 
     /**
-     * The value of the {@link javax.ws.rs.Produces} annotation, if none is specified on the method
+     * The value of the {@link Produces} annotation, if none is specified on the method
      * then this represents the value inherited from the class level, or null if not specified.
      */
     private String[] produces;
@@ -33,7 +36,7 @@ public class ResourceMethod {
     private String sseElementType;
 
     /**
-     * The value of the {@link javax.ws.rs.Consumes} annotation, if none is specified on the method
+     * The value of the {@link Consumes} annotation, if none is specified on the method
      * then this represents the value inherited from the class level, or null if not specified.
      */
     private String[] consumes;
@@ -60,6 +63,32 @@ public class ResourceMethod {
     private boolean isFormParamRequired;
 
     private boolean isMultipart;
+    private List<ResourceMethod> subResourceMethods;
+
+    public ResourceMethod() {
+    }
+
+    public ResourceMethod(String httpMethod, String path, String[] produces, String sseElementType, String[] consumes,
+            Set<String> nameBindingNames, String name, String returnType, String simpleReturnType, MethodParameter[] parameters,
+            boolean blocking, boolean suspended, boolean isSse, boolean isFormParamRequired, boolean isMultipart,
+            List<ResourceMethod> subResourceMethods) {
+        this.httpMethod = httpMethod;
+        this.path = path;
+        this.produces = produces;
+        this.sseElementType = sseElementType;
+        this.consumes = consumes;
+        this.nameBindingNames = nameBindingNames;
+        this.name = name;
+        this.returnType = returnType;
+        this.simpleReturnType = simpleReturnType;
+        this.parameters = parameters;
+        this.blocking = blocking;
+        this.suspended = suspended;
+        this.isSse = isSse;
+        this.isFormParamRequired = isFormParamRequired;
+        this.isMultipart = isMultipart;
+        this.subResourceMethods = subResourceMethods;
+    }
 
     public boolean isResourceLocator() {
         return httpMethod == null;
@@ -205,5 +234,13 @@ public class ResourceMethod {
         if (httpMethod != null)
             return httpMethod + " " + path;
         return "Sub-resource locator for " + path;
+    }
+
+    public void setSubResourceMethods(List<ResourceMethod> subResourceMethods) {
+        this.subResourceMethods = subResourceMethods;
+    }
+
+    public List<ResourceMethod> getSubResourceMethods() {
+        return subResourceMethods;
     }
 }

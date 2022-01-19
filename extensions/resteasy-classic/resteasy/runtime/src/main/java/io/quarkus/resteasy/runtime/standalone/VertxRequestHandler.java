@@ -3,6 +3,7 @@ package io.quarkus.resteasy.runtime.standalone;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.MalformedInputException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -19,8 +20,8 @@ import org.jboss.resteasy.specimpl.ResteasyUriInfo;
 import org.jboss.resteasy.spi.Failure;
 import org.jboss.resteasy.spi.ResteasyDeployment;
 
+import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
-import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.resteasy.runtime.ContextUtil;
 import io.quarkus.runtime.BlockingOperationControl;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
@@ -45,19 +46,16 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     protected final RequestDispatcher dispatcher;
     protected final String rootPath;
     protected final BufferAllocator allocator;
-    protected final BeanContainer beanContainer;
     protected final CurrentIdentityAssociation association;
     protected final CurrentVertxRequest currentVertxRequest;
     protected final Executor executor;
     protected final long readTimeout;
 
     public VertxRequestHandler(Vertx vertx,
-            BeanContainer beanContainer,
             ResteasyDeployment deployment,
             String rootPath,
             BufferAllocator allocator, Executor executor, long readTimeout) {
         this.vertx = vertx;
-        this.beanContainer = beanContainer;
         this.dispatcher = new RequestDispatcher((SynchronousDispatcher) deployment.getDispatcher(),
                 deployment.getProviderFactory(), null, Thread.currentThread().getContextClassLoader());
         this.rootPath = rootPath;
@@ -101,7 +99,22 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
     }
 
     private void dispatch(RoutingContext routingContext, InputStream is, VertxOutput output) {
-        ManagedContext requestContext = beanContainer.requestContext();
+        ResteasyUriInfo uriInfo;
+        try {
+            uriInfo = VertxUtil.extractUriInfo(routingContext.request(), rootPath);
+        } catch (Exception e) {
+            if (e.getCause() instanceof MalformedInputException) {
+                log.debug(e.getCause());
+                routingContext.response().setStatusCode(400);
+            } else {
+                log.debug(e);
+                routingContext.response().setStatusCode(500);
+            }
+            routingContext.response().end();
+            return;
+        }
+
+        ManagedContext requestContext = Arc.container().requestContext();
         requestContext.activate();
         routingContext.remove(QuarkusHttpUser.AUTH_FAILURE_HANDLER);
         if (association != null) {
@@ -117,7 +130,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
         try {
             Context ctx = vertx.getOrCreateContext();
             HttpServerRequest request = routingContext.request();
-            ResteasyUriInfo uriInfo = VertxUtil.extractUriInfo(request, rootPath);
+
             ResteasyHttpHeaders headers = VertxUtil.extractHttpHeaders(request);
             HttpServerResponse response = request.response();
             VertxHttpResponse vertxResponse = new VertxHttpResponse(request, dispatcher.getProviderFactory(),
@@ -126,7 +139,7 @@ public class VertxRequestHandler implements Handler<RoutingContext> {
             // using a supplier to make the remote Address resolution lazy: often it's not needed and it's not very cheap to create.
             LazyHostSupplier hostSupplier = new LazyHostSupplier(request);
 
-            VertxHttpRequest vertxRequest = new VertxHttpRequest(ctx, routingContext, headers, uriInfo, request.rawMethod(),
+            VertxHttpRequest vertxRequest = new VertxHttpRequest(ctx, routingContext, headers, uriInfo, request.method().name(),
                     hostSupplier,
                     dispatcher.getDispatcher(), vertxResponse, requestContext, executor);
             vertxRequest.setInputStream(is);

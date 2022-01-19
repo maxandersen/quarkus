@@ -1,5 +1,6 @@
 package io.quarkus.qute;
 
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
@@ -21,6 +22,25 @@ public class CollectionResolverTest {
 
         assertEquals("1,false,true",
                 engine.parse("{this.size},{this.isEmpty},{this.contains('Lu')}").render(list));
+    }
+
+    @Test
+    public void testListTake() {
+        List<String> list = new ArrayList<>();
+        list.add("Lu");
+        list.add("Roman");
+        list.add("Matej");
+
+        Engine engine = Engine.builder().addDefaults().build();
+
+        assertEquals("Lu,",
+                engine.parse("{#each list.take(1)}{it},{/each}").data("list", list).render());
+        assertEquals("Roman,Matej,",
+                engine.parse("{#each list.takeLast(2)}{it},{/each}").data("list", list).render());
+        assertThatExceptionOfType(IndexOutOfBoundsException.class)
+                .isThrownBy(() -> engine.parse("{list.take(12).size}").data("list", list).render());
+        assertThatExceptionOfType(IndexOutOfBoundsException.class)
+                .isThrownBy(() -> engine.parse("{list.take(-1).size}").data("list", list).render());
     }
 
 }

@@ -1,11 +1,14 @@
 package io.quarkus.mutiny.runtime;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 
@@ -14,8 +17,28 @@ public class MutinyInfrastructure {
 
     public static final String VERTX_EVENT_LOOP_THREAD_PREFIX = "vert.x-eventloop-thread-";
 
-    public void configureMutinyInfrastructure(ExecutorService exec) {
-        Infrastructure.setDefaultExecutor(exec);
+    public void configureMutinyInfrastructure(ExecutorService exec, ShutdownContext shutdownContext) {
+        //mutiny leaks a ScheduledExecutorService if you don't do this
+        Infrastructure.getDefaultWorkerPool().shutdown();
+        Infrastructure.setDefaultExecutor(new Executor() {
+            @Override
+            public void execute(Runnable command) {
+                try {
+                    exec.execute(command);
+                } catch (RejectedExecutionException e) {
+                    if (!exec.isShutdown() && !exec.isTerminated()) {
+                        throw e;
+                    }
+                    // Ignore the failure - the application has been shutdown.
+                }
+            }
+        });
+        shutdownContext.addLastShutdownTask(new Runnable() {
+            @Override
+            public void run() {
+                Infrastructure.getDefaultWorkerPool().shutdown();
+            }
+        });
     }
 
     public void configureDroppedExceptionHandler() {

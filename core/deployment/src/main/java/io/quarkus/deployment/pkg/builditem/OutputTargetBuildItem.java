@@ -1,9 +1,12 @@
 package io.quarkus.deployment.pkg.builditem;
 
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 
 import io.quarkus.builder.item.SimpleBuildItem;
+import io.quarkus.maven.dependency.ArtifactKey;
 
 /**
  * The location that output artifacts should be created in
@@ -16,12 +19,15 @@ public final class OutputTargetBuildItem extends SimpleBuildItem {
     private final String baseName;
     private final boolean rebuild;
     private final Properties buildSystemProperties;
+    private final Optional<Set<ArtifactKey>> includedOptionalDependencies;
 
-    public OutputTargetBuildItem(Path outputDirectory, String baseName, boolean rebuild, Properties buildSystemProperties) {
+    public OutputTargetBuildItem(Path outputDirectory, String baseName, boolean rebuild, Properties buildSystemProperties,
+            Optional<Set<ArtifactKey>> includedOptionalDependencies) {
         this.outputDirectory = outputDirectory;
         this.baseName = baseName;
         this.rebuild = rebuild;
         this.buildSystemProperties = buildSystemProperties;
+        this.includedOptionalDependencies = includedOptionalDependencies;
     }
 
     public Path getOutputDirectory() {
@@ -38,5 +44,9 @@ public final class OutputTargetBuildItem extends SimpleBuildItem {
 
     public Properties getBuildSystemProperties() {
         return buildSystemProperties;
+    }
+
+    public Optional<Set<ArtifactKey>> getIncludedOptionalDependencies() {
+        return includedOptionalDependencies;
     }
 }

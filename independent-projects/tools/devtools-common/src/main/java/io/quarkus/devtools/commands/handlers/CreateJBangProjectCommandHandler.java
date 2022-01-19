@@ -2,10 +2,11 @@ package io.quarkus.devtools.commands.handlers;
 
 import static io.quarkus.devtools.commands.handlers.QuarkusCommandHandlers.computeCoordsFromQuery;
 
-import io.quarkus.bootstrap.model.AppArtifactCoords;
 import io.quarkus.devtools.codestarts.jbang.QuarkusJBangCodestartCatalog;
 import io.quarkus.devtools.codestarts.jbang.QuarkusJBangCodestartProjectInput;
 import io.quarkus.devtools.codestarts.jbang.QuarkusJBangCodestartProjectInputBuilder;
+import io.quarkus.devtools.codestarts.quarkus.QuarkusCodestartData.LegacySupport;
+import io.quarkus.devtools.commands.CreateProject;
 import io.quarkus.devtools.commands.data.QuarkusCommandException;
 import io.quarkus.devtools.commands.data.QuarkusCommandInvocation;
 import io.quarkus.devtools.commands.data.QuarkusCommandOutcome;
@@ -25,16 +26,20 @@ public class CreateJBangProjectCommandHandler implements QuarkusCommandHandler {
     @Override
     public QuarkusCommandOutcome execute(QuarkusCommandInvocation invocation) throws QuarkusCommandException {
         final Set<String> extensionsQuery = invocation.getValue(ProjectGenerator.EXTENSIONS, Collections.emptySet());
-        final List<AppArtifactCoords> extensionsToAdd = computeCoordsFromQuery(invocation, extensionsQuery);
+        final List<ArtifactCoords> extensionsToAdd = computeCoordsFromQuery(invocation, extensionsQuery);
         if (extensionsToAdd == null) {
             throw new QuarkusCommandException("Failed to create project because of invalid extensions");
         }
 
         final ExtensionCatalog catalog = invocation.getExtensionsCatalog();
 
+        final boolean noWrapper = invocation.getValue("noJBangWrapper", false) ||
+                invocation.getValue(CreateProject.NO_BUILDTOOL_WRAPPER, false);
+
         final QuarkusJBangCodestartProjectInputBuilder builder = QuarkusJBangCodestartProjectInput.builder()
                 .addExtensions(extensionsToAdd)
-                .setNoJBangWrapper(invocation.getBooleanValue("noJBangWrapper"))
+                .setNoJBangWrapper(noWrapper)
+                .addData(LegacySupport.convertFromLegacy(invocation.getValues()))
                 .putData("quarkus.version", invocation.getExtensionsCatalog().getQuarkusCoreVersion());
 
         if (catalog.getBom() != null) {
@@ -59,7 +64,7 @@ public class CreateJBangProjectCommandHandler implements QuarkusCommandHandler {
             }
             getCatalog(invocation.getQuarkusProject()).createProject(input).generate(projectDir);
             invocation.log()
-                    .info("\n-----------\n" + MessageIcons.NOOP_ICON
+                    .info("\n-----------\n" + MessageIcons.OK_ICON + " "
                             + " jbang project has been successfully generated in:\n--> "
                             + invocation.getQuarkusProject().getProjectDirPath().toString() + "\n-----------");
         } catch (IOException e) {

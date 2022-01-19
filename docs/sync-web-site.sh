@@ -2,10 +2,11 @@
 
 git clone -b develop --single-branch git@github.com:quarkusio/quarkusio.github.io.git target/web-site
 
-rsync -vr \
+rsync -vr --delete \
     --exclude='**/*.html' \
     --exclude='**/index.adoc' \
     --exclude='**/attributes.adoc' \
+    --exclude='**/guides.md' \
     src/main/asciidoc/* \
     target/web-site/_guides
 
@@ -29,6 +30,6 @@ then
     echo "Web Site updated - wait for CI build"
 else
     echo "Run the following command to check the web site (if not done already)"
-    echo "cd target/web-site  && bundle exec jekyll serve"
+    echo "(cd target/web-site  && bundle exec jekyll serve)"
 fi
 

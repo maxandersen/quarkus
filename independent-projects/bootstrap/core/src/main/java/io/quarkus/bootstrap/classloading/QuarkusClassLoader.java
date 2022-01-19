@@ -30,13 +30,21 @@ import org.jboss.logging.Logger;
  * The ClassLoader used for non production Quarkus applications (i.e. dev and test mode).
  */
 public class QuarkusClassLoader extends ClassLoader implements Closeable {
-
     private static final Logger log = Logger.getLogger(QuarkusClassLoader.class);
     protected static final String META_INF_SERVICES = "META-INF/services/";
     protected static final String JAVA = "java.";
 
     static {
         registerAsParallelCapable();
+    }
+
+    public static List<ClassPathElement> getElements(String resourceName, boolean localOnly) {
+        final ClassLoader ccl = Thread.currentThread().getContextClassLoader();
+        if (!(ccl instanceof QuarkusClassLoader)) {
+            throw new IllegalStateException("The current classloader is not an instance of "
+                    + QuarkusClassLoader.class.getName() + " but " + ccl.getClass().getName());
+        }
+        return ((QuarkusClassLoader) ccl).getElementsWithResource(resourceName, localOnly);
     }
 
     private final String name;
@@ -56,16 +64,15 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
     /**
      * The element that holds resettable in-memory classses.
-     *
+     * <p>
      * A reset occurs when new transformers and in-memory classes are added to a ClassLoader. It happens after each
      * start in dev mode, however in general the reset resources will be the same. There are some cases where this is
      * not the case though:
-     *
+     * <p>
      * - Dev mode failed start will not end up with transformers or generated classes being registered. The reset
      * in this case will add them.
      * - Platform CDI beans that are considered to be removed and have the removed status changed will result in
      * additional classes being added to the class loader.
-     *
      */
     private volatile MemoryClassPathElement resettableElement;
     private volatile MemoryClassPathElement transformedClasses;
@@ -88,7 +95,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
     private volatile boolean driverLoaded;
 
     private QuarkusClassLoader(Builder builder) {
-        super(new GetPackageBlockingClassLoader(builder.parent));
+        super(builder.parent);
         this.name = builder.name;
         this.elements = builder.elements;
         this.bannedElements = builder.bannedElements;
@@ -97,10 +104,11 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         this.parent = builder.parent;
         this.parentFirst = builder.parentFirst;
         this.resettableElement = builder.resettableElement;
-        this.transformedClasses = new MemoryClassPathElement(builder.transformedClasses);
+        this.transformedClasses = new MemoryClassPathElement(builder.transformedClasses, true);
         this.aggregateParentResources = builder.aggregateParentResources;
         this.classLoaderEventListeners = builder.classLoaderEventListeners.isEmpty() ? Collections.emptyList()
                 : builder.classLoaderEventListeners;
+        setDefaultAssertionStatus(builder.assertionsEnabled);
     }
 
     public static Builder builder(String name, ClassLoader parent, boolean parentFirst) {
@@ -117,6 +125,32 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         return name;
     }
 
+    /**
+     * Returns true if the supplied class is a class that would be loaded parent-first
+     */
+    public boolean isParentFirst(String name) {
+        if (name.startsWith(JAVA)) {
+            return true;
+        }
+
+        //even if the thread is interrupted we still want to be able to load classes
+        //if the interrupt bit is set then we clear it and restore it at the end
+        boolean interrupted = Thread.interrupted();
+        try {
+            ClassLoaderState state = getState();
+            synchronized (getClassLoadingLock(name)) {
+                String resourceName = sanitizeName(name).replace('.', '/') + ".class";
+                return parentFirst(resourceName, state);
+            }
+
+        } finally {
+            if (interrupted) {
+                //restore interrupt state
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
     private boolean parentFirst(String name, ClassLoaderState state) {
         return parentFirst || state.parentFirstResources.contains(name);
     }
@@ -126,7 +160,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             throw new IllegalStateException("Classloader is not resettable");
         }
         synchronized (this) {
-            this.transformedClasses = new MemoryClassPathElement(transformedClasses);
+            this.transformedClasses = new MemoryClassPathElement(transformedClasses, true);
             resettableElement.reset(generatedResources);
             state = null;
         }
@@ -134,6 +168,10 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
     @Override
     public Enumeration<URL> getResources(String unsanitisedName) throws IOException {
+        return getResources(unsanitisedName, false);
+    }
+
+    public Enumeration<URL> getResources(String unsanitisedName, boolean parentAlreadyFoundResources) throws IOException {
         for (ClassLoaderEventListener l : classLoaderEventListeners) {
             l.enumeratingResourceURLs(unsanitisedName, this.name);
         }
@@ -195,8 +233,13 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             }
         }
         if (!banned) {
-            if (resources.isEmpty() || aggregateParentResources) {
-                Enumeration<URL> res = parent.getResources(unsanitisedName);
+            if ((resources.isEmpty() && !parentAlreadyFoundResources) || aggregateParentResources) {
+                Enumeration<URL> res;
+                if (parent instanceof QuarkusClassLoader) {
+                    res = ((QuarkusClassLoader) parent).getResources(unsanitisedName, !resources.isEmpty());
+                } else {
+                    res = parent.getResources(unsanitisedName);
+                }
                 while (res.hasMoreElements()) {
                     resources.add(res.nextElement());
                 }
@@ -223,7 +266,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                             } else {
                                 List<ClassPathElement> list = elementMap.get(i);
                                 if (list == null) {
-                                    elementMap.put(i, list = new ArrayList<>());
+                                    elementMap.put(i, list = new ArrayList<>(2)); //default initial capacity of 10 is way too large
                                 }
                                 list.add(element);
                             }
@@ -354,7 +397,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
      * @param name
      * @return
      */
-    //@Override
+    @Override
     protected Class<?> findClass(String moduleName, String name) {
         try {
             return loadClass(name, false);
@@ -389,7 +432,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                 if (c != null) {
                     return c;
                 }
-                String resourceName = sanitizeName(name).replace(".", "/") + ".class";
+                String resourceName = sanitizeName(name).replace('.', '/') + ".class";
                 boolean parentFirst = parentFirst(resourceName, state);
                 if (state.bannedResources.contains(resourceName)) {
                     throw new ClassNotFoundException(name);
@@ -485,13 +528,24 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         return ret;
     }
 
-    @SuppressWarnings("unused")
+    public List<String> getLocalClassNames() {
+        List<String> ret = new ArrayList<>();
+        for (String name : getState().loadableResources.keySet()) {
+            if (name.endsWith(".class")) {
+                ret.add(name.substring(0, name.length() - 6).replace('/', '.'));
+            }
+        }
+        return ret;
+    }
+
     public Class<?> visibleDefineClass(String name, byte[] b, int off, int len) throws ClassFormatError {
         return super.defineClass(name, b, off, len);
     }
 
     public void addCloseTask(Runnable task) {
-        closeTasks.add(task);
+        synchronized (closeTasks) {
+            closeTasks.add(task);
+        }
     }
 
     @Override
@@ -502,7 +556,11 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             }
             closed = true;
         }
-        for (Runnable i : closeTasks) {
+        List<Runnable> tasks;
+        synchronized (closeTasks) {
+            tasks = new ArrayList<>(closeTasks);
+        }
+        for (Runnable i : tasks) {
             try {
                 i.run();
             } catch (Throwable t) {
@@ -531,13 +589,27 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                 log.error("Failed to close " + element, e);
             }
         }
+        for (ClassPathElement element : bannedElements) {
+            //note that this is a 'soft' close
+            //all resources are closed, however the CL can still be used
+            //but after close no resources will be held past the scope of an operation
+            try (ClassPathElement ignored = element) {
+                //the close() operation is implied by the try-with syntax
+            } catch (Exception e) {
+                log.error("Failed to close " + element, e);
+            }
+        }
         ResourceBundle.clearCache(this);
 
     }
 
+    public boolean isClosed() {
+        return closed;
+    }
+
     @Override
     public String toString() {
-        return "QuarkusClassLoader:" + name;
+        return "QuarkusClassLoader:" + name + "@" + Integer.toHexString(hashCode());
     }
 
     public static class Builder {
@@ -551,6 +623,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         MemoryClassPathElement resettableElement;
         private Map<String, byte[]> transformedClasses = Collections.emptyMap();
         boolean aggregateParentResources;
+        boolean assertionsEnabled;
         private final ArrayList<ClassLoaderEventListener> classLoaderEventListeners = new ArrayList<>(5);
 
         public Builder(String name, ClassLoader parent, boolean parentFirst) {
@@ -561,10 +634,10 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
         /**
          * Adds an element that can be used to load classes.
-         *
+         * <p>
          * Order is important, if there are multiple elements that provide the same
          * class then the first one passed to this method will be used.
-         *
+         * <p>
          * The provided element will be closed when the ClassLoader is closed.
          *
          * @param element The element to add
@@ -578,10 +651,10 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
         /**
          * Adds a resettable MemoryClassPathElement to the class loader.
-         *
+         * <p>
          * This element is mutable, and its contents will be modified if the class loader
          * is reset.
-         *
+         * <p>
          * If this is not explicitly added to the elements list then it will be automatically
          * added as the highest priority element.
          *
@@ -595,11 +668,11 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
         /**
          * Adds an element that contains classes that will always be loaded in a parent first manner.
-         *
+         * <p>
          * Note that this does not mean that the parent will always have this class, it is possible that
          * in some cases the class will end up being loaded by this loader, however an attempt will always
          * be made to load these from the parent CL first
-         *
+         * <p>
          * Note that elements passed to this method will not be automatically closed, as
          * references to this element are not retained after the class loader has been built.
          *
@@ -614,13 +687,13 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
         /**
          * Adds an element that contains classes that should never be loaded by this loader.
-         *
+         * <p>
          * Note that elements passed to this method will not be automatically closed, as
          * references to this element are not retained after the class loader has been built.
-         *
+         * <p>
          * This is because banned elements are generally expected to be loaded by another ClassLoader,
          * so this prevents the need to create multiple ClassPathElements for the same resource.
-         *
+         * <p>
          * Banned elements have the highest priority, a banned element will never be loaded,
          * and resources will never appear to be present.
          *
@@ -647,13 +720,18 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
 
         /**
          * If this is true then a getResources call will always include the parent resources.
-         *
+         * <p>
          * If this is false then getResources will not return parent resources if local resources were found.
-         *
+         * <p>
          * This only takes effect if parentFirst is false.
          */
         public Builder setAggregateParentResources(boolean aggregateParentResources) {
             this.aggregateParentResources = aggregateParentResources;
+            return this;
+        }
+
+        public Builder setAssertionsEnabled(boolean assertionsEnabled) {
+            this.assertionsEnabled = assertionsEnabled;
             return this;
         }
 
@@ -702,23 +780,9 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         }
     }
 
-    /**
-     * Horrible JDK8 hack
-     *
-     * getPackage() on JDK8 will always delegate to the parent, so QuarkusClassLoader will never define a package,
-     * which can cause issues if you then try and read package annotations as they will be from the wrong ClassLoader.
-     *
-     * We add this ClassLoader into the mix to block the getPackage() delegation.
-     */
-    private static class GetPackageBlockingClassLoader extends ClassLoader {
-
-        protected GetPackageBlockingClassLoader(ClassLoader parent) {
-            super(parent);
-        }
-
-        @Override
-        protected Package getPackage(String name) {
-            return null;
-        }
+    @Override
+    public String getName() {
+        return name;
     }
+
 }

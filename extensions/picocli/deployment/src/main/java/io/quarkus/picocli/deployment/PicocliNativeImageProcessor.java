@@ -4,18 +4,20 @@ import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
+import org.jboss.jandex.AnnotationValue.Kind;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
+import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -25,26 +27,19 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBui
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBundleBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.pkg.steps.NativeBuild;
 import picocli.CommandLine;
 
 public class PicocliNativeImageProcessor {
 
     private static final Logger LOGGER = Logger.getLogger(PicocliNativeImageProcessor.class);
 
-    static class NativeImageProcessingEnabled implements BooleanSupplier {
-
-        PicocliDeploymentConfiguration deploymentConfiguration;
-
-        public boolean getAsBoolean() {
-            return deploymentConfiguration.nativeImageProcessingEnabled;
-        }
-
-    }
-
-    @BuildStep(onlyIf = NativeImageProcessingEnabled.class)
+    @BuildStep(onlyIf = NativeBuild.class)
     void reflectionConfiguration(CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<ReflectiveFieldBuildItem> reflectiveFields,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
+            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchies,
             BuildProducer<NativeImageProxyDefinitionBuildItem> nativeImageProxies) {
         IndexView index = combinedIndexBuildItem.getIndex();
 
@@ -60,6 +55,8 @@ public class PicocliNativeImageProcessor {
 
         Set<ClassInfo> foundClasses = new HashSet<>();
         Set<FieldInfo> foundFields = new HashSet<>();
+        Set<Type> typeAnnotationValues = new HashSet<>();
+
         for (DotName analyzedAnnotation : annotationsToAnalyze) {
             for (AnnotationInstance ann : index.getAnnotations(analyzedAnnotation)) {
                 AnnotationTarget target = ann.target();
@@ -83,12 +80,20 @@ public class PicocliNativeImageProcessor {
                         LOGGER.warnf("Unsupported type %s annotated with %s", target.kind().name(), analyzedAnnotation);
                         break;
                 }
+
+                // register classes references in Picocli annotations for reflection
+                List<AnnotationValue> values = ann.valuesWithDefaults(index);
+                for (AnnotationValue value : values) {
+                    if (value.kind() == Kind.CLASS) {
+                        typeAnnotationValues.add(value.asClass());
+                    } else if (value.kind() == Kind.ARRAY && value.componentKind() == Kind.CLASS) {
+                        for (Type componentClass : value.asClassArray()) {
+                            typeAnnotationValues.add(componentClass);
+                        }
+                    }
+                }
             }
         }
-
-        Arrays.asList(DotName.createSimple(CommandLine.IVersionProvider.class.getName()),
-                DotName.createSimple(CommandLine.class.getName()))
-                .forEach(interfaceName -> foundClasses.addAll(index.getAllKnownImplementors(interfaceName)));
 
         foundClasses.forEach(classInfo -> {
             if (Modifier.isInterface(classInfo.flags())) {
@@ -102,9 +107,13 @@ public class PicocliNativeImageProcessor {
             }
         });
         foundFields.forEach(fieldInfo -> reflectiveFields.produce(new ReflectiveFieldBuildItem(fieldInfo)));
+        typeAnnotationValues.forEach(type -> reflectiveHierarchies.produce(new ReflectiveHierarchyBuildItem.Builder()
+                .type(type)
+                .source(PicocliNativeImageProcessor.class.getSimpleName())
+                .build()));
     }
 
-    @BuildStep(onlyIf = NativeImageProcessingEnabled.class)
+    @BuildStep(onlyIf = NativeBuild.class)
     void resourceBundlesConfiguration(CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<NativeImageResourceBundleBuildItem> resourceBundles) {
         combinedIndexBuildItem.getIndex().getAnnotations(DotName.createSimple(CommandLine.Command.class.getName()))

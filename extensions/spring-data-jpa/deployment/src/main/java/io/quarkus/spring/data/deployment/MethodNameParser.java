@@ -66,7 +66,7 @@ public class MethodNameParser {
     public MethodNameParser(ClassInfo entityClass, IndexView indexView) {
         this.entityClass = entityClass;
         this.indexView = indexView;
-        this.mappedSuperClassInfos = getMappedSuperClassInfos(indexView, entityClass);
+        this.mappedSuperClassInfos = getSuperClassInfos(indexView, entityClass);
     }
 
     public enum QueryType {
@@ -79,15 +79,17 @@ public class MethodNameParser {
     public Result parse(MethodInfo methodInfo) {
         String methodName = methodInfo.name();
         ClassInfo repositoryClassInfo = methodInfo.declaringClass();
-        String repositoryMethodDescription = methodName + " of Repository " + repositoryClassInfo;
+        String repositoryMethodDescription = "'" + methodName + "' of repository '" + repositoryClassInfo + "'";
         QueryType queryType = getType(methodName);
         if (queryType == null) {
-            throw new UnableToParseMethodException("Method " + repositoryMethodDescription + " cannot be parsed");
+            throw new UnableToParseMethodException("Method " + repositoryMethodDescription
+                    + " cannot be parsed. Did you forget to annotate the method with '@Query'?");
         }
 
         int byIndex = methodName.indexOf("By");
         if ((byIndex == -1) || (byIndex + 2 >= methodName.length())) {
-            throw new UnableToParseMethodException("Method " + repositoryMethodDescription + " cannot be parsed");
+            throw new UnableToParseMethodException("Method " + repositoryMethodDescription
+                    + " cannot be parsed as there is no proper 'By' clause in the name.");
         }
 
         // handle 'Top' and 'First'
@@ -508,13 +510,13 @@ public class MethodNameParser {
     }
 
     private FieldInfo getFieldInfo(String fieldName, ClassInfo entityClass,
-            MutableReference<List<ClassInfo>> mappedSuperClassInfos) {
+            MutableReference<List<ClassInfo>> superClassInfos) {
         FieldInfo fieldInfo = entityClass.field(fieldName);
         if (fieldInfo == null) {
-            if (mappedSuperClassInfos.isEmpty()) {
-                mappedSuperClassInfos.set(getMappedSuperClassInfos(indexView, entityClass));
+            if (superClassInfos.isEmpty()) {
+                superClassInfos.set(getSuperClassInfos(indexView, entityClass));
             }
-            for (ClassInfo superClass : mappedSuperClassInfos.get()) {
+            for (ClassInfo superClass : superClassInfos.get()) {
                 fieldInfo = superClass.field(fieldName);
                 if (fieldInfo != null) {
                     break;
@@ -524,12 +526,14 @@ public class MethodNameParser {
         return fieldInfo;
     }
 
-    private List<ClassInfo> getMappedSuperClassInfos(IndexView indexView, ClassInfo entityClass) {
+    private List<ClassInfo> getSuperClassInfos(IndexView indexView, ClassInfo entityClass) {
         List<ClassInfo> mappedSuperClassInfoElements = new ArrayList<>(3);
         Type superClassType = entityClass.superClassType();
         while (superClassType != null && !superClassType.name().equals(DotNames.OBJECT)) {
             ClassInfo superClass = indexView.getClassByName(superClassType.name());
             if (superClass.classAnnotation(DotNames.JPA_MAPPED_SUPERCLASS) != null) {
+                mappedSuperClassInfoElements.add(superClass);
+            } else if (superClass.classAnnotation(DotNames.JPA_INHERITANCE) != null) {
                 mappedSuperClassInfoElements.add(superClass);
             }
 

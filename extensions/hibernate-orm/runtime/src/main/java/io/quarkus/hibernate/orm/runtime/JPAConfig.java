@@ -1,10 +1,13 @@
 package io.quarkus.hibernate.orm.runtime;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import javax.annotation.PreDestroy;
 import javax.enterprise.context.ApplicationScoped;
@@ -22,13 +25,10 @@ public class JPAConfig {
 
     private static final Logger LOGGER = Logger.getLogger(JPAConfig.class.getName());
 
-    private final Map<String, Set<String>> entityPersistenceUnitMapping;
-
     private final Map<String, LazyPersistenceUnit> persistenceUnits;
 
     @Inject
     public JPAConfig(JPAConfigSupport jpaConfigSupport) {
-        this.entityPersistenceUnitMapping = Collections.unmodifiableMap(jpaConfigSupport.entityPersistenceUnitMapping);
 
         Map<String, LazyPersistenceUnit> persistenceUnitsBuilder = new HashMap<>();
         for (String persistenceUnitName : jpaConfigSupport.persistenceUnitNames) {
@@ -38,8 +38,35 @@ public class JPAConfig {
     }
 
     void startAll() {
+        List<CompletableFuture<?>> start = new ArrayList<>();
+        //start PU's in parallel, for faster startup
+        //also works around https://github.com/quarkusio/quarkus/issues/17304 to some extent
+        //as the main thread is now no longer polluted with ThreadLocals by default
+        //this is not a complete fix, but will help as long as the test methods
+        //don't access the datasource directly, but only over HTTP calls
         for (Map.Entry<String, LazyPersistenceUnit> i : persistenceUnits.entrySet()) {
-            i.getValue().get();
+            CompletableFuture<Object> future = new CompletableFuture<>();
+            start.add(future);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        i.getValue().get();
+                        future.complete(null);
+                    } catch (Throwable t) {
+                        future.completeExceptionally(t);
+                    }
+                }
+            }, "JPA Startup Thread: " + i.getKey()).start();
+        }
+        for (CompletableFuture<?> i : start) {
+            try {
+                i.get();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e.getCause());
+            }
         }
     }
 
@@ -68,13 +95,6 @@ public class JPAConfig {
      */
     public Set<String> getPersistenceUnits() {
         return persistenceUnits.keySet();
-    }
-
-    /**
-     * Returns the set of persistence units an entity is attached to.
-     */
-    public Set<String> getPersistenceUnitsForEntity(String entityClass) {
-        return entityPersistenceUnitMapping.getOrDefault(entityClass, Collections.emptySet());
     }
 
     /**

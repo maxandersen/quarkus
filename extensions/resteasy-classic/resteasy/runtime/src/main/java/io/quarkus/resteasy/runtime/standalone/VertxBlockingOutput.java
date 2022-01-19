@@ -8,6 +8,7 @@ import java.util.concurrent.CompletionStage;
 import org.jboss.logging.Logger;
 
 import io.netty.buffer.ByteBuf;
+import io.quarkus.runtime.BlockingOperationNotAllowedException;
 import io.quarkus.vertx.core.runtime.VertxBufferImpl;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Context;
@@ -68,7 +69,18 @@ public class VertxBlockingOutput implements VertxOutput {
     public void write(ByteBuf data, boolean last) throws IOException {
         if (last && data == null) {
             request.response().end();
+            //if there is a problem we still try and end, but then throw to report to the caller
+            if (throwable != null) {
+                throw new IOException(throwable);
+            }
             return;
+        }
+        if (throwable != null) {
+            if (data != null && data.refCnt() > 0) {
+                data.release();
+            }
+            request.response().end();
+            throw new IOException(throwable);
         }
         try {
             //do all this in the same lock
@@ -135,7 +147,7 @@ public class VertxBlockingOutput implements VertxOutput {
                 throw new IOException(throwable);
             }
             if (Context.isOnEventLoopThread()) {
-                throw new IOException("Attempting a blocking write on io thread");
+                throw new BlockingOperationNotAllowedException("Attempting a blocking write on io thread");
             }
             if (request.response().closed()) {
                 throw new IOException("Connection has been closed");

@@ -8,7 +8,6 @@ import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.PERMIT;
 import static javax.servlet.DispatcherType.REQUEST;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -91,7 +90,6 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -102,8 +100,11 @@ import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
+import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.ServiceUtil;
+import io.quarkus.maven.dependency.ResolvedDependency;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.undertow.runtime.HttpSessionContext;
 import io.quarkus.undertow.runtime.ServletHttpSecurityPolicy;
@@ -114,9 +115,9 @@ import io.quarkus.undertow.runtime.ServletSecurityInfoSubstitution;
 import io.quarkus.undertow.runtime.UndertowDeploymentRecorder;
 import io.quarkus.undertow.runtime.UndertowHandlersConfServletExtension;
 import io.quarkus.vertx.http.deployment.DefaultRouteBuildItem;
+import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
-import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.HttpMethodSecurityInfo;
@@ -146,13 +147,26 @@ public class UndertowBuildStep {
     CombinedIndexBuildItem combinedIndexBuildItem;
 
     @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.SERVLET);
+    public FeatureBuildItem setupCapability() {
+        return new FeatureBuildItem(Feature.SERVLET);
     }
 
     @BuildStep
-    public FeatureBuildItem setupCapability() {
-        return new FeatureBuildItem(Feature.SERVLET);
+    void build(CurateOutcomeBuildItem curateOutcomeBuildItem,
+            BuildProducer<RuntimeInitializedClassBuildItem> producer) {
+        if (!jacksonOnClasspath(curateOutcomeBuildItem)) {
+            producer.produce(new RuntimeInitializedClassBuildItem("io.vertx.core.json.Json"));
+            producer.produce(new RuntimeInitializedClassBuildItem("io.vertx.core.spi.JsonFactory"));
+        }
+    }
+
+    private boolean jacksonOnClasspath(CurateOutcomeBuildItem curateOutcomeBuildItem) {
+        for (ResolvedDependency appDep : curateOutcomeBuildItem.getApplicationModel().getRuntimeDependencies()) {
+            if (appDep.getArtifactId().equals("jackson-core")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @BuildStep
@@ -163,7 +177,7 @@ public class UndertowBuildStep {
             ShutdownContextBuildItem shutdown,
             Consumer<DefaultRouteBuildItem> undertowProducer,
             BuildProducer<RouteBuildItem> routeProducer,
-            ExecutorBuildItem executorBuildItem, HttpConfiguration httpConfiguration,
+            ExecutorBuildItem executorBuildItem,
             ServletRuntimeConfig servletRuntimeConfig,
             ServletContextPathBuildItem servletContextPathBuildItem,
             Capabilities capabilities) throws Exception {
@@ -173,14 +187,16 @@ public class UndertowBuildStep {
         }
         Handler<RoutingContext> ut = recorder.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
                 servletDeploymentManagerBuildItem.getDeploymentManager(),
-                wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()), httpConfiguration,
+                wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()),
                 servletRuntimeConfig);
 
         if (servletContextPathBuildItem.getServletContextPath().equals("/")) {
             undertowProducer.accept(new DefaultRouteBuildItem(ut));
         } else {
-            routeProducer.produce(new RouteBuildItem(servletContextPathBuildItem.getServletContextPath() + "/*", ut, false));
-            routeProducer.produce(new RouteBuildItem(servletContextPathBuildItem.getServletContextPath(), ut, false));
+            routeProducer.produce(RouteBuildItem.builder().route(servletContextPathBuildItem.getServletContextPath() + "/*")
+                    .handler(ut).build());
+            routeProducer.produce(
+                    RouteBuildItem.builder().route(servletContextPathBuildItem.getServletContextPath()).handler(ut).build());
         }
         return new ServiceStartBuildItem("undertow");
     }
@@ -220,9 +236,9 @@ public class UndertowBuildStep {
                 new HotDeploymentWatchedFileBuildItem(UndertowHandlersConfServletExtension.META_INF_UNDERTOW_HANDLERS_CONF));
 
         //check for the file in the handlers dir
-        Path handlerPath = applicationArchivesBuildItem.getRootArchive()
-                .getChildPath(UndertowHandlersConfServletExtension.META_INF_UNDERTOW_HANDLERS_CONF);
-        if (handlerPath != null) {
+        final boolean handlerPath = applicationArchivesBuildItem.getRootArchive()
+                .apply(tree -> tree.contains(UndertowHandlersConfServletExtension.META_INF_UNDERTOW_HANDLERS_CONF));
+        if (handlerPath) {
             producer.produce(new ServletExtensionBuildItem(new UndertowHandlersConfServletExtension()));
             nativeImageResourceBuildItemBuildProducer.produce(
                     new NativeImageResourceBuildItem(UndertowHandlersConfServletExtension.META_INF_UNDERTOW_HANDLERS_CONF));
@@ -235,21 +251,20 @@ public class UndertowBuildStep {
      */
     @BuildStep
     public List<ServletContainerInitializerBuildItem> servletContainerInitializer(
-            ApplicationArchivesBuildItem archives,
             CombinedIndexBuildItem combinedIndexBuildItem,
-            List<BlacklistedServletContainerInitializerBuildItem> blacklistedBuildItems,
+            List<IgnoredServletContainerInitializerBuildItem> ignoredScis,
             BuildProducer<AdditionalBeanBuildItem> beans) throws IOException {
 
-        Set<String> blacklistedClassNames = new HashSet<>();
-        for (BlacklistedServletContainerInitializerBuildItem bi : blacklistedBuildItems) {
-            blacklistedClassNames.add(bi.getSciClass());
+        Set<String> ignoredClassNames = new HashSet<>();
+        for (IgnoredServletContainerInitializerBuildItem bi : ignoredScis) {
+            ignoredClassNames.add(bi.getSciClass());
         }
         List<ServletContainerInitializerBuildItem> ret = new ArrayList<>();
         Set<String> initializers = ServiceUtil.classNamesNamedIn(Thread.currentThread().getContextClassLoader(),
                 SERVLET_CONTAINER_INITIALIZER);
 
         for (String initializer : initializers) {
-            if (blacklistedClassNames.contains(initializer)) {
+            if (ignoredClassNames.contains(initializer)) {
                 continue;
             }
             beans.produce(AdditionalBeanBuildItem.unremovableOf(initializer));
@@ -296,11 +311,7 @@ public class UndertowBuildStep {
             WebMetadataBuildItem webMetadataBuildItem) {
         String contextPath;
         if (servletConfig.contextPath.isPresent()) {
-            if (!servletConfig.contextPath.get().startsWith("/")) {
-                contextPath = "/" + servletConfig.contextPath;
-            } else {
-                contextPath = servletConfig.contextPath.get();
-            }
+            contextPath = servletConfig.contextPath.get();
         } else if (webMetadataBuildItem.getWebMetaData().getDefaultContextPath() != null) {
             contextPath = webMetadataBuildItem.getWebMetaData().getDefaultContextPath();
         } else {
@@ -328,6 +339,7 @@ public class UndertowBuildStep {
             ShutdownContextBuildItem shutdownContext,
             KnownPathsBuildItem knownPaths,
             HttpBuildTimeConfig httpBuildTimeConfig,
+            HttpRootPathBuildItem httpRootPath,
             ServletConfig servletConfig) throws Exception {
 
         ObjectSubstitutionBuildItem.Holder holder = new ObjectSubstitutionBuildItem.Holder(ServletSecurityInfo.class,
@@ -342,7 +354,7 @@ public class UndertowBuildStep {
         String contextPath = servletContextPathBuildItem.getServletContextPath();
         RuntimeValue<DeploymentInfo> deployment = recorder.createDeployment("test", knownPaths.knownFiles,
                 knownPaths.knownDirectories,
-                launchMode.getLaunchMode(), shutdownContext, contextPath, httpBuildTimeConfig.rootPath,
+                launchMode.getLaunchMode(), shutdownContext, httpRootPath.relativePath(contextPath),
                 servletConfig.defaultCharset, webMetaData.getRequestCharacterEncoding(),
                 webMetaData.getResponseCharacterEncoding(), httpBuildTimeConfig.auth.proactive,
                 webMetaData.getWelcomeFileList() != null ? webMetaData.getWelcomeFileList().getWelcomeFiles() : null);

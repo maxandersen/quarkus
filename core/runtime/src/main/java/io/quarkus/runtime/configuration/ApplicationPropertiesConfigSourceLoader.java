@@ -3,7 +3,8 @@ package io.quarkus.runtime.configuration;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
-import java.util.ArrayList;
+import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.List;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
@@ -25,35 +26,27 @@ public class ApplicationPropertiesConfigSourceLoader extends AbstractLocationCon
 
     public static class InClassPath extends ApplicationPropertiesConfigSourceLoader implements ConfigSourceProvider {
         @Override
-        protected ConfigSource loadConfigSource(final URL url, final int ordinal) throws IOException {
-            return super.loadConfigSource(url, 250);
-        }
-
-        @Override
         public List<ConfigSource> getConfigSources(final ClassLoader classLoader) {
-            return loadConfigSources("application.properties", classLoader);
+            return loadConfigSources("application.properties", 250, classLoader);
         }
 
         @Override
-        protected List<ConfigSource> tryFileSystem(final URI uri) {
-            return new ArrayList<>();
+        protected List<ConfigSource> tryFileSystem(final URI uri, final int ordinal) {
+            return Collections.emptyList();
         }
     }
 
     public static class InFileSystem extends ApplicationPropertiesConfigSourceLoader implements ConfigSourceProvider {
         @Override
-        protected ConfigSource loadConfigSource(final URL url, final int ordinal) throws IOException {
-            return super.loadConfigSource(url, 260);
-        }
-
-        @Override
         public List<ConfigSource> getConfigSources(final ClassLoader classLoader) {
-            return loadConfigSources("config/application.properties", classLoader);
+            return loadConfigSources(
+                    Paths.get(System.getProperty("user.dir"), "config", "application.properties").toUri().toString(), 260,
+                    classLoader);
         }
 
         @Override
-        protected List<ConfigSource> tryClassPath(final URI uri, final ClassLoader classLoader) {
-            return new ArrayList<>();
+        protected List<ConfigSource> tryClassPath(final URI uri, final int ordinal, final ClassLoader classLoader) {
+            return Collections.emptyList();
         }
     }
 }

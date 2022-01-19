@@ -1,13 +1,14 @@
 package io.quarkus.mongodb.runtime;
 
 import static com.mongodb.AuthenticationMechanism.GSSAPI;
+import static com.mongodb.AuthenticationMechanism.MONGODB_AWS;
 import static com.mongodb.AuthenticationMechanism.MONGODB_X509;
 import static com.mongodb.AuthenticationMechanism.PLAIN;
 import static com.mongodb.AuthenticationMechanism.SCRAM_SHA_1;
+import static com.mongodb.AuthenticationMechanism.SCRAM_SHA_256;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 
 import javax.annotation.PreDestroy;
 import javax.enterprise.inject.Any;
+import javax.enterprise.inject.Instance;
 import javax.inject.Singleton;
 
 import org.bson.codecs.configuration.CodecProvider;
@@ -37,6 +39,8 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCredential;
 import com.mongodb.MongoException;
+import com.mongodb.ReadConcern;
+import com.mongodb.ReadConcernLevel;
 import com.mongodb.ReadPreference;
 import com.mongodb.ServerAddress;
 import com.mongodb.WriteConcern;
@@ -73,20 +77,29 @@ public class MongoClients {
 
     private final MongodbConfig mongodbConfig;
     private final MongoClientSupport mongoClientSupport;
+    private final Instance<CodecProvider> codecProviders;
+    private final Instance<PropertyCodecProvider> propertyCodecProviders;
+    private final Instance<CommandListener> commandListeners;
 
-    private Map<String, MongoClient> mongoclients = new HashMap<>();
-    private Map<String, ReactiveMongoClient> reactiveMongoClients = new HashMap<>();
+    private final Map<String, MongoClient> mongoclients = new HashMap<>();
+    private final Map<String, ReactiveMongoClient> reactiveMongoClients = new HashMap<>();
 
-    public MongoClients(MongodbConfig mongodbConfig, MongoClientSupport mongoClientSupport) {
+    public MongoClients(MongodbConfig mongodbConfig, MongoClientSupport mongoClientSupport,
+            Instance<CodecProvider> codecProviders,
+            Instance<PropertyCodecProvider> propertyCodecProviders,
+            Instance<CommandListener> commandListeners) {
         this.mongodbConfig = mongodbConfig;
         this.mongoClientSupport = mongoClientSupport;
+        this.codecProviders = codecProviders;
+        this.propertyCodecProviders = propertyCodecProviders;
+        this.commandListeners = commandListeners;
 
         try {
             //JDK bug workaround
             //https://github.com/quarkusio/quarkus/issues/14424
             //force class init to prevent possible deadlock when done by mongo threads
             Class.forName("sun.net.ext.ExtendedSocketOptions", true, ClassLoader.getSystemClassLoader());
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException ignored) {
         }
 
         try {
@@ -252,7 +265,11 @@ public class MongoClients {
 
         configureCodecRegistry(defaultCodecRegistry, settings);
 
-        settings.commandListenerList(getCommandListeners(mongoClientSupport.getCommandListeners()));
+        List<CommandListener> commandListenerList = new ArrayList<>();
+        for (CommandListener commandListener : commandListeners) {
+            commandListenerList.add(commandListener);
+        }
+        settings.commandListenerList(commandListenerList);
 
         config.applicationName.ifPresent(settings::applicationName);
 
@@ -274,7 +291,13 @@ public class MongoClients {
 
             Optional<String> maybeW = wc.w;
             if (maybeW.isPresent()) {
-                concern = concern.withW(maybeW.get());
+                String w = maybeW.get();
+                if ("majority".equalsIgnoreCase(w)) {
+                    concern = concern.withW(w);
+                } else {
+                    int wInt = Integer.parseInt(w);
+                    concern = concern.withW(wInt);
+                }
             }
             settings.writeConcern(concern);
             settings.retryWrites(wc.retryWrites);
@@ -291,15 +314,19 @@ public class MongoClients {
         if (config.readPreference.isPresent()) {
             settings.readPreference(ReadPreference.valueOf(config.readPreference.get()));
         }
+        if (config.readConcern.isPresent()) {
+            settings.readConcern(new ReadConcern(ReadConcernLevel.fromString(config.readConcern.get())));
+        }
 
         return settings.build();
     }
 
     private void configureCodecRegistry(CodecRegistry defaultCodecRegistry, MongoClientSettings.Builder settings) {
         List<CodecProvider> providers = new ArrayList<>();
-        if (!mongoClientSupport.getCodecProviders().isEmpty()) {
-            providers.addAll(getCodecProviders(mongoClientSupport.getCodecProviders()));
+        for (CodecProvider codecProvider : codecProviders) {
+            providers.add(codecProvider);
         }
+
         // add pojo codec provider with automatic capabilities
         // it always needs to be the last codec provided
         PojoCodecProvider.Builder pojoCodecProviderBuilder = PojoCodecProvider.builder()
@@ -317,10 +344,10 @@ public class MongoClients {
             }
         }
         // register property codec provider
-        if (!mongoClientSupport.getPropertyCodecProviders().isEmpty()) {
-            pojoCodecProviderBuilder.register(getPropertyCodecProviders(mongoClientSupport.getPropertyCodecProviders())
-                    .toArray(new PropertyCodecProvider[0]));
+        for (PropertyCodecProvider propertyCodecProvider : propertyCodecProviders) {
+            pojoCodecProviderBuilder.register(propertyCodecProvider);
         }
+
         CodecRegistry registry = !providers.isEmpty() ? fromRegistries(fromProviders(providers), defaultCodecRegistry,
                 fromProviders(pojoCodecProviderBuilder.build()))
                 : fromRegistries(defaultCodecRegistry, fromProviders(pojoCodecProviderBuilder.build()));
@@ -380,6 +407,10 @@ public class MongoClients {
             credential = MongoCredential.createMongoX509Credential(username);
         } else if (mechanism == SCRAM_SHA_1) {
             credential = MongoCredential.createScramSha1Credential(username, authSource, password);
+        } else if (mechanism == SCRAM_SHA_256) {
+            credential = MongoCredential.createScramSha256Credential(username, authSource, password);
+        } else if (mechanism == MONGODB_AWS) {
+            credential = MongoCredential.createAwsCredential(username, password);
         } else if (mechanism == null) {
             credential = MongoCredential.createCredential(username, authSource, password);
         } else {
@@ -404,51 +435,6 @@ public class MongoClients {
             throw new IllegalArgumentException("Invalid authMechanism '" + authMechanism + "'");
         }
         return mechanism;
-    }
-
-    private List<CodecProvider> getCodecProviders(List<String> classNames) {
-        List<CodecProvider> providers = new ArrayList<>();
-        for (String name : classNames) {
-            try {
-                Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass(name);
-                Constructor clazzConstructor = clazz.getConstructor();
-                providers.add((CodecProvider) clazzConstructor.newInstance());
-            } catch (Exception e) {
-                LOGGER.warnf(e, "Unable to load the codec provider class %s", name);
-            }
-        }
-
-        return providers;
-    }
-
-    private List<PropertyCodecProvider> getPropertyCodecProviders(List<String> classNames) {
-        List<PropertyCodecProvider> providers = new ArrayList<>();
-        for (String name : classNames) {
-            try {
-                Class<?> clazz = Thread.currentThread().getContextClassLoader().loadClass(name);
-                Constructor clazzConstructor = clazz.getConstructor();
-                providers.add((PropertyCodecProvider) clazzConstructor.newInstance());
-            } catch (Exception e) {
-                LOGGER.warnf(e, "Unable to load the property codec provider class %s", name);
-            }
-        }
-
-        return providers;
-    }
-
-    private List<CommandListener> getCommandListeners(List<String> classNames) {
-        List<CommandListener> listeners = new ArrayList<>();
-        for (String name : classNames) {
-            try {
-                Class<?> clazz = Class.forName(name, true, Thread.currentThread().getContextClassLoader());
-                Constructor<?> clazzConstructor = clazz.getConstructor();
-                listeners.add((CommandListener) clazzConstructor.newInstance());
-            } catch (Exception e) {
-                LOGGER.warnf(e, "Unable to load the command listener class %s", name);
-            }
-        }
-
-        return listeners;
     }
 
     @PreDestroy

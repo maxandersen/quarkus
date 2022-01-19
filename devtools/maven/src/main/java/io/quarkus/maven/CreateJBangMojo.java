@@ -1,5 +1,6 @@
 package io.quarkus.maven;
 
+import static io.quarkus.devtools.project.CodestartResourceLoadersBuilder.codestartLoadersBuilder;
 import static org.fusesource.jansi.Ansi.ansi;
 
 import java.io.File;
@@ -9,7 +10,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Component;
@@ -27,7 +27,10 @@ import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
 import io.quarkus.devtools.project.QuarkusProjectHelper;
+import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.platform.descriptor.loader.json.ResourceLoader;
 import io.quarkus.platform.tools.maven.MojoMessageWriter;
+import io.quarkus.registry.RegistryResolutionException;
 import io.quarkus.registry.catalog.ExtensionCatalog;
 
 @Mojo(name = "create-jbang", requiresProject = false)
@@ -66,6 +69,9 @@ public class CreateJBangMojo extends AbstractMojo {
     @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
     private RepositorySystemSession repoSession;
 
+    @Parameter(property = "javaVersion")
+    private String javaVersion;
+
     @Component
     private RepositorySystem repoSystem;
 
@@ -87,7 +93,8 @@ public class CreateJBangMojo extends AbstractMojo {
         try {
             mvn = MavenArtifactResolver.builder()
                     .setRepositorySystem(repoSystem)
-                    .setRepositorySystemSession(repoSession)
+                    .setRepositorySystemSession(
+                            getLog().isDebugEnabled() ? repoSession : MojoUtils.muteTransferListener(repoSession))
                     .setRemoteRepositories(repos)
                     .setRemoteRepositoryManager(remoteRepoManager)
                     .build();
@@ -96,15 +103,22 @@ public class CreateJBangMojo extends AbstractMojo {
         }
 
         final MessageWriter log = new MojoMessageWriter(getLog());
-        final ExtensionCatalog catalog = CreateProjectMojo.resolveExtensionsCatalog(
-                StringUtils.defaultIfBlank(bomGroupId, null),
-                StringUtils.defaultIfBlank(bomArtifactId, null),
-                StringUtils.defaultIfBlank(bomVersion, null),
-                QuarkusProjectHelper.getCatalogResolver(mvn, log), mvn, log);
+        ExtensionCatalog catalog;
+        try {
+            catalog = CreateProjectMojo.resolveExtensionsCatalog(this, bomGroupId, bomArtifactId, bomVersion,
+                    QuarkusProjectHelper.getCatalogResolver(mvn, log), mvn, log);
+        } catch (RegistryResolutionException e) {
+            throw new MojoExecutionException("Failed to resolve Quarkus extension catalog", e);
+        }
 
+        final List<ResourceLoader> codestartsResourceLoader = codestartLoadersBuilder()
+                .catalog(catalog)
+                .artifactResolver(mvn)
+                .build();
         final CreateJBangProject createJBangProject = new CreateJBangProject(QuarkusProject.of(projectDirPath, catalog,
-                QuarkusProjectHelper.getCodestartResourceLoaders(catalog, mvn), log, BuildTool.MAVEN))
+                codestartsResourceLoader, log, BuildTool.MAVEN))
                         .extensions(extensions)
+                        .javaTarget(javaVersion)
                         .setValue("noJBangWrapper", noJBangWrapper);
 
         boolean success;

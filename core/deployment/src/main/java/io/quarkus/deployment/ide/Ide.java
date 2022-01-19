@@ -1,26 +1,33 @@
 package io.quarkus.deployment.ide;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import io.quarkus.dev.console.DevConsoleManager;
+
 public enum Ide {
 
-    IDEA("idea", "--help"),
-    ECLIPSE("eclipse", (String[]) null),
-    VSCODE("code", "--version"),
-    NETBEANS("netbeans", "--help");
+    // see for cli syntax of idea https://www.jetbrains.com/help/idea/opening-files-from-command-line.html
+    IDEA("idea", null, "--help"),
+    ECLIPSE("eclipse", null, (String[]) null),
+    VSCODE("code", null, "--version"),
+    NETBEANS("netbeans", null, "--help");
 
     private final String defaultCommand;
     private final List<String> markerArgs;
+    private final String lineNumberArg;
     private String machineSpecificCommand;
 
     private String effectiveCommand;
 
-    Ide(String defaultCommand, String... markerArgs) {
+    Ide(String defaultCommand, String lineNumberArg, String... markerArgs) {
         this.defaultCommand = defaultCommand;
+        this.lineNumberArg = lineNumberArg;
         this.markerArgs = markerArgs != null ? Arrays.asList(markerArgs) : Collections.emptyList();
     }
 
@@ -47,7 +54,8 @@ public enum Ide {
                     List<String> command = new ArrayList<>(1 + markerArgs.size());
                     command.add(defaultCommand);
                     command.addAll(markerArgs);
-                    new ProcessBuilder(command).redirectError(IdeUtil.NULL_FILE).redirectOutput(IdeUtil.NULL_FILE).start()
+                    new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD.file())
+                            .redirectOutput(ProcessBuilder.Redirect.DISCARD.file()).start()
                             .waitFor(10,
                                     TimeUnit.SECONDS);
                     return defaultCommand;
@@ -62,8 +70,38 @@ public enum Ide {
         }
     }
 
+    public List<String> createFileOpeningArgs(String fileName, String line) {
+        if (line == null || line.isEmpty()) {
+            return Collections.singletonList(fileName);
+        }
+
+        if (lineNumberArg == null) {
+            return Collections.singletonList(fileName + ":" + line);
+        }
+
+        String formattedLineArg = String.format(lineNumberArg, line);
+
+        return List.of(formattedLineArg, fileName);
+    }
+
     public void setMachineSpecificCommand(String machineSpecificCommand) {
         this.machineSpecificCommand = machineSpecificCommand;
+    }
+
+    /**
+     * Finds the location of a source file given the path from the source root
+     *
+     * @param fileName The file name
+     * @return The path or null if it could not be found
+     */
+    public static Path findSourceFile(String fileName) {
+        for (var i : DevConsoleManager.getHotReplacementContext().getSourcesDir()) {
+            Path resolved = i.resolve(fileName);
+            if (Files.exists(resolved)) {
+                return resolved;
+            }
+        }
+        return null;
     }
 
     @Override

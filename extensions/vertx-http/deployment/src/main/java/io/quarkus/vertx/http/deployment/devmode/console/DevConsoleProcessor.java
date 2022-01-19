@@ -4,16 +4,12 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.net.URL;
 import java.net.URLConnection;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -27,10 +23,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
@@ -40,32 +38,33 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelInitializer;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
-import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.builder.item.SimpleBuildItem;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
+import io.quarkus.deployment.annotations.Produce;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.ConfigDescriptionBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LiveReloadBuildItem;
-import io.quarkus.deployment.builditem.LogHandlerBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
+import io.quarkus.deployment.builditem.WebSocketLogHandlerBuildItem;
+import io.quarkus.deployment.console.ConsoleCommand;
+import io.quarkus.deployment.console.ConsoleStateManager;
 import io.quarkus.deployment.ide.EffectiveIdeBuildItem;
 import io.quarkus.deployment.ide.Ide;
 import io.quarkus.deployment.logging.LoggingSetupBuildItem;
 import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
-import io.quarkus.deployment.recording.BytecodeRecorderImpl;
 import io.quarkus.deployment.util.ArtifactInfoUtil;
-import io.quarkus.deployment.util.WebJarUtil;
 import io.quarkus.dev.console.DevConsoleManager;
 import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.devconsole.spi.DevConsoleRouteBuildItem;
 import io.quarkus.devconsole.spi.DevConsoleRuntimeTemplateInfoBuildItem;
 import io.quarkus.devconsole.spi.DevConsoleTemplateInfoBuildItem;
+import io.quarkus.maven.dependency.GACT;
 import io.quarkus.netty.runtime.virtual.VirtualChannel;
 import io.quarkus.netty.runtime.virtual.VirtualServerChannel;
 import io.quarkus.qute.Engine;
@@ -78,7 +77,6 @@ import io.quarkus.qute.RawString;
 import io.quarkus.qute.ReflectionValueResolver;
 import io.quarkus.qute.ResultMapper;
 import io.quarkus.qute.Results;
-import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateException;
 import io.quarkus.qute.TemplateLocator;
 import io.quarkus.qute.TemplateNode.Origin;
@@ -88,32 +86,46 @@ import io.quarkus.qute.ValueResolvers;
 import io.quarkus.qute.Variant;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.TemplateHtmlBuilder;
+import io.quarkus.runtime.util.ClassPathUtils;
+import io.quarkus.utilities.OS;
+import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
+import io.quarkus.vertx.http.deployment.webjar.WebJarBuildItem;
+import io.quarkus.vertx.http.deployment.webjar.WebJarResultsBuildItem;
 import io.quarkus.vertx.http.runtime.devmode.DevConsoleFilter;
 import io.quarkus.vertx.http.runtime.devmode.DevConsoleRecorder;
+import io.quarkus.vertx.http.runtime.devmode.FileSystemStaticHandler;
 import io.quarkus.vertx.http.runtime.devmode.RedirectHandler;
 import io.quarkus.vertx.http.runtime.devmode.RuntimeDevConsoleRoute;
-import io.quarkus.vertx.http.runtime.logstream.HistoryHandler;
 import io.quarkus.vertx.http.runtime.logstream.LogStreamRecorder;
+import io.quarkus.vertx.http.runtime.logstream.WebSocketLogHandler;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.impl.Http1xServerConnection;
-import io.vertx.core.impl.ContextInternal;
+import io.vertx.core.impl.EventLoopContext;
+import io.vertx.core.impl.VertxBuilder;
 import io.vertx.core.impl.VertxInternal;
-import io.vertx.core.json.JsonObject;
+import io.vertx.core.impl.VertxThread;
 import io.vertx.core.net.impl.VertxHandler;
+import io.vertx.core.net.impl.transport.Transport;
+import io.vertx.core.spi.VertxThreadFactory;
+import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.BodyHandler;
 
 public class DevConsoleProcessor {
 
     private static final Logger log = Logger.getLogger(DevConsoleProcessor.class);
 
-    private static final String STATIC_RESOURCES_PATH = "dev-static/";
+    private static final GACT DEVCONSOLE_WEBJAR_ARTIFACT_KEY = new GACT("io.quarkus", "quarkus-vertx-http-deployment", null,
+            "jar");
+    private static final String DEVCONSOLE_WEBJAR_STATIC_RESOURCES_PATH = "dev-static/";
     private static final Object EMPTY = new Object();
 
     // FIXME: config, take from Qute?
@@ -128,23 +140,23 @@ public class DevConsoleProcessor {
         if (virtualBootstrap != null) {
             return;
         }
-        devConsoleVertx = Vertx.vertx();
+        devConsoleVertx = initializeDevConsoleVertx();
         VertxInternal vertx = (VertxInternal) devConsoleVertx;
         QuarkusClassLoader ccl = (QuarkusClassLoader) DevConsoleProcessor.class.getClassLoader();
         ccl.addCloseTask(new Runnable() {
             @Override
             public void run() {
                 virtualBootstrap = null;
-                if (devConsoleVertx != null) {
-                    devConsoleVertx.close();
-                    devConsoleVertx = null;
-                }
                 if (channel != null) {
                     try {
                         channel.close().sync();
                     } catch (InterruptedException e) {
                         throw new RuntimeException("failed to close virtual http");
                     }
+                }
+                if (devConsoleVertx != null) {
+                    devConsoleVertx.close();
+                    devConsoleVertx = null;
                 }
             }
         });
@@ -160,25 +172,37 @@ public class DevConsoleProcessor {
                 .childHandler(new ChannelInitializer<VirtualChannel>() {
                     @Override
                     public void initChannel(VirtualChannel ch) throws Exception {
-                        ContextInternal context = (ContextInternal) vertx
-                                .createEventLoopContext(null, null, new JsonObject(),
-                                        Thread.currentThread().getContextClassLoader());
-                        VertxHandler<Http1xServerConnection> handler = VertxHandler.create(context, chctx -> {
-                            Http1xServerConnection conn = new Http1xServerConnection(
-                                    context.owner(),
+                        // Vert.x 4 Migration: Verify this behavior
+                        EventLoopContext context = vertx.createEventLoopContext();
+
+                        //                                ContextInternal context = (ContextInternal) vertx
+                        //                                        .createEventLoopContext(null, null, new JsonObject(),
+                        //                                                Thread.currentThread().getContextClassLoader());
+                        VertxHandler<Http1xServerConnection> handler = VertxHandler.create(chctx -> {
+                            Http1xServerConnection connection = new Http1xServerConnection(
+                                    () -> context,
                                     null,
                                     new HttpServerOptions(),
                                     chctx,
                                     context,
                                     "localhost",
                                     null);
-                            conn.handler(new Handler<HttpServerRequest>() {
+
+                            //                                    Http1xServerConnection conn = new Http1xServerConnection(
+                            //                                            context.owner(),
+                            //                                            null,
+                            //                                            new HttpServerOptions(),
+                            //                                            chctx,
+                            //                                            context,
+                            //                                            "localhost",
+                            //                                            null);
+                            connection.handler(new Handler<HttpServerRequest>() {
                                 @Override
                                 public void handle(HttpServerRequest event) {
                                     mainRouter.handle(event);
                                 }
                             });
-                            return conn;
+                            return connection;
                         });
                         ch.pipeline().addLast("handler", handler);
                     }
@@ -193,6 +217,36 @@ public class DevConsoleProcessor {
             throw new RuntimeException("failed to bind virtual http");
         }
 
+    }
+
+    /**
+     * Boots the Vert.x instance used by the DevConsole,
+     * applying some minimal tuning and customizations.
+     *
+     * @return the initialized Vert.x instance
+     */
+    private static Vertx initializeDevConsoleVertx() {
+        final VertxOptions vertxOptions = new VertxOptions();
+        //Smaller than default, but larger than 1 to be on the safe side.
+        int POOL_SIZE = 2;
+        vertxOptions.setEventLoopPoolSize(POOL_SIZE);
+        vertxOptions.setWorkerPoolSize(POOL_SIZE);
+        vertxOptions.getMetricsOptions().setEnabled(false);
+        //Not good for development:
+        vertxOptions.getFileSystemOptions().setFileCachingEnabled(false);
+        vertxOptions.getFileSystemOptions().setClassPathResolvingEnabled(false);
+        VertxBuilder builder = new VertxBuilder(vertxOptions);
+        builder.threadFactory(new VertxThreadFactory() {
+            @Override
+            public VertxThread newVertxThread(Runnable target, String name, boolean worker, long maxExecTime,
+                    TimeUnit maxExecTimeUnit) {
+                //Customize the Thread names so to not conflict with the names generated by the main Quarkus Vert.x instance
+                return new VertxThread(target, "[DevConsole]" + name, worker, maxExecTime, maxExecTimeUnit);
+            }
+        });
+        builder.transport(Transport.JDK);
+        builder.init();
+        return builder.vertx();
     }
 
     protected static void newRouter(Engine engine,
@@ -218,12 +272,13 @@ public class DevConsoleProcessor {
         router.route()
                 .order(Integer.MIN_VALUE)
                 .handler(new FlashScopeHandler());
+
         router.route().method(HttpMethod.GET)
                 .order(Integer.MIN_VALUE + 1)
                 .handler(new DevConsole(engine, httpRootPath, frameworkRootPath));
         mainRouter = Router.router(devConsoleVertx);
         mainRouter.errorHandler(500, errorHandler);
-        mainRouter.route(nonApplicationRootPathBuildItem.resolvePath("dev/*")).subRouter(router);
+        mainRouter.route(nonApplicationRootPathBuildItem.resolvePath("dev*")).subRouter(router);
     }
 
     @BuildStep(onlyIf = IsDevelopment.class)
@@ -268,15 +323,18 @@ public class DevConsoleProcessor {
         for (DevConsoleRuntimeTemplateInfoBuildItem i : items) {
             recorder.addInfo(i.getGroupId(), i.getArtifactId(), i.getName(), i.getObject());
         }
+        recorder.initConfigFun();
     }
 
     @BuildStep(onlyIf = IsDevelopment.class)
     @Record(ExecutionTime.STATIC_INIT)
-    public HistoryHandlerBuildItem handler(BuildProducer<LogHandlerBuildItem> logHandlerBuildItemBuildProducer,
+    public void handler(BuildProducer<HistoryHandlerBuildItem> historyProducer,
+            BuildProducer<WebSocketLogHandlerBuildItem> webSocketLogHandlerBuildItem,
             LogStreamRecorder recorder, DevUIConfig devUiConfig) {
-        RuntimeValue<Optional<HistoryHandler>> handler = recorder.handler(devUiConfig.historySize);
-        logHandlerBuildItemBuildProducer.produce(new LogHandlerBuildItem((RuntimeValue) handler));
-        return new HistoryHandlerBuildItem(handler);
+        RuntimeValue<Optional<WebSocketLogHandler>> handler = recorder.logHandler(devUiConfig.historySize);
+
+        webSocketLogHandlerBuildItem.produce(new WebSocketLogHandlerBuildItem((RuntimeValue) handler));
+        historyProducer.produce(new HistoryHandlerBuildItem(handler));
     }
 
     @Consume(LoggingSetupBuildItem.class)
@@ -287,7 +345,9 @@ public class DevConsoleProcessor {
             Optional<EffectiveIdeBuildItem> effectiveIdeBuildItem,
             List<RouteBuildItem> allRoutes,
             List<DevConsoleRouteBuildItem> routes,
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem, LaunchModeBuildItem launchModeBuildItem) {
+            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
+            List<ConfigDescriptionBuildItem> configDescriptionBuildItems,
+            LaunchModeBuildItem launchModeBuildItem) {
         if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
             return null;
         }
@@ -298,20 +358,43 @@ public class DevConsoleProcessor {
                 buildSystemTargetBuildItem,
                 effectiveIdeBuildItem,
                 nonApplicationRootPathBuildItem,
+                configDescriptionBuildItems,
                 launchModeBuildItem);
         newRouter(quteEngine, nonApplicationRootPathBuildItem);
 
         for (DevConsoleRouteBuildItem i : routes) {
             Entry<String, String> groupAndArtifact = i.groupIdAndArtifactId(curateOutcomeBuildItem);
             // deployment side handling
-            if (!(i.getHandler() instanceof BytecodeRecorderImpl.ReturnedProxy)) {
-                router.route(HttpMethod.valueOf(i.getMethod()),
-                        "/" + groupAndArtifact.getKey() + "." + groupAndArtifact.getValue() + "/" + i.getPath())
-                        .handler(i.getHandler());
+            if (i.isDeploymentSide()) {
+                Route route = router
+                        .route("/" + groupAndArtifact.getKey() + "." + groupAndArtifact.getValue() + "/" + i.getPath());
+                if (i.getMethod() != null) {
+                    route = route.method(HttpMethod.valueOf(i.getMethod()));
+                }
+                if (i.isBodyHandlerRequired()) {
+                    route.handler(BodyHandler.create());
+                }
+                if (i.isBlockingHandler()) {
+                    route.blockingHandler(i.getHandler());
+                } else {
+                    route.handler(i.getHandler());
+                }
             }
         }
 
         return null;
+    }
+
+    @BuildStep(onlyIf = IsDevelopment.class)
+    public WebJarBuildItem setupWebJar(
+            LaunchModeBuildItem launchModeBuildItem) {
+        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+            return null;
+        }
+        return WebJarBuildItem.builder().artifactKey(DEVCONSOLE_WEBJAR_ARTIFACT_KEY) //
+                .root(DEVCONSOLE_WEBJAR_STATIC_RESOURCES_PATH) //
+                .onlyCopyNonArtifactFiles(true) //
+                .build();
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
@@ -321,29 +404,32 @@ public class DevConsoleProcessor {
             DevConsoleRecorder recorder,
             LogStreamRecorder logStreamRecorder,
             List<DevConsoleRouteBuildItem> routes,
-            CurateOutcomeBuildItem curateOutcomeBuildItem,
             HistoryHandlerBuildItem historyHandlerBuildItem,
             NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
-            LaunchModeBuildItem launchModeBuildItem,
             ShutdownContextBuildItem shutdownContext,
             BuildProducer<RouteBuildItem> routeBuildItemBuildProducer,
-            LiveReloadBuildItem liveReloadBuildItem) throws IOException {
-        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+            WebJarResultsBuildItem webJarResultsBuildItem,
+            CurateOutcomeBuildItem curateOutcomeBuildItem) {
+
+        WebJarResultsBuildItem.WebJarResult result = webJarResultsBuildItem.byArtifactKey(DEVCONSOLE_WEBJAR_ARTIFACT_KEY);
+
+        if (result == null) {
             return;
         }
 
-        // Add the static resources
-        AppArtifact devConsoleResourcesArtifact = WebJarUtil.getAppArtifact(curateOutcomeBuildItem, "io.quarkus",
-                "quarkus-vertx-http-deployment");
-
-        Path devConsoleStaticResourcesDeploymentPath = WebJarUtil.copyResourcesForDevOrTest(liveReloadBuildItem,
-                curateOutcomeBuildItem,
-                launchModeBuildItem,
-                devConsoleResourcesArtifact, STATIC_RESOURCES_PATH);
-
+        List<FileSystemStaticHandler.StaticWebRootConfiguration> webRootConfigurations = new ArrayList<>();
+        webRootConfigurations.add(
+                new FileSystemStaticHandler.StaticWebRootConfiguration(result.getFinalDestination(),
+                        ""));
+        for (Path resolvedPath : result.getDependency().getResolvedPaths()) {
+            webRootConfigurations
+                    .add(new FileSystemStaticHandler.StaticWebRootConfiguration(resolvedPath.toString(),
+                            DEVCONSOLE_WEBJAR_STATIC_RESOURCES_PATH));
+        }
         routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
                 .route("dev/resources/*")
-                .handler(recorder.devConsoleHandler(devConsoleStaticResourcesDeploymentPath.toString(), shutdownContext))
+                .handler(recorder.fileSystemStaticHandler(
+                        webRootConfigurations, shutdownContext))
                 .build());
 
         // Add the log stream
@@ -356,13 +442,16 @@ public class DevConsoleProcessor {
             Entry<String, String> groupAndArtifact = i.groupIdAndArtifactId(curateOutcomeBuildItem);
             // if the handler is a proxy, then that means it's been produced by a recorder and therefore belongs in the regular runtime Vert.x instance
             // otherwise this is handled in the setupDeploymentSideHandling method
-            if (i.getHandler() instanceof BytecodeRecorderImpl.ReturnedProxy) {
-                routeBuildItemBuildProducer.produce(nonApplicationRootPathBuildItem.routeBuilder()
+            if (!i.isDeploymentSide()) {
+                NonApplicationRootPathBuildItem.Builder builder = nonApplicationRootPathBuildItem.routeBuilder()
                         .routeFunction(
                                 "dev/" + groupAndArtifact.getKey() + "." + groupAndArtifact.getValue() + "/" + i.getPath(),
-                                new RuntimeDevConsoleRoute(i.getMethod()))
-                        .handler(i.getHandler())
-                        .build());
+                                new RuntimeDevConsoleRoute(i.getMethod()));
+                if (i.isBlockingHandler()) {
+                    builder.blockingRoute();
+                }
+                builder.handler(i.getHandler());
+                routeBuildItemBuildProducer.produce(builder.build());
             }
         }
 
@@ -387,17 +476,77 @@ public class DevConsoleProcessor {
         }
     }
 
+    static volatile ConsoleStateManager.ConsoleContext context;
+
+    @Produce(ServiceStartBuildItem.class)
+    @BuildStep()
+    void setupConsole(HttpRootPathBuildItem rp, NonApplicationRootPathBuildItem np, LaunchModeBuildItem launchModeBuildItem) {
+        if (launchModeBuildItem.getDevModeType().orElse(null) != DevModeType.LOCAL) {
+            return;
+        }
+        if (context == null) {
+            context = ConsoleStateManager.INSTANCE.createContext("HTTP");
+        }
+        Config c = ConfigProvider.getConfig();
+        String host = c.getOptionalValue("quarkus.http.host", String.class).orElse("localhost");
+        String port = c.getOptionalValue("quarkus.http.port", String.class).orElse("8080");
+        context.reset(
+                new ConsoleCommand('w', "Open the application in a browser", null, () -> openBrowser(rp, np, "/", host, port)),
+                new ConsoleCommand('d', "Open the Dev UI in a browser", null, () -> openBrowser(rp, np, "/q/dev", host, port)));
+    }
+
+    public static void openBrowser(HttpRootPathBuildItem rp, NonApplicationRootPathBuildItem np, String path, String host,
+            String port) {
+        if (path.startsWith("/q")) {
+            path = np.resolvePath(path.substring(3));
+        } else {
+            path = rp.resolvePath(path.substring(1));
+        }
+
+        StringBuilder sb = new StringBuilder("http://");
+        Config c = ConfigProvider.getConfig();
+        sb.append(host);
+        sb.append(":");
+        sb.append(port);
+        sb.append(path);
+        String url = sb.toString();
+
+        Runtime rt = Runtime.getRuntime();
+        OS os = OS.determineOS();
+        try {
+            switch (os) {
+                case MAC:
+                    rt.exec(new String[] { "open", url });
+                    break;
+                case LINUX:
+                    rt.exec(new String[] { "xdg-open", url });
+                    break;
+                case WINDOWS:
+                    rt.exec(new String[] { "rundll32", "url.dll,FileProtocolHandler", url });
+                    break;
+                case OTHER:
+                    log.error("Cannot launch browser on this operating system");
+            }
+        } catch (Exception e) {
+            log.error("Failed to launch browser", e);
+        }
+
+    }
+
     private Engine buildEngine(List<DevTemplatePathBuildItem> devTemplatePaths,
             List<RouteBuildItem> allRoutes,
             BuildSystemTargetBuildItem buildSystemTargetBuildItem,
             Optional<EffectiveIdeBuildItem> effectiveIdeBuildItem,
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem, LaunchModeBuildItem launchModeBuildItem) {
+            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem,
+            List<ConfigDescriptionBuildItem> configDescriptionBuildItems,
+            LaunchModeBuildItem launchModeBuildItem) {
         EngineBuilder builder = Engine.builder().addDefaults();
 
         // Escape some characters for HTML templates
-        builder.addResultMapper(new HtmlEscaper());
+        builder.addResultMapper(new HtmlEscaper(List.of(Variant.TEXT_HTML)));
 
-        builder.addValueResolver(new ReflectionValueResolver())
+        builder.strictRendering(true)
+                .addValueResolver(new ReflectionValueResolver())
                 .addValueResolver(new JsonObjectValueResolver())
                 .addValueResolver(new MultiMapValueResolver())
                 .addValueResolver(ValueResolvers.rawResolver())
@@ -408,14 +557,14 @@ public class DevConsoleProcessor {
                 .addNamespaceResolver(NamespaceResolver.builder("info").resolve(ctx -> {
                     String ext = DevConsole.currentExtension.get();
                     if (ext == null) {
-                        return Results.Result.NOT_FOUND;
+                        return Results.NotFound.from(ctx);
                     }
                     Map<String, Object> map = DevConsoleManager.getTemplateInfo().get(ext);
                     if (map == null) {
-                        return Results.Result.NOT_FOUND;
+                        return Results.NotFound.from(ctx);
                     }
                     Object result = map.get(ctx.getName());
-                    return result == null ? Results.Result.NOT_FOUND : result;
+                    return result == null ? Results.NotFound.from(ctx) : result;
                 }).build());
 
         // Create map of resolved paths
@@ -428,23 +577,27 @@ public class DevConsoleProcessor {
             }
         }
 
+        Map<String, String> defaultValues = getDefaultValues(configDescriptionBuildItems);
+
         // {config:property('quarkus.lambda.handler')}
         // {config:http-path('quarkus.smallrye-graphql.ui.root-path')}
         // Note that the output value is always string!
         builder.addNamespaceResolver(NamespaceResolver.builder("config").resolveAsync(ctx -> {
             List<Expression> params = ctx.getParams();
             if (params.size() != 1 || (!ctx.getName().equals("property") && !ctx.getName().equals("http-path"))) {
-                return Results.NOT_FOUND;
+                return Results.notFound(ctx);
             }
             if (ctx.getName().equals("http-path")) {
                 return ctx.evaluate(params.get(0)).thenCompose(propertyName -> {
                     String value = resolvedPaths.get(propertyName.toString());
-                    return CompletableFuture.completedFuture(value != null ? value : Result.NOT_FOUND);
+                    return CompletableFuture.completedFuture(value != null ? value : Results.NotFound.from(ctx));
                 });
             } else {
                 return ctx.evaluate(params.get(0)).thenCompose(propertyName -> {
-                    Optional<String> val = ConfigProvider.getConfig().getOptionalValue(propertyName.toString(), String.class);
-                    return CompletableFuture.completedFuture(val.isPresent() ? val.get() : Result.NOT_FOUND);
+                    // Use the function stored in the DevConsoleRecorder to make sure the config is obtained using the correct TCCL
+                    Function<String, Optional<String>> configFun = DevConsoleManager.getGlobal("devui-config-fun");
+                    String val = configFun.apply(propertyName.toString()).orElse(defaultValues.get(propertyName.toString()));
+                    return CompletableFuture.completedFuture(val != null ? val : Results.NotFound.from(ctx));
                 });
             }
         }).build());
@@ -473,7 +626,7 @@ public class DevConsoleProcessor {
 
             @Override
             public boolean appliesTo(Origin origin, Object result) {
-                return result.equals(Result.NOT_FOUND);
+                return Results.isNotFound(result);
             }
 
             @Override
@@ -512,6 +665,17 @@ public class DevConsoleProcessor {
             }
         }
         return engine;
+    }
+
+    private Map<String, String> getDefaultValues(List<ConfigDescriptionBuildItem> configDescriptionBuildItems) {
+        Map<String, String> defaultValues = new HashMap<>();
+
+        for (ConfigDescriptionBuildItem configDescriptionBuildItem : configDescriptionBuildItems) {
+            if (configDescriptionBuildItem.getDefaultValue() != null) {
+                defaultValues.put(configDescriptionBuildItem.getPropertyName(), configDescriptionBuildItem.getDefaultValue());
+            }
+        }
+        return defaultValues;
     }
 
     private static Optional<TemplateLocator.TemplateLocation> locateTemplate(String id, Map<String, String> templates) {
@@ -565,33 +729,61 @@ public class DevConsoleProcessor {
 
     @BuildStep
     void collectTemplates(BuildProducer<DevTemplatePathBuildItem> devTemplatePaths) {
+        final Enumeration<URL> devTemplateURLs;
         try {
-            ClassLoader classLoader = DevConsoleProcessor.class.getClassLoader();
-            Enumeration<URL> devTemplateURLs = classLoader.getResources("/dev-templates");
-            while (devTemplateURLs.hasMoreElements()) {
-                String devTemplatesURL = devTemplateURLs.nextElement().toExternalForm();
-                if (devTemplatesURL.startsWith("jar:file:") && devTemplatesURL.endsWith("!/dev-templates")) {
-                    String jarPath = devTemplatesURL.substring(9, devTemplatesURL.length() - 15);
-                    if (File.separatorChar == '\\') {
-                        // on Windows this will be /C:/some/path, so turn it into C:\some\path
-                        jarPath = jarPath.substring(1).replace('/', '\\');
-                    }
-                    try (FileSystem fs = FileSystems
-                            .newFileSystem(Paths.get(URLDecoder.decode(jarPath, StandardCharsets.UTF_8.name())), classLoader)) {
-                        scanTemplates(fs, devTemplatePaths);
-                    }
-                }
-            }
+            devTemplateURLs = DevConsoleProcessor.class.getClassLoader().getResources("/dev-templates");
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            throw new UncheckedIOException(e);
+        }
+        while (devTemplateURLs.hasMoreElements()) {
+            URL devTemplatesUrl = devTemplateURLs.nextElement();
+            ClassPathUtils.consumeAsPath(devTemplatesUrl, devTemplatesDir -> {
+                final Path classesDir = devTemplatesDir.getParent();
+                if (classesDir == null) {
+                    return;
+                }
+                final Entry<String, String> entry = readPomPropertiesIfBuilt(devTemplatesUrl, classesDir);
+                if (entry == null) {
+                    return;
+                }
+                try {
+                    scanTemplates(entry, devTemplatesDir, devTemplatePaths);
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
         }
     }
 
-    private void scanTemplates(FileSystem fs, BuildProducer<DevTemplatePathBuildItem> devTemplatePaths) throws IOException {
-        Entry<String, String> entry = ArtifactInfoUtil.groupIdAndArtifactId(fs);
-        if (entry == null) {
-            throw new RuntimeException("Artifact at " + fs + " is missing pom metadata");
+    private Entry<String, String> readPomPropertiesIfBuilt(URL devTemplatesURL, final Path classesDir) {
+        Entry<String, String> entry = null;
+        try {
+            if ("jar".equals(devTemplatesURL.getProtocol())) {
+                final Path metaInf = classesDir.resolve("META-INF").resolve("maven");
+                if (Files.exists(metaInf)) {
+                    entry = ArtifactInfoUtil.groupIdAndArtifactId(metaInf);
+                }
+            } else {
+                final Path rootDir = classesDir.getParent();
+                final Path mavenArchiver = rootDir == null ? null : rootDir.resolve("maven-archiver");
+                if (mavenArchiver == null || !mavenArchiver.toFile().canRead()) {
+                    // it's a module output dir and the Maven metadata hasn't been generated 
+                    return null;
+                }
+                entry = ArtifactInfoUtil.groupIdAndArtifactId(mavenArchiver);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
+        if (entry == null) {
+            throw new RuntimeException("Missing POM metadata in " + devTemplatesURL);
+        }
+        return entry;
+    }
+
+    private void scanTemplates(Entry<String, String> entry, Path devTemplatesPath,
+            BuildProducer<DevTemplatePathBuildItem> devTemplatePaths)
+            throws IOException {
         String prefix;
         // don't move stuff for our "root" dev console artifact, since it includes the main template
         if (entry.getKey().equals("io.quarkus")
@@ -599,32 +791,35 @@ public class DevConsoleProcessor {
             prefix = "";
         else
             prefix = entry.getKey() + "." + entry.getValue() + "/";
-        for (Path root : fs.getRootDirectories()) {
-            Path devTemplatesPath = fs.getPath("/dev-templates");
-            Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                    if (dir.toString().equals("/") || dir.startsWith(devTemplatesPath))
-                        return FileVisitResult.CONTINUE;
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
 
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    String contents = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-                    // don't move tags yet, since we don't know how to use them afterwards
-                    String relativePath = devTemplatesPath.relativize(file).toString();
-                    String correctedPath;
-                    if (relativePath.startsWith(DevTemplatePathBuildItem.TAGS))
-                        correctedPath = relativePath;
-                    else
-                        correctedPath = prefix + relativePath;
-                    devTemplatePaths
-                            .produce(new DevTemplatePathBuildItem(correctedPath, contents));
-                    return super.visitFile(file, attrs);
+        final Path root = devTemplatesPath.getParent();
+        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                if (dir.equals(root) || dir.toString().equals("/") || dir.startsWith(devTemplatesPath)) {
+                    return FileVisitResult.CONTINUE;
                 }
-            });
-        }
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                String contents = Files.readString(file);
+                // don't move tags yet, since we don't know how to use them afterwards
+                String relativePath = devTemplatesPath.relativize(file).toString();
+                String correctedPath;
+                if (File.separatorChar == '\\') {
+                    relativePath = relativePath.replace('\\', '/');
+                }
+                if (relativePath.startsWith(DevTemplatePathBuildItem.TAGS))
+                    correctedPath = relativePath;
+                else
+                    correctedPath = prefix + relativePath;
+                devTemplatePaths
+                        .produce(new DevTemplatePathBuildItem(correctedPath, contents));
+                return super.visitFile(file, attrs);
+            }
+        });
     }
 
     public static class JavaDocResolver implements ValueResolver {
@@ -652,9 +847,9 @@ public class DevConsoleProcessor {
     }
 
     public static final class HistoryHandlerBuildItem extends SimpleBuildItem {
-        final RuntimeValue<Optional<HistoryHandler>> value;
+        final RuntimeValue<Optional<WebSocketLogHandler>> value;
 
-        public HistoryHandlerBuildItem(RuntimeValue<Optional<HistoryHandler>> value) {
+        public HistoryHandlerBuildItem(RuntimeValue<Optional<WebSocketLogHandler>> value) {
             this.value = value;
         }
     }
@@ -690,14 +885,12 @@ public class DevConsoleProcessor {
         private static final String[] SUPPORTED_LANGS = { "java", "kotlin" };
 
         private final Optional<EffectiveIdeBuildItem> effectiveIdeBuildItem;
-        private final Path srcMainPath;
         private final boolean disable;
 
         public IdeInfoContextFunction(BuildSystemTargetBuildItem buildSystemTargetBuildItem,
                 Optional<EffectiveIdeBuildItem> effectiveIdeBuildItem,
                 LaunchModeBuildItem launchModeBuildItem) {
             this.effectiveIdeBuildItem = effectiveIdeBuildItem;
-            srcMainPath = buildSystemTargetBuildItem.getOutputDirectory().getParent().resolve("src").resolve("main");
             disable = launchModeBuildItem.getDevModeType().orElse(DevModeType.LOCAL) != DevModeType.LOCAL;
         }
 
@@ -705,29 +898,41 @@ public class DevConsoleProcessor {
         public Object apply(EvalContext ctx) {
             String ctxName = ctx.getName();
 
+            List<Path> sourcesDir = DevConsoleManager.getHotReplacementContext().getSourcesDir();
             if (ctxName.equals("sourcePackages")) {
                 if (disable) {
                     return Collections.emptyList(); // we need this here because the result needs to be iterable
                 }
                 Map<String, List<String>> sourcePackagesByLang = new HashMap<>();
 
-                for (String lang : SUPPORTED_LANGS) {
-                    List<String> packages = sourcePackagesForLang(srcMainPath, lang);
+                for (Path sourcePaths : sourcesDir) {
+                    String lang = sourcePaths.getFileName().toString();
+                    List<String> packages = sourcePackagesForRoot(sourcePaths);
                     if (!packages.isEmpty()) {
                         sourcePackagesByLang.put(lang, packages);
                     }
                 }
                 return sourcePackagesByLang;
             }
+            if (ctxName.equals("locationPackages")) {
+                if (disable) {
+                    return Collections.emptyList(); // we need this here because the result needs to be iterable
+                }
+                Map<String, List<String>> sourcePackagesByDir = new HashMap<>();
 
+                for (Path sourcePaths : sourcesDir) {
+                    List<String> packages = sourcePackagesForRoot(sourcePaths);
+                    if (!packages.isEmpty()) {
+                        sourcePackagesByDir.put(sourcePaths.toAbsolutePath().toString(), packages);
+                    }
+                }
+                return sourcePackagesByDir;
+            }
             if (disable) { // all the other values are Strings
                 return EMPTY;
             }
 
             switch (ctxName) {
-                case "srcMainPath": {
-                    return srcMainPath.toAbsolutePath().toString();
-                }
                 case "ideLinkType":
                     if (!effectiveIdeBuildItem.isPresent()) {
                         return "none";
@@ -748,16 +953,15 @@ public class DevConsoleProcessor {
                     }
                     return "/io.quarkus.quarkus-vertx-http/openInIDE";
             }
-            return Results.Result.NOT_FOUND;
+            return Results.notFound(ctx);
         }
 
         /**
          * Return the most general packages used in the application
-         *
+         * <p>
          * TODO: this likely covers almost all typical use cases, but probably needs some tweaks for extreme corner cases
          */
-        private List<String> sourcePackagesForLang(Path srcMainPath, String lang) {
-            Path langPath = srcMainPath.resolve(lang);
+        private List<String> sourcePackagesForRoot(Path langPath) {
             if (!Files.exists(langPath)) {
                 return Collections.emptyList();
             }

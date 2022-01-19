@@ -3,6 +3,7 @@ package io.quarkus.hibernate.validator.runtime;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import javax.enterprise.util.TypeLiteral;
 import javax.validation.ClockProvider;
 import javax.validation.ConstraintValidatorFactory;
 import javax.validation.MessageInterpolator;
@@ -16,6 +17,7 @@ import org.hibernate.validator.PredefinedScopeHibernateValidator;
 import org.hibernate.validator.PredefinedScopeHibernateValidatorConfiguration;
 import org.hibernate.validator.internal.engine.resolver.JPATraversableResolver;
 import org.hibernate.validator.spi.messageinterpolation.LocaleResolver;
+import org.hibernate.validator.spi.nodenameprovider.PropertyNodeNameProvider;
 import org.hibernate.validator.spi.properties.GetterPropertySelectionStrategy;
 import org.hibernate.validator.spi.scripting.ScriptEvaluatorFactory;
 
@@ -30,6 +32,9 @@ import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
 public class HibernateValidatorRecorder {
+
+    private static final TypeLiteral<ValueExtractor<?>> TYPE_LITERAL_VALUE_EXTRACTOR_WITH_WILDCARD = new TypeLiteral<ValueExtractor<?>>() {
+    };
 
     public BeanContainerListener initializeValidatorFactory(Set<Class<?>> classesToBeValidated,
             Set<String> detectedBuiltinConstraints,
@@ -123,9 +128,18 @@ public class HibernateValidatorRecorder {
                     configuration.getterPropertySelectionStrategy(configuredGetterPropertySelectionStrategy.get());
                 }
 
+                InstanceHandle<PropertyNodeNameProvider> configuredPropertyNodeNameProvider = Arc.container()
+                        .instance(PropertyNodeNameProvider.class);
+                if (configuredPropertyNodeNameProvider.isAvailable()) {
+                    configuration.propertyNodeNameProvider(configuredPropertyNodeNameProvider.get());
+                }
+
                 // Automatically add all the values extractors declared as beans
                 for (ValueExtractor<?> valueExtractor : Arc.container().beanManager().createInstance()
-                        .select(ValueExtractor.class)) {
+                        // Apparently passing ValueExtractor.class
+                        // won't match beans implementing ValueExtractor<NotAWildcard>,
+                        // so we need a type literal here.
+                        .select(TYPE_LITERAL_VALUE_EXTRACTOR_WITH_WILDCARD)) {
                     configuration.addValueExtractor(valueExtractor);
                 }
 

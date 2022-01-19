@@ -7,9 +7,8 @@ import javax.inject.Named;
 import org.eclipse.microprofile.metrics.MetricID;
 import org.eclipse.microprofile.metrics.MetricRegistry;
 import org.eclipse.microprofile.metrics.annotation.Counted;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -23,8 +22,9 @@ public class DefaultMethodTest {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(A.class, B.class));
+            .withApplicationRoot((jar) -> jar
+                    .addClasses(A.class, B.class, Y.class, C.class,
+                            D.class, ClashA.class, I.class, ClashB.class));
 
     @Inject
     B b;
@@ -44,6 +44,15 @@ public class DefaultMethodTest {
 
     @Inject
     MetricRegistry metricRegistry;
+
+    @BeforeEach
+    void cleanup() {
+        // reset all counters to zero
+        metricRegistry.getCounters().keySet().forEach(metricID -> {
+            metricRegistry.remove(metricID);
+            metricRegistry.counter(metricID);
+        });
+    }
 
     @Test
     public void defaultMethodInherited() {

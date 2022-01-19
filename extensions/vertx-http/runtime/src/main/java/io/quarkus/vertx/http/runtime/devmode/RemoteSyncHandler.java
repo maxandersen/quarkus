@@ -39,7 +39,7 @@ public class RemoteSyncHandler implements Handler<HttpServerRequest> {
     final Handler<HttpServerRequest> next;
     final HotReplacementContext hotReplacementContext;
 
-    //all these are static to allow the handler to be recreated on hot reload
+    //all these are static to allow the handler to be recreated on hot reload 
     //which makes lifecycle management a lot easier
     static volatile String currentSession;
     //incrementing counter to prevent replay attacks
@@ -233,7 +233,7 @@ public class RemoteSyncHandler implements Handler<HttpServerRequest> {
         }).exceptionHandler(new Handler<Throwable>() {
             @Override
             public void handle(Throwable error) {
-                log.error("Failed writing hot replacement data", error);
+                log.error("Failed writing live reload data", error);
                 event.response().setStatusCode(500);
                 event.response().end();
             }

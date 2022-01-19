@@ -33,6 +33,7 @@ import java.util.function.Predicate;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
+import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.TypeVariable;
@@ -56,15 +57,13 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
     private final Predicate<DotName> applicationClassPredicate;
     private final boolean mockable;
-    private final ReflectionRegistration reflectionRegistration;
     private final Set<String> existingClasses;
 
     public ClientProxyGenerator(Predicate<DotName> applicationClassPredicate, boolean generateSources, boolean mockable,
             ReflectionRegistration reflectionRegistration, Set<String> existingClasses) {
-        super(generateSources);
+        super(generateSources, reflectionRegistration);
         this.applicationClassPredicate = applicationClassPredicate;
         this.mockable = mockable;
-        this.reflectionRegistration = reflectionRegistration;
         this.existingClasses = existingClasses;
     }
 
@@ -79,13 +78,22 @@ public class ClientProxyGenerator extends AbstractGenerator {
     Collection<Resource> generate(BeanInfo bean, String beanClassName,
             Consumer<BytecodeTransformer> bytecodeTransformerConsumer, boolean transformUnproxyableClasses) {
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()),
+        DotName testedName;
+        // For producers we need to test the produced type
+        if (bean.isProducerField()) {
+            testedName = bean.getTarget().get().asField().type().name();
+        } else if (bean.isProducerMethod()) {
+            testedName = bean.getTarget().get().asMethod().returnType().name();
+        } else {
+            testedName = bean.getBeanClass();
+        }
+        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(testedName),
                 generateSources);
 
         ProviderType providerType = new ProviderType(bean.getProviderType());
         ClassInfo providerClass = getClassByName(bean.getDeployment().getBeanArchiveIndex(), providerType.name());
         String baseName = getBaseName(bean, beanClassName);
-        String targetPackage = getPackageName(bean);
+        String targetPackage = bean.getClientProxyPackageName();
         String generatedName = generatedNameFromTarget(targetPackage, baseName, CLIENT_PROXY_SUFFIX);
         if (existingClasses.contains(generatedName)) {
             return Collections.emptyList();
@@ -110,8 +118,16 @@ public class ClientProxyGenerator extends AbstractGenerator {
         ClassCreator clientProxy = ClassCreator.builder().classOutput(classOutput).className(generatedName)
                 .superClass(superClass)
                 .interfaces(interfaces.toArray(new String[0])).build();
-        if (AsmUtilCopy.needsSignature(providerClass)) {
-            clientProxy.setSignature(AsmUtilCopy.getSignature(providerClass));
+        // See https://docs.oracle.com/javase/specs/jvms/se14/html/jvms-4.html#jvms-4.7.9.1
+        // Essentially a signature is needed if a class has type parameters or extends/implements parameterized type.
+        // We're generating a subtype (subclass or subinterface) of "providerClass".
+        // The only way for that generated subtype to have type parameters or to extend/implement a parameterized type
+        // is if providerClass has type parameters.
+        // Whether supertypes or superinterfaces of providerClass have type parameters is irrelevant:
+        // as long as those type parameters are bound in providerClass,
+        // they won't affect the need for a signature in the generated subtype.
+        if (!providerClass.typeParameters().isEmpty()) {
+            clientProxy.setSignature(AsmUtilCopy.getGeneratedSubClassSignature(providerClass, bean.getProviderType()));
         }
         Map<ClassInfo, Map<TypeVariable, Type>> resolvedTypeVariables = Types.resolvedTypeVariables(providerClass,
                 bean.getDeployment());
@@ -310,11 +326,12 @@ public class ClientProxyGenerator extends AbstractGenerator {
     Collection<MethodInfo> getDelegatingMethods(BeanInfo bean, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
             boolean transformUnproxyableClasses) {
         Map<Methods.MethodKey, MethodInfo> methods = new HashMap<>();
+        IndexView index = bean.getDeployment().getBeanArchiveIndex();
 
         if (bean.isClassBean()) {
             Set<Methods.NameAndDescriptor> methodsFromWhichToRemoveFinal = new HashSet<>();
             ClassInfo classInfo = bean.getTarget().get().asClass();
-            Methods.addDelegatingMethods(bean.getDeployment().getBeanArchiveIndex(), classInfo,
+            Methods.addDelegatingMethods(index, classInfo,
                     methods, methodsFromWhichToRemoveFinal, transformUnproxyableClasses);
             if (!methodsFromWhichToRemoveFinal.isEmpty()) {
                 String className = classInfo.name().toString();
@@ -323,16 +340,16 @@ public class ClientProxyGenerator extends AbstractGenerator {
             }
         } else if (bean.isProducerMethod()) {
             MethodInfo producerMethod = bean.getTarget().get().asMethod();
-            ClassInfo returnTypeClass = getClassByName(bean.getDeployment().getBeanArchiveIndex(), producerMethod.returnType());
-            Methods.addDelegatingMethods(bean.getDeployment().getBeanArchiveIndex(), returnTypeClass, methods, null,
+            ClassInfo returnTypeClass = getClassByName(index, producerMethod.returnType());
+            Methods.addDelegatingMethods(index, returnTypeClass, methods, null,
                     transformUnproxyableClasses);
         } else if (bean.isProducerField()) {
             FieldInfo producerField = bean.getTarget().get().asField();
-            ClassInfo fieldClass = getClassByName(bean.getDeployment().getBeanArchiveIndex(), producerField.type());
-            Methods.addDelegatingMethods(bean.getDeployment().getBeanArchiveIndex(), fieldClass, methods, null,
+            ClassInfo fieldClass = getClassByName(index, producerField.type());
+            Methods.addDelegatingMethods(index, fieldClass, methods, null,
                     transformUnproxyableClasses);
         } else if (bean.isSynthetic()) {
-            Methods.addDelegatingMethods(bean.getDeployment().getBeanArchiveIndex(), bean.getImplClazz(), methods, null,
+            Methods.addDelegatingMethods(index, bean.getImplClazz(), methods, null,
                     transformUnproxyableClasses);
         }
 

@@ -6,9 +6,7 @@ import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 import java.io.File;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +31,7 @@ import io.quarkus.builder.Version;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.AllowJNDIBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationClassNameBuildItem;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
@@ -47,14 +46,17 @@ import io.quarkus.deployment.builditem.MainBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.MainClassBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.QuarkusApplicationClassBuildItem;
+import io.quarkus.deployment.builditem.RecordableConstructorBuildItem;
 import io.quarkus.deployment.builditem.StaticBytecodeRecorderBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.RunTimeConfigurationGenerator;
+import io.quarkus.deployment.naming.NamingConfig;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.AppCDSRequestedBuildItem;
 import io.quarkus.deployment.recording.BytecodeRecorderImpl;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
+import io.quarkus.dev.console.QuarkusConsole;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.CatchBlockCreator;
 import io.quarkus.gizmo.ClassCreator;
@@ -75,6 +77,7 @@ import io.quarkus.runtime.StartupTask;
 import io.quarkus.runtime.annotations.QuarkusMain;
 import io.quarkus.runtime.appcds.AppCDSUtil;
 import io.quarkus.runtime.configuration.ProfileManager;
+import io.quarkus.runtime.naming.DisabledInitialContextManager;
 import io.quarkus.runtime.util.StepTiming;
 
 public class MainClassBuildStep {
@@ -83,15 +86,6 @@ public class MainClassBuildStep {
     static final String STARTUP_CONTEXT = "STARTUP_CONTEXT";
     static final String LOG = "LOG";
     static final String JAVA_LIBRARY_PATH = "java.library.path";
-
-    private static final String JAVAX_NET_SSL_TRUST_STORE = "javax.net.ssl.trustStore";
-    private static final String JAVAX_NET_SSL_TRUST_STORE_TYPE = "javax.net.ssl.trustStoreType";
-    private static final String JAVAX_NET_SSL_TRUST_STORE_PROVIDER = "javax.net.ssl.trustStoreProvider";
-    private static final String JAVAX_NET_SSL_TRUST_STORE_PASSWORD = "javax.net.ssl.trustStorePassword";
-    private static final List<String> BUILD_TIME_TRUST_STORE_PROPERTIES = Collections.unmodifiableList(Arrays.asList(
-            JAVAX_NET_SSL_TRUST_STORE,
-            JAVAX_NET_SSL_TRUST_STORE_TYPE, JAVAX_NET_SSL_TRUST_STORE_PROVIDER,
-            JAVAX_NET_SSL_TRUST_STORE_PASSWORD));
 
     public static final String GENERATE_APP_CDS_SYSTEM_PROPERTY = "quarkus.appcds.generate";
 
@@ -114,11 +108,14 @@ public class MainClassBuildStep {
             List<FeatureBuildItem> features,
             BuildProducer<ApplicationClassNameBuildItem> appClassNameProducer,
             List<BytecodeRecorderObjectLoaderBuildItem> loaders,
+            List<RecordableConstructorBuildItem> recordableConstructorBuildItems,
             BuildProducer<GeneratedClassBuildItem> generatedClass,
             LaunchModeBuildItem launchMode,
             LiveReloadBuildItem liveReloadBuildItem,
             ApplicationInfoBuildItem applicationInfo,
-            Optional<AppCDSRequestedBuildItem> appCDSRequested) {
+            List<AllowJNDIBuildItem> allowJNDIBuildItems,
+            Optional<AppCDSRequestedBuildItem> appCDSRequested,
+            NamingConfig namingConfig) {
 
         appClassNameProducer.produce(new ApplicationClassNameBuildItem(Application.APP_CLASS_NAME));
 
@@ -135,8 +132,16 @@ public class MainClassBuildStep {
         FieldCreator scField = file.getFieldCreator(STARTUP_CONTEXT_FIELD);
         scField.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
+        MethodCreator ctor = file.getMethodCreator("<init>", void.class);
+        ctor.invokeSpecialMethod(MethodDescriptor.ofMethod(Application.class, "<init>", void.class, boolean.class),
+                ctor.getThis(), ctor.load(launchMode.isAuxiliaryApplication()));
+        ctor.returnValue(null);
+
         MethodCreator mv = file.getMethodCreator("<clinit>", void.class);
         mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
+        if (!namingConfig.enableJndi && allowJNDIBuildItems.isEmpty()) {
+            mv.invokeStaticMethod(MethodDescriptor.ofMethod(DisabledInitialContextManager.class, "register", void.class));
+        }
 
         //very first thing is to set system props (for build time)
         for (SystemPropertyBuildItem i : properties) {
@@ -151,7 +156,8 @@ public class MainClassBuildStep {
 
         mv.invokeStaticMethod(CONFIGURE_STEP_TIME_ENABLED);
 
-        mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class));
+        mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class, boolean.class),
+                mv.load(launchMode.isAuxiliaryApplication()));
 
         // ensure that the config class is initialized
         mv.invokeStaticMethod(RunTimeConfigurationGenerator.C_ENSURE_INITIALIZED);
@@ -167,7 +173,8 @@ public class MainClassBuildStep {
         TryBlock tryBlock = mv.tryBlock();
         tryBlock.invokeStaticMethod(CONFIGURE_STEP_TIME_START);
         for (StaticBytecodeRecorderBuildItem holder : staticInitTasks) {
-            writeRecordedBytecode(holder.getBytecodeRecorder(), null, substitutions, loaders, gizmoOutput, startupContext,
+            writeRecordedBytecode(holder.getBytecodeRecorder(), null, substitutions, recordableConstructorBuildItems, loaders,
+                    gizmoOutput, startupContext,
                     tryBlock);
         }
         tryBlock.returnValue(null);
@@ -230,22 +237,6 @@ public class MainClassBuildStep {
                 .ifNonZero(mv.invokeStaticMethod(ofMethod(ImageInfo.class, "inImageRuntimeCode", boolean.class)))
                 .trueBranch();
 
-        // GraalVM uses the build-time trustStore and bakes the backing classes of the TrustStore into the the native binary,
-        // so we need to warn users trying to set the trust store related system properties that it won't have an effect
-        for (String property : BUILD_TIME_TRUST_STORE_PROPERTIES) {
-            ResultHandle trustStoreSystemProp = inGraalVMCode.invokeStaticMethod(
-                    ofMethod(System.class, "getProperty", String.class, String.class),
-                    mv.load(property));
-
-            BytecodeCreator inGraalVMCodeAndTrustStoreSet = inGraalVMCode.ifNull(trustStoreSystemProp).falseBranch();
-            inGraalVMCodeAndTrustStoreSet.invokeVirtualMethod(
-                    ofMethod(Logger.class, "warn", void.class, Object.class),
-                    inGraalVMCodeAndTrustStoreSet.readStaticField(logField.getFieldDescriptor()),
-                    inGraalVMCodeAndTrustStoreSet.load(String.format(
-                            "Setting the '%s' system property will not have any effect at runtime. Make sure to set this property at build time (for example by setting 'quarkus.native.additional-build-args=-J-D%s=someValue').",
-                            property, property)));
-        }
-
         mv.invokeStaticMethod(ofMethod(Timing.class, "mainStarted", void.class));
         startupContext = mv.readStaticField(scField.getFieldDescriptor());
 
@@ -262,6 +253,7 @@ public class MainClassBuildStep {
         tryBlock.invokeStaticMethod(CONFIGURE_STEP_TIME_START);
         for (MainBytecodeRecorderBuildItem holder : mainMethod) {
             writeRecordedBytecode(holder.getBytecodeRecorder(), holder.getGeneratedStartupContextClassName(), substitutions,
+                    recordableConstructorBuildItems,
                     loaders, gizmoOutput, startupContext, tryBlock);
         }
 
@@ -277,27 +269,37 @@ public class MainClassBuildStep {
         ResultHandle featuresHandle = tryBlock.load(featureNames.stream().sorted().collect(Collectors.joining(", ")));
         tryBlock.invokeStaticMethod(
                 ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class, String.class,
-                        String.class, boolean.class),
+                        String.class, boolean.class, boolean.class),
                 tryBlock.load(applicationInfo.getName()),
                 tryBlock.load(applicationInfo.getVersion()),
                 tryBlock.load(Version.getVersion()),
                 featuresHandle,
                 activeProfile,
-                tryBlock.load(LaunchMode.DEVELOPMENT.equals(launchMode.getLaunchMode())));
+                tryBlock.load(LaunchMode.DEVELOPMENT.equals(launchMode.getLaunchMode())),
+                tryBlock.load(launchMode.isAuxiliaryApplication()));
+
+        tryBlock.invokeStaticMethod(
+                ofMethod(QuarkusConsole.class, "start", void.class));
         cb = tryBlock.addCatch(Throwable.class);
 
         // an exception was thrown before logging was actually setup, we simply dump everything to the console
-        ResultHandle delayedHandler = cb
-                .readStaticField(FieldDescriptor.of(InitialConfigurator.class, "DELAYED_HANDLER", QuarkusDelayedHandler.class));
-        ResultHandle isActivated = cb.invokeVirtualMethod(ofMethod(QuarkusDelayedHandler.class, "isActivated", boolean.class),
-                delayedHandler);
-        BytecodeCreator isActivatedFalse = cb.ifNonZero(isActivated).falseBranch();
-        ResultHandle handlersArray = isActivatedFalse.newArray(Handler.class, 1);
-        isActivatedFalse.writeArrayValue(handlersArray, 0, isActivatedFalse.newInstance(ofConstructor(ConsoleHandler.class)));
-        isActivatedFalse.invokeVirtualMethod(
-                ofMethod(QuarkusDelayedHandler.class, "setHandlers", Handler[].class, Handler[].class),
-                delayedHandler, handlersArray);
-        isActivatedFalse.breakScope();
+        // we don't do this for dev mode, as on startup failure dev mode sets up its own logging
+        if (launchMode.getLaunchMode() != LaunchMode.DEVELOPMENT) {
+            ResultHandle delayedHandler = cb
+                    .readStaticField(
+                            FieldDescriptor.of(InitialConfigurator.class, "DELAYED_HANDLER", QuarkusDelayedHandler.class));
+            ResultHandle isActivated = cb.invokeVirtualMethod(
+                    ofMethod(QuarkusDelayedHandler.class, "isActivated", boolean.class),
+                    delayedHandler);
+            BytecodeCreator isActivatedFalse = cb.ifNonZero(isActivated).falseBranch();
+            ResultHandle handlersArray = isActivatedFalse.newArray(Handler.class, 1);
+            isActivatedFalse.writeArrayValue(handlersArray, 0,
+                    isActivatedFalse.newInstance(ofConstructor(ConsoleHandler.class)));
+            isActivatedFalse.invokeVirtualMethod(
+                    ofMethod(QuarkusDelayedHandler.class, "setHandlers", Handler[].class, Handler[].class),
+                    delayedHandler, handlersArray);
+            isActivatedFalse.breakScope();
+        }
 
         cb.invokeVirtualMethod(ofMethod(StartupContext.class, "close", void.class), startupContext);
         cb.throwException(RuntimeException.class, "Failed to start quarkus", cb.getCaughtException());
@@ -420,6 +422,7 @@ public class MainClassBuildStep {
 
     private void writeRecordedBytecode(BytecodeRecorderImpl recorder, String fallbackGeneratedStartupTaskClassName,
             List<ObjectSubstitutionBuildItem> substitutions,
+            List<RecordableConstructorBuildItem> recordableConstructorBuildItems,
             List<BytecodeRecorderObjectLoaderBuildItem> loaders, GeneratedClassGizmoAdaptor gizmoOutput,
             ResultHandle startupContext, BytecodeCreator bytecodeCreator) {
 
@@ -435,6 +438,9 @@ public class MainClassBuildStep {
             for (BytecodeRecorderObjectLoaderBuildItem item : loaders) {
                 recorder.registerObjectLoader(item.getObjectLoader());
             }
+            for (var item : recordableConstructorBuildItems) {
+                recorder.markClassAsConstructorRecordable(item.getClazz());
+            }
             recorder.writeBytecode(gizmoOutput);
         }
 
@@ -447,7 +453,6 @@ public class MainClassBuildStep {
 
     /**
      * registers the generated application class for reflection, needed when launching via the Quarkus launcher
-     *
      */
     @BuildStep
     ReflectiveClassBuildItem applicationReflection() {

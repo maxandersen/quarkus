@@ -1,10 +1,12 @@
 package io.quarkus.resteasy.reactive.jsonb.deployment.processor;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
 import javax.ws.rs.core.MediaType;
+
+import org.jboss.resteasy.reactive.server.jsonb.JsonbMessageBodyReader;
+import org.jboss.resteasy.reactive.server.jsonb.JsonbMessageBodyWriter;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.Feature;
@@ -14,19 +16,17 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.jsonb.spi.JsonbDeserializerBuildItem;
 import io.quarkus.jsonb.spi.JsonbSerializerBuildItem;
 import io.quarkus.resteasy.reactive.common.deployment.ServerDefaultProducesHandlerBuildItem;
-import io.quarkus.resteasy.reactive.jsonb.runtime.serialisers.JsonbMessageBodyReader;
-import io.quarkus.resteasy.reactive.jsonb.runtime.serialisers.JsonbMessageBodyWriter;
 import io.quarkus.resteasy.reactive.jsonb.runtime.serialisers.vertx.VertxJson;
 import io.quarkus.resteasy.reactive.spi.MessageBodyReaderBuildItem;
 import io.quarkus.resteasy.reactive.spi.MessageBodyWriterBuildItem;
 
 public class ResteasyReactiveJsonbProcessor {
 
-    private static final List<String> VERTX_SERIALIZERS = Arrays.asList(
+    private static final List<String> VERTX_SERIALIZERS = List.of(
             VertxJson.JsonObjectSerializer.class.getName(),
             VertxJson.JsonArraySerializer.class.getName());
 
-    private static final List<String> VERTX_DESERIALIZERS = Arrays.asList(
+    private static final List<String> VERTX_DESERIALIZERS = List.of(
             VertxJson.JsonObjectDeserializer.class.getName(),
             VertxJson.JsonArrayDeserializer.class.getName());
 

@@ -19,11 +19,24 @@ public class PrometheusConfigGroup implements MicrometerConfig.CapabilityEnabled
     public Optional<Boolean> enabled;
 
     /**
-     * The path for the prometheus metrics endpoint (produces text/plain).
-     * The default value is {@code metrics}.
+     * The path for the prometheus metrics endpoint (produces text/plain). The default value is
+     * `metrics` and is resolved relative to the non-application endpoint (`q`), e.g.
+     * `${quarkus.http.root-path}/${quarkus.http.non-application-root-path}/metrics`.
+     * If an absolute path is specified (`/metrics`), the prometheus endpoint will be served
+     * from the configured path.
+     *
+     * @asciidoclet
      */
     @ConfigItem(defaultValue = "metrics")
     public String path;
+
+    /**
+     * By default, this extension will create a Prometheus MeterRegistry instance.
+     * <p>
+     * Use this attribute to veto the creation of the default Prometheus MeterRegistry.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean defaultRegistry;
 
     @Override
     public Optional<Boolean> getEnabled() {
@@ -35,6 +48,7 @@ public class PrometheusConfigGroup implements MicrometerConfig.CapabilityEnabled
         return this.getClass().getSimpleName()
                 + "{path='" + path
                 + ",enabled=" + enabled
+                + ",defaultRegistry=" + defaultRegistry
                 + '}';
     }
 }

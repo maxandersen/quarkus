@@ -9,8 +9,6 @@ import javax.enterprise.inject.Any;
 import javax.inject.Inject;
 
 import org.eclipse.microprofile.health.HealthCheckResponse;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -25,7 +23,7 @@ public class DefaultMongoClientConfigTest extends MongoWithReplicasTestBase {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(MongoTestBase.class))
+            .withApplicationRoot((jar) -> jar.addClasses(MongoTestBase.class))
             .withConfigurationResource("default-mongoclient.properties");
 
     @Inject
@@ -51,10 +49,10 @@ public class DefaultMongoClientConfigTest extends MongoWithReplicasTestBase {
     @Test
     public void testClientInjection() {
         assertThat(client.listDatabaseNames().first()).isNotEmpty();
-        assertThat(reactiveClient.listDatabases().collectItems().first().await().indefinitely()).isNotEmpty();
+        assertThat(reactiveClient.listDatabases().collect().first().await().indefinitely()).isNotEmpty();
 
         org.eclipse.microprofile.health.HealthCheckResponse response = health.call();
-        assertThat(response.getState()).isEqualTo(HealthCheckResponse.State.UP);
+        assertThat(response.getStatus()).isEqualTo(HealthCheckResponse.Status.UP);
         assertThat(response.getData()).isNotEmpty();
         assertThat(response.getData().get()).hasSize(2).contains(entry("<default-reactive>", "OK"),
                 entry("<default>", "OK"));
@@ -63,7 +61,7 @@ public class DefaultMongoClientConfigTest extends MongoWithReplicasTestBase {
         stopMongoDatabase();
 
         response = health.call();
-        assertThat(response.getState()).isEqualTo(HealthCheckResponse.State.DOWN);
+        assertThat(response.getStatus()).isEqualTo(HealthCheckResponse.Status.DOWN);
         assertThat(response.getData()).isNotEmpty();
         assertThat(response.getData().get()).hasSize(2)
                 .allSatisfy(new BiConsumer<String, Object>() {

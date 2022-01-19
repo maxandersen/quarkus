@@ -1,5 +1,6 @@
 package io.quarkus.qute;
 
+import io.quarkus.qute.TemplateNode.Origin;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,20 +31,20 @@ public final class Expressions {
         return value.substring(0, start);
     }
 
-    public static List<String> parseVirtualMethodParams(String value) {
+    public static List<String> parseVirtualMethodParams(String value, Origin origin, String exprValue) {
         int start = value.indexOf(LEFT_BRACKET);
         if (start != -1 && value.endsWith(RIGHT_BRACKET)) {
             String params = value.substring(start + 1, value.length() - 1);
             return splitParts(params, PARAMS_SPLIT_CONFIG);
         }
-        throw new IllegalArgumentException("Not a virtual method: " + value);
+        throw Parser.parserError("invalid virtual method in {" + exprValue + "}", origin);
     }
 
-    public static String parseBracketContent(String value) {
+    public static String parseBracketContent(String value, Origin origin, String exprValue) {
         if (value.endsWith(SQUARE_RIGHT_BRACKET)) {
             return value.substring(1, value.length() - 1);
         }
-        throw new IllegalArgumentException("Not a bracket notation expression: " + value);
+        throw Parser.parserError("invalid bracket notation expression in {" + exprValue + "}", origin);
     }
 
     public static String buildVirtualMethodSignature(String name, List<String> params) {
@@ -78,7 +79,7 @@ public final class Expressions {
             if (splitConfig.isSeparator(c)) {
                 // Adjacent separators may be ignored
                 if (separator == 0 || separator != c) {
-                    if (!literal && brackets == 0) {
+                    if (!literal && brackets == 0 && infix == 0) {
                         if (splitConfig.shouldPrependSeparator(c)) {
                             buffer.append(c);
                         }
@@ -99,20 +100,37 @@ public final class Expressions {
                 }
                 // Non-separator char
                 if (!literal) {
-                    if (brackets == 0 && buffer.length() > 0 && c == ' ') {
-                        if (infix == 1) {
-                            // The second space after the infix method
+                    // Not inside a string/type literal
+                    if (brackets == 0 && c == ' ' && splitConfig.isInfixNotationSupported()) {
+                        // Infix supported, blank space and not inside a virtual method
+                        if (separator == 0
+                                && (buffer.length() == 0 || buffer.charAt(buffer.length() - 1) == '(')) {
+                            // Skip redundant blank space:
+                            // 1. before the infix method
+                            // foo  or bar
+                            // ----^
+                            // 2. before an infix method parameter
+                            // foo or  bar
+                            // -------^
+                        } else if (infix == 1) {
+                            // The space after the infix method
+                            // foo or bar
+                            // ------^
                             buffer.append(LEFT_BRACKET);
                             infix++;
                         } else if (infix == 2) {
                             // Next infix method
+                            // foo or bar or baz
+                            // ----------^
                             infix = 1;
                             buffer.append(RIGHT_BRACKET);
                             if (addPart(buffer, parts)) {
                                 buffer = new StringBuilder();
                             }
                         } else {
-                            // First space - start infix method
+                            // First space - start a new infix method
+                            // foo or bar
+                            // ---^
                             infix++;
                             if (addPart(buffer, parts)) {
                                 buffer = new StringBuilder();
@@ -120,8 +138,10 @@ public final class Expressions {
                         }
                     } else {
                         if (Parser.isLeftBracket(c)) {
+                            // Start of a virtual method
                             brackets++;
                         } else if (Parser.isRightBracket(c)) {
+                            // End of a virtual method
                             brackets--;
                         }
                         buffer.append(c);
@@ -138,6 +158,10 @@ public final class Expressions {
         }
         addPart(buffer, parts);
         return parts.build();
+    }
+
+    public static String typeInfoFrom(String typeName) {
+        return TYPE_INFO_SEPARATOR + typeName + TYPE_INFO_SEPARATOR;
     }
 
     /**
@@ -164,6 +188,10 @@ public final class Expressions {
         @Override
         public boolean isSeparator(char candidate) {
             return ',' == candidate;
+        }
+
+        public boolean isInfixNotationSupported() {
+            return false;
         }
 
     };
@@ -209,6 +237,10 @@ public final class Expressions {
 
         default boolean shouldAppendSeparator(char candidate) {
             return false;
+        }
+
+        default boolean isInfixNotationSupported() {
+            return true;
         }
 
     }

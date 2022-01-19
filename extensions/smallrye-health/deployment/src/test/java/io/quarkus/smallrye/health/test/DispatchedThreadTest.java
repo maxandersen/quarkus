@@ -11,9 +11,7 @@ import org.eclipse.microprofile.health.HealthCheck;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Liveness;
 import org.eclipse.microprofile.health.Readiness;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -25,7 +23,7 @@ public class DispatchedThreadTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(LivenessHealthCheckCapturingThread.class, ReadinessHealthCheckCapturingThread.class)
                     .addAsManifestResource(EmptyAsset.INSTANCE, "beans.xml"));
 
@@ -35,7 +33,7 @@ public class DispatchedThreadTest {
                 .body("status", is("UP"),
                         "checks.status", contains("UP"),
                         "checks.name", contains("my-liveness-check"),
-                        "checks.data.thread[0]", stringContainsInOrder("worker"),
+                        "checks.data.thread[0]", stringContainsInOrder("executor-thread"),
                         "checks.data.thread[0]", not(stringContainsInOrder("loop")),
                         "checks.data.request[0]", is(true));
 
@@ -43,7 +41,7 @@ public class DispatchedThreadTest {
                 .body("status", is("UP"),
                         "checks.status", contains("UP"),
                         "checks.name", contains("my-readiness-check"),
-                        "checks.data.thread[0]", stringContainsInOrder("worker"),
+                        "checks.data.thread[0]", stringContainsInOrder("executor-thread"),
                         "checks.data.thread[0]", not(stringContainsInOrder("loop")),
                         "checks.data.request[0]", is(true));
     }

@@ -2,35 +2,30 @@ package io.quarkus.jaxrs.client.reactive.runtime;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executor;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.BiFunction;
 
 import javax.ws.rs.RuntimeType;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.ext.ParamConverterProvider;
 
 import org.jboss.resteasy.reactive.client.impl.ClientProxies;
 import org.jboss.resteasy.reactive.client.impl.ClientSerialisers;
+import org.jboss.resteasy.reactive.client.spi.MultipartResponseData;
 import org.jboss.resteasy.reactive.common.core.GenericTypeMapping;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 
 import io.quarkus.resteasy.reactive.common.runtime.ResteasyReactiveCommonRecorder;
-import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
 
 @Recorder
 public class JaxrsClientReactiveRecorder extends ResteasyReactiveCommonRecorder {
 
-    public static final Supplier<Executor> EXECUTOR_SUPPLIER = new Supplier<Executor>() {
-        @Override
-        public Executor get() {
-            return ExecutorRecorder.getCurrent();
-        }
-    };
     private static volatile Serialisers serialisers;
     private static volatile GenericTypeMapping genericTypeMapping;
+    private static volatile Map<Class<?>, MultipartResponseData> multipartResponsesData;
 
     private static volatile ClientProxies clientProxies = new ClientProxies(Collections.emptyMap(), Collections.emptyMap());
 
@@ -46,7 +41,21 @@ public class JaxrsClientReactiveRecorder extends ResteasyReactiveCommonRecorder 
         return genericTypeMapping;
     }
 
-    public void setupClientProxies(Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations,
+    public static Map<Class<?>, MultipartResponseData> getMultipartResponsesData() {
+        return multipartResponsesData;
+    }
+
+    public void setMultipartResponsesData(Map<String, RuntimeValue<MultipartResponseData>> multipartResponsesData) {
+        Map<Class<?>, MultipartResponseData> runtimeMap = new HashMap<>();
+        for (Map.Entry<String, RuntimeValue<MultipartResponseData>> multipartData : multipartResponsesData.entrySet()) {
+            runtimeMap.put(loadClass(multipartData.getKey()), multipartData.getValue().getValue());
+        }
+
+        JaxrsClientReactiveRecorder.multipartResponsesData = runtimeMap;
+    }
+
+    public void setupClientProxies(
+            Map<String, RuntimeValue<BiFunction<WebTarget, List<ParamConverterProvider>, ?>>> clientImplementations,
             Map<String, String> failures) {
         clientProxies = createClientImpls(clientImplementations, failures);
     }
@@ -58,10 +67,12 @@ public class JaxrsClientReactiveRecorder extends ResteasyReactiveCommonRecorder 
         return s;
     }
 
-    private ClientProxies createClientImpls(Map<String, RuntimeValue<Function<WebTarget, ?>>> clientImplementations,
+    private ClientProxies createClientImpls(
+            Map<String, RuntimeValue<BiFunction<WebTarget, List<ParamConverterProvider>, ?>>> clientImplementations,
             Map<String, String> failureMessages) {
-        Map<Class<?>, Function<WebTarget, ?>> map = new HashMap<>();
-        for (Map.Entry<String, RuntimeValue<Function<WebTarget, ?>>> entry : clientImplementations.entrySet()) {
+        Map<Class<?>, BiFunction<WebTarget, List<ParamConverterProvider>, ?>> map = new HashMap<>();
+        for (Map.Entry<String, RuntimeValue<BiFunction<WebTarget, List<ParamConverterProvider>, ?>>> entry : clientImplementations
+                .entrySet()) {
             map.put(loadClass(entry.getKey()), entry.getValue().getValue());
         }
         Map<Class<?>, String> failures = new HashMap<>();

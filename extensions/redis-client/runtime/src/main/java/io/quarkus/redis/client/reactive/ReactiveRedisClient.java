@@ -1,7 +1,12 @@
 package io.quarkus.redis.client.reactive;
 
+import static io.quarkus.redis.client.runtime.RedisClientUtil.DEFAULT_CLIENT;
+
 import java.util.List;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.redis.client.RedisClient;
+import io.quarkus.redis.client.runtime.RedisClientsProducer;
 import io.smallrye.mutiny.Uni;
 import io.vertx.mutiny.redis.client.Response;
 
@@ -12,6 +17,25 @@ import io.vertx.mutiny.redis.client.Response;
  * the <a href="https://redis.io/commands">Redis Commands Page</a>
  */
 public interface ReactiveRedisClient {
+    /**
+     * Creates the {@link RedisClient} using the default redis client configuration
+     * 
+     * @return {@link ReactiveRedisClient} - the default reactive redis client
+     */
+    static ReactiveRedisClient createClient() {
+        return createClient(DEFAULT_CLIENT);
+    }
+
+    /**
+     * Creates the {@link RedisClient} using the named redis client configuration
+     * 
+     * @return {@link ReactiveRedisClient} - the named reactive redis client
+     */
+    static ReactiveRedisClient createClient(String name) {
+        RedisClientsProducer redisClientsProducer = Arc.container().instance(RedisClientsProducer.class).get();
+        return redisClientsProducer.getReactiveRedisClient(name);
+    }
+
     void close();
 
     Uni<Response> append(String arg0, String arg1);
@@ -22,9 +46,9 @@ public interface ReactiveRedisClient {
 
     Response askingAndAwait();
 
-    Uni<Response> auth(String arg0);
+    Uni<Response> auth(List<String> args);
 
-    Response authAndAwait(String arg0);
+    Response authAndAwait(List<String> args);
 
     Uni<Response> bgrewriteaof();
 
@@ -78,9 +102,9 @@ public interface ReactiveRedisClient {
 
     Response clusterAndAwait(List<String> args);
 
-    Uni<Response> command();
+    Uni<Response> command(List<String> args);
 
-    Response commandAndAwait();
+    Response commandAndAwait(List<String> args);
 
     Uni<Response> config(List<String> args);
 
@@ -308,7 +332,11 @@ public interface ReactiveRedisClient {
 
     Uni<Response> lpop(String arg0);
 
+    Uni<Response> lpop(List<String> arg0);
+
     Response lpopAndAwait(String arg0);
+
+    Response lpopAndAwait(List<String> arg0);
 
     Uni<Response> lpush(List<String> args);
 
@@ -424,7 +452,11 @@ public interface ReactiveRedisClient {
 
     Uni<Response> psync(String arg0, String arg1);
 
+    Uni<Response> psync(List<String> args);
+
     Response psyncAndAwait(String arg0, String arg1);
+
+    Response psyncAndAwait(List<String> args);
 
     Uni<Response> pttl(String arg0);
 
@@ -484,7 +516,11 @@ public interface ReactiveRedisClient {
 
     Uni<Response> rpop(String arg0);
 
+    Uni<Response> rpop(List<String> args);
+
     Response rpopAndAwait(String arg0);
+
+    Response rpopAndAwait(List<String> args);
 
     Uni<Response> rpoplpush(String arg0, String arg1);
 
@@ -809,6 +845,10 @@ public interface ReactiveRedisClient {
     Uni<Response> zscore(String arg0, String arg1);
 
     Response zscoreAndAwait(String arg0, String arg1);
+
+    Uni<Response> zunion(List<String> args);
+
+    Response zunionAndAwait(List<String> args);
 
     Uni<Response> zunionstore(List<String> args);
 

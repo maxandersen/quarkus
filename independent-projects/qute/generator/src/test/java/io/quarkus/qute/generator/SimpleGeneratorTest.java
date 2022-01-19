@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import io.quarkus.qute.Engine;
 import io.quarkus.qute.EngineBuilder;
+import io.quarkus.qute.NamespaceResolver;
+import io.quarkus.qute.Resolver;
 import io.quarkus.qute.TestEvalContext;
 import io.quarkus.qute.ValueResolver;
 import java.io.IOException;
@@ -35,8 +37,7 @@ public class SimpleGeneratorTest {
     public static void init() throws IOException {
         TestClassOutput classOutput = new TestClassOutput();
         Index index = index(MyService.class, PublicMyService.class, BaseService.class, MyItem.class, String.class,
-                CompletionStage.class,
-                List.class);
+                CompletionStage.class, List.class, MyEnum.class);
         ClassInfo myServiceClazz = index.getClassByName(DotName.createSimple(MyService.class.getName()));
         ValueResolverGenerator generator = ValueResolverGenerator.builder().setIndex(index).setClassOutput(classOutput)
                 .addClass(myServiceClazz)
@@ -44,6 +45,7 @@ public class SimpleGeneratorTest {
                 .addClass(index.getClassByName(DotName.createSimple(MyItem.class.getName())))
                 .addClass(index.getClassByName(DotName.createSimple(String.class.getName())))
                 .addClass(index.getClassByName(DotName.createSimple(List.class.getName())))
+                .addClass(index.getClassByName(DotName.createSimple(MyEnum.class.getName())))
                 .build();
 
         generator.generate();
@@ -101,7 +103,11 @@ public class SimpleGeneratorTest {
 
         EngineBuilder builder = Engine.builder().addDefaults();
         for (String generatedType : generatedTypes) {
-            builder.addValueResolver(newResolver(generatedType));
+            if (generatedType.contains(ValueResolverGenerator.NAMESPACE_SUFFIX)) {
+                builder.addNamespaceResolver((NamespaceResolver) newResolver(generatedType));
+            } else {
+                builder.addValueResolver((ValueResolver) newResolver(generatedType));
+            }
         }
         Engine engine = builder.build();
         assertEquals(" FOO ", engine.parse("{#if isActive} {name.toUpperCase} {/if}").render(new MyService()));
@@ -110,17 +116,19 @@ public class SimpleGeneratorTest {
         assertEquals(" FOO ", engine.parse("{#if !items} {name.toUpperCase} {/if}").render(new MyService()));
         assertEquals("OK", engine.parse("{#if this.getList(5).size == 5}OK{/if}").render(new MyService()));
         assertEquals("2", engine.parse("{this.getListVarargs('foo','bar').size}").render(new MyService()));
-        assertEquals("NOT_FOUND", engine.parse("{this.getAnotherTestName(1)}").render(new MyService()));
+        assertEquals("NOT_FOUND", engine.parse("{this.getAnotherTestName(1).or('NOT_FOUND')}").render(new MyService()));
         assertEquals("Martin NOT_FOUND OK NOT_FOUND",
-                engine.parse("{name} {surname} {isStatic ?: 'OK'} {base}").render(new PublicMyService()));
-        assertEquals("foo NOT_FOUND", engine.parse("{id} {bar}").render(new MyItem()));
+                engine.parse("{name} {surname.or('NOT_FOUND')} {isStatic ?: 'OK'} {base.or('NOT_FOUND')}")
+                        .render(new PublicMyService()));
+        assertEquals("foo NOT_FOUND", engine.parse("{id} {bar.or('NOT_FOUND')}").render(new MyItem()));
         // Param types don't match - NOT_FOUND
-        assertEquals("NOT_FOUND", engine.parse("{this.getList(5,5)}").render(new MyService()));
+        assertEquals("NOT_FOUND", engine.parse("{this.getList(5,5).or('NOT_FOUND')}").render(new MyService()));
         // Test multiple extension methods with the same number of parameters
         assertEquals("1", engine.parse("{service.getDummy(5,2l).size}").data("service", new MyService()).render());
         // No extension method matches the param types
         assertEquals("NOT_FOUND",
-                engine.parse("{service.getDummy(5,resultNotFound)}").data("service", new MyService()).render());
+                engine.parse("{service.getDummy(5,resultNotFound.or(false)).or('NOT_FOUND')}").data("service", new MyService())
+                        .render());
         // Extension method with varargs
         assertEquals("alphabravo",
                 engine.parse("{#each service.getDummyVarargs(5,'alpha','bravo')}{it}{/}").data("service", new MyService())
@@ -128,9 +136,14 @@ public class SimpleGeneratorTest {
         assertEquals("5",
                 engine.parse("{#each service.getDummyVarargs(5)}{it}{/}").data("service", new MyService())
                         .render());
+
+        // Namespace resolvers
+        assertEquals("OK", engine.parse("{#if enum is MyEnum:BAR}OK{/if}").data("enum", MyEnum.BAR).render());
+        assertEquals("one", engine.parse("{MyEnum:valueOf('ONE').name}").render());
+        assertEquals("10", engine.parse("{io_quarkus_qute_generator_MyService:getDummy(5)}").render());
     }
 
-    private ValueResolver newResolver(String className)
+    private Resolver newResolver(String className)
             throws ClassNotFoundException, InstantiationException, IllegalAccessException, IllegalArgumentException,
             InvocationTargetException, NoSuchMethodException, SecurityException {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
@@ -138,7 +151,7 @@ public class SimpleGeneratorTest {
             cl = SimpleGeneratorTest.class.getClassLoader();
         }
         Class<?> clazz = cl.loadClass(className);
-        return (ValueResolver) clazz.getDeclaredConstructor().newInstance();
+        return (Resolver) clazz.getDeclaredConstructor().newInstance();
     }
 
     static Index index(Class<?>... classes) throws IOException {

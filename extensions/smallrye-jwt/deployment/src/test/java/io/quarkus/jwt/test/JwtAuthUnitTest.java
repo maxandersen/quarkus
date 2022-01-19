@@ -1,5 +1,7 @@
 package io.quarkus.jwt.test;
 
+import static org.hamcrest.Matchers.equalTo;
+
 import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.util.HashMap;
@@ -9,8 +11,6 @@ import javax.json.JsonObject;
 import javax.json.JsonReader;
 
 import org.eclipse.microprofile.jwt.Claims;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,7 @@ public class JwtAuthUnitTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(testClasses)
                     .addAsResource("publicKey.pem")
                     .addAsResource("privateKey.pem")
@@ -48,11 +48,11 @@ public class JwtAuthUnitTest {
         authTimeClaim = timeClaims.get(Claims.auth_time.name());
     }
 
-    // Basic @ServletSecurity tests
     @Test()
     public void testSecureAccessFailure() {
         RestAssured.when().get("/endp/verifyInjectedIssuer").then()
-                .statusCode(401);
+                .statusCode(401)
+                .header("WWW-Authenticate", equalTo("Bearer"));
     }
 
     /**

@@ -24,7 +24,6 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.AnnotationValue.Kind;
-import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
@@ -33,6 +32,9 @@ import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.core.MediaTypeMap;
+import org.jboss.resteasy.microprofile.config.FilterConfigSourceImpl;
+import org.jboss.resteasy.microprofile.config.ServletConfigSourceImpl;
+import org.jboss.resteasy.microprofile.config.ServletContextConfigSourceImpl;
 import org.jboss.resteasy.plugins.interceptors.AcceptEncodingGZIPFilter;
 import org.jboss.resteasy.plugins.interceptors.GZIPDecodingInterceptor;
 import org.jboss.resteasy.plugins.interceptors.GZIPEncodingInterceptor;
@@ -49,12 +51,14 @@ import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.ProxyUnwrapperBuildItem;
+import io.quarkus.deployment.builditem.StaticInitConfigSourceProviderBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.resteasy.common.runtime.ResteasyInjectorFactoryRecorder;
+import io.quarkus.resteasy.common.runtime.config.ResteasyConfigSourceProvider;
 import io.quarkus.resteasy.common.runtime.providers.ServerFormUrlEncodedProvider;
 import io.quarkus.resteasy.common.spi.ResteasyConfigBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyDotNames;
@@ -121,9 +125,31 @@ public class ResteasyCommonProcessor {
     }
 
     @BuildStep
+    void addStaticInitConfigSourceProvider(
+            Capabilities capabilities,
+            BuildProducer<StaticInitConfigSourceProviderBuildItem> initConfigSourceProvider,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+
+        if (!capabilities.isCapabilityWithPrefixPresent(Capability.SERVLET)) {
+            return;
+        }
+
+        initConfigSourceProvider.produce(
+                new StaticInitConfigSourceProviderBuildItem(ResteasyConfigSourceProvider.class.getName()));
+
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
+                ServletConfigSourceImpl.class,
+                ServletContextConfigSourceImpl.class,
+                FilterConfigSourceImpl.class));
+    }
+
+    @BuildStep
     ResteasyConfigBuildItem resteasyConfig(ResteasyJsonConfig resteasyJsonConfig, Capabilities capabilities) {
         return new ResteasyConfigBuildItem(resteasyJsonConfig.jsonDefault &&
-                (capabilities.isPresent(Capability.REST_JACKSON) || capabilities.isPresent(Capability.REST_JSONB)));
+        // RESTEASY_JACKSON or RESTEASY_JACKSON_CLIENT
+                (capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JACKSON)
+                        // RESTEASY_JSONB or RESTEASY_JSONB_CLIENT
+                        || capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JSONB)));
     }
 
     @BuildStep
@@ -137,16 +163,11 @@ public class ResteasyCommonProcessor {
     }
 
     @Record(STATIC_INIT)
+    @Consume(BeanContainerBuildItem.class)
     @BuildStep
-    ResteasyInjectionReadyBuildItem setupResteasyInjection(List<ProxyUnwrapperBuildItem> proxyUnwrappers,
-            BeanContainerBuildItem beanContainerBuildItem,
-            Capabilities capabilities,
+    ResteasyInjectionReadyBuildItem setupResteasyInjection(
             ResteasyInjectorFactoryRecorder recorder) {
-        List<Function<Object, Object>> unwrappers = new ArrayList<>();
-        for (ProxyUnwrapperBuildItem i : proxyUnwrappers) {
-            unwrappers.add(i.getUnwrapper());
-        }
-        RuntimeValue<InjectorFactory> injectorFactory = recorder.setup(beanContainerBuildItem.getValue(), unwrappers);
+        RuntimeValue<InjectorFactory> injectorFactory = recorder.setup();
         return new ResteasyInjectionReadyBuildItem(injectorFactory);
     }
 
@@ -154,6 +175,7 @@ public class ResteasyCommonProcessor {
     JaxrsProvidersToRegisterBuildItem setupProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             CombinedIndexBuildItem indexBuildItem,
             BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
+            BuildProducer<UnremovableBeanBuildItem> unremovableBeans,
             List<ResteasyJaxrsProviderBuildItem> contributedProviderBuildItems,
             List<RestClientBuildItem> restClients,
             ResteasyConfigBuildItem resteasyConfig,
@@ -170,7 +192,6 @@ public class ResteasyCommonProcessor {
                 annotatedProviders.add(i.target().asClass().name().toString());
             }
             checkProperConfigAccessInProvider(i);
-            checkProperConstructorInProvider(i);
         }
         contributedProviders.addAll(annotatedProviders);
         Set<String> availableProviders = new HashSet<>(ServiceUtil.classNamesNamedIn(getClass().getClassLoader(),
@@ -189,7 +210,8 @@ public class ResteasyCommonProcessor {
         // add the other providers detected
         Set<String> providersToRegister = new HashSet<>(otherProviders);
 
-        if (!capabilities.isPresent(Capability.RESTEASY_JSON)) {
+        if (!capabilities.isPresent(Capability.VERTX)
+                && !capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON)) {
 
             boolean needJsonSupport = restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.CONSUMES)
                     || restJsonSupportNeeded(indexBuildItem, ResteasyDotNames.PRODUCES)
@@ -239,8 +261,14 @@ public class ResteasyCommonProcessor {
                     "org.jboss.resteasy.plugins.providers.jsonb.AbstractJsonBindingProvider"));
         }
 
-        return new JaxrsProvidersToRegisterBuildItem(
+        JaxrsProvidersToRegisterBuildItem result = new JaxrsProvidersToRegisterBuildItem(
                 providersToRegister, contributedProviders, annotatedProviders, useBuiltinProviders);
+
+        // Providers that are also beans are unremovable
+        unremovableBeans.produce(new UnremovableBeanBuildItem(
+                b -> result.getProviders().contains(b.getBeanClass().toString())));
+
+        return result;
     }
 
     private String mutinySupportNeeded(CombinedIndexBuildItem indexBuildItem) {
@@ -277,7 +305,7 @@ public class ResteasyCommonProcessor {
             BuildProducer<AdditionalBeanBuildItem> additionalBean,
             BuildProducer<UnremovableBeanBuildItem> unremovable) {
 
-        if (capabilities.isPresent(Capability.REST_JACKSON)) {
+        if (capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JACKSON)) {
             registerJsonContextResolver(OBJECT_MAPPER, QUARKUS_OBJECT_MAPPER_CONTEXT_RESOLVER, combinedIndexBuildItem,
                     jaxrsProvider, additionalBean, unremovable);
             if (resteasyJsonConfig.jsonDefault) {
@@ -285,7 +313,7 @@ public class ResteasyCommonProcessor {
             }
         }
 
-        if (capabilities.isPresent(Capability.REST_JSONB)) {
+        if (capabilities.isCapabilityWithPrefixPresent(Capability.RESTEASY_JSON_JSONB)) {
             registerJsonContextResolver(JSONB, QUARKUS_JSONB_CONTEXT_RESOLVER, combinedIndexBuildItem, jaxrsProvider,
                     additionalBean, unremovable);
             if (resteasyJsonConfig.jsonDefault) {
@@ -352,16 +380,6 @@ public class ResteasyCommonProcessor {
                             + " into a JAX-RS provider may lead to unexpected results. To ensure proper results, please change the type of the field to "
                             + ParameterizedType.create(ResteasyDotNames.CDI_INSTANCE, new Type[] { fieldType }, null)
                             + ". Offending field is '" + field.name() + "' of class '" + field.declaringClass() + "'");
-        }
-    }
-
-    private void checkProperConstructorInProvider(AnnotationInstance i) {
-        ClassInfo targetClass = i.target().asClass();
-        if (!targetClass.hasNoArgsConstructor()
-                || targetClass.methods().stream().filter(m -> m.name().equals("<init>")).count() > 1) {
-            LOGGER.warn(
-                    "Classes annotated with @Provider should have a single, no-argument constructor, otherwise dependency injection won't work properly. Offending class is "
-                            + targetClass);
         }
     }
 
@@ -650,10 +668,5 @@ public class ResteasyCommonProcessor {
         public boolean noProducesDefaultsToAll() {
             return noProducesDefaultsToAll;
         }
-    }
-
-    private enum NoMediaTypesDefault {
-        ALL,
-        JSON;
     }
 }

@@ -2,6 +2,7 @@ package io.quarkus.vertx.http.runtime.security;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -9,9 +10,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Instance;
-import javax.inject.Inject;
+import javax.inject.Singleton;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.quarkus.security.identity.IdentityProvider;
@@ -19,49 +19,57 @@ import io.quarkus.security.identity.IdentityProviderManager;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.security.identity.request.AnonymousAuthenticationRequest;
 import io.quarkus.security.identity.request.AuthenticationRequest;
+import io.quarkus.vertx.http.runtime.security.HttpCredentialTransport.Type;
 import io.smallrye.mutiny.Uni;
+import io.vertx.core.http.HttpHeaders;
 import io.vertx.ext.web.RoutingContext;
 
 /**
  * Class that is responsible for running the HTTP based authentication
  */
-@ApplicationScoped
+@Singleton
 public class HttpAuthenticator {
 
-    final HttpAuthenticationMechanism[] mechanisms;
-    @Inject
-    IdentityProviderManager identityProviderManager;
+    private final IdentityProviderManager identityProviderManager;
+    private final Instance<PathMatchingHttpSecurityPolicy> pathMatchingPolicy;
+    private final HttpAuthenticationMechanism[] mechanisms;
 
-    public HttpAuthenticator() {
-        mechanisms = null;
-    }
-
-    @Inject
-    public HttpAuthenticator(Instance<HttpAuthenticationMechanism> instance,
+    public HttpAuthenticator(IdentityProviderManager identityProviderManager,
+            Instance<PathMatchingHttpSecurityPolicy> pathMatchingPolicy,
+            Instance<HttpAuthenticationMechanism> httpAuthenticationMechanism,
             Instance<IdentityProvider<?>> providers) {
+        this.identityProviderManager = identityProviderManager;
+        this.pathMatchingPolicy = pathMatchingPolicy;
         List<HttpAuthenticationMechanism> mechanisms = new ArrayList<>();
-        for (HttpAuthenticationMechanism mechanism : instance) {
-            boolean notFound = false;
+        for (HttpAuthenticationMechanism mechanism : httpAuthenticationMechanism) {
+            boolean found = false;
             for (Class<? extends AuthenticationRequest> mechType : mechanism.getCredentialTypes()) {
-                boolean found = false;
                 for (IdentityProvider<?> i : providers) {
                     if (i.getRequestType().equals(mechType)) {
                         found = true;
                         break;
                     }
                 }
-                if (!found) {
-                    notFound = true;
+                if (found == true) {
                     break;
                 }
             }
-            if (!notFound) {
+            // Add mechanism if there is a provider with matching credential type
+            // If the mechanism has no credential types, just add it anyways
+            if (found || mechanism.getCredentialTypes().isEmpty()) {
                 mechanisms.add(mechanism);
             }
         }
         if (mechanisms.isEmpty()) {
             this.mechanisms = new HttpAuthenticationMechanism[] { new NoAuthenticationMechanism() };
         } else {
+            Collections.sort(mechanisms, new Comparator<HttpAuthenticationMechanism>() {
+                @Override
+                public int compare(HttpAuthenticationMechanism mech1, HttpAuthenticationMechanism mech2) {
+                    //descending order
+                    return Integer.compare(mech2.getPriority(), mech1.getPriority());
+                }
+            });
             this.mechanisms = mechanisms.toArray(new HttpAuthenticationMechanism[mechanisms.size()]);
             //validate that we don't have multiple incompatible mechanisms
             Map<HttpCredentialTransport, HttpAuthenticationMechanism> map = new HashMap<>();
@@ -97,6 +105,17 @@ public class HttpAuthenticator {
      */
     public Uni<SecurityIdentity> attemptAuthentication(RoutingContext routingContext) {
 
+        String pathSpecificMechanism = pathMatchingPolicy.isResolvable()
+                ? pathMatchingPolicy.get().getAuthMechanismName(routingContext)
+                : null;
+        HttpAuthenticationMechanism matchingMech = findBestCandidateMechanism(routingContext, pathSpecificMechanism);
+        if (matchingMech != null) {
+            routingContext.put(HttpAuthenticationMechanism.class.getName(), matchingMech);
+            return matchingMech.authenticate(routingContext, identityProviderManager);
+        } else if (pathSpecificMechanism != null) {
+            return Uni.createFrom().optional(Optional.empty());
+        }
+
         Uni<SecurityIdentity> result = mechanisms[0].authenticate(routingContext, identityProviderManager);
         for (int i = 1; i < mechanisms.length; ++i) {
             HttpAuthenticationMechanism mech = mechanisms[i];
@@ -118,18 +137,30 @@ public class HttpAuthenticator {
      * @return
      */
     public Uni<Boolean> sendChallenge(RoutingContext routingContext) {
-        Uni<Boolean> result = mechanisms[0].sendChallenge(routingContext);
-        for (int i = 1; i < mechanisms.length; ++i) {
-            HttpAuthenticationMechanism mech = mechanisms[i];
-            result = result.onItem().transformToUni(new Function<Boolean, Uni<? extends Boolean>>() {
-                @Override
-                public Uni<? extends Boolean> apply(Boolean authDone) {
-                    if (authDone) {
-                        return Uni.createFrom().item(authDone);
+        //we want to consume any body content if present
+        //challenges won't read the body, and if we don't consume
+        //things can get stuck
+        routingContext.request().resume();
+        Uni<Boolean> result = null;
+
+        HttpAuthenticationMechanism matchingMech = routingContext.get(HttpAuthenticationMechanism.class.getName());
+        if (matchingMech != null) {
+            result = matchingMech.sendChallenge(routingContext);
+        }
+        if (result == null) {
+            result = mechanisms[0].sendChallenge(routingContext);
+            for (int i = 1; i < mechanisms.length; ++i) {
+                HttpAuthenticationMechanism mech = mechanisms[i];
+                result = result.onItem().transformToUni(new Function<Boolean, Uni<? extends Boolean>>() {
+                    @Override
+                    public Uni<? extends Boolean> apply(Boolean authDone) {
+                        if (authDone) {
+                            return Uni.createFrom().item(authDone);
+                        }
+                        return mech.sendChallenge(routingContext);
                     }
-                    return mech.sendChallenge(routingContext);
-                }
-            });
+                });
+            }
         }
         return result.onItem().transformToUni(new Function<Boolean, Uni<? extends Boolean>>() {
             @Override
@@ -144,6 +175,10 @@ public class HttpAuthenticator {
     }
 
     public Uni<ChallengeData> getChallenge(RoutingContext routingContext) {
+        HttpAuthenticationMechanism matchingMech = routingContext.get(HttpAuthenticationMechanism.class.getName());
+        if (matchingMech != null) {
+            return matchingMech.getChallenge(routingContext);
+        }
         Uni<ChallengeData> result = mechanisms[0].getChallenge(routingContext);
         for (int i = 1; i < mechanisms.length; ++i) {
             HttpAuthenticationMechanism mech = mechanisms[i];
@@ -159,6 +194,41 @@ public class HttpAuthenticator {
 
         }
         return result;
+    }
+
+    private HttpAuthenticationMechanism findBestCandidateMechanism(RoutingContext routingContext,
+            String pathSpecificMechanism) {
+        if (pathSpecificMechanism != null) {
+            for (int i = 0; i < mechanisms.length; ++i) {
+                HttpCredentialTransport credType = mechanisms[i].getCredentialTransport();
+                if (credType != null && credType.getAuthenticationScheme().equalsIgnoreCase(pathSpecificMechanism)) {
+                    return mechanisms[i];
+                }
+            }
+        } else {
+            String authScheme = getAuthorizationScheme(routingContext);
+            if (authScheme != null) {
+                for (int i = 0; i < mechanisms.length; ++i) {
+                    HttpCredentialTransport credType = mechanisms[i].getCredentialTransport();
+                    if (credType != null && credType.getTransportType() == Type.AUTHORIZATION
+                            && credType.getTypeTarget().toLowerCase().startsWith(authScheme.toLowerCase())) {
+                        return mechanisms[i];
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String getAuthorizationScheme(RoutingContext routingContext) {
+        String authorization = routingContext.request().getHeader(HttpHeaders.AUTHORIZATION);
+        if (authorization != null) {
+            int spaceIndex = authorization.indexOf(' ');
+            if (spaceIndex > 0) {
+                return authorization.substring(0, spaceIndex);
+            }
+        }
+        return null;
     }
 
     static class NoAuthenticationMechanism implements HttpAuthenticationMechanism {

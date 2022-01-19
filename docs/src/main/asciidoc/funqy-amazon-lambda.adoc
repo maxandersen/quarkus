@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Funqy Amazon Lambda Binding
+= Funqy Amazon Lambda Binding
 :extension-status: preview
 
 include::./attributes.adoc[]
@@ -20,14 +20,14 @@ include::./status-include.adoc[]
 To complete this guide, you need:
 
 * less than 30 minutes
-* Read about link:funqy[Funqy Basics].  This is a short read!
+* Read about xref:funqy.adoc[Funqy Basics].  This is a short read!
 * JDK 11 (AWS requires JDK 1.8 or 11)
 * Apache Maven {maven-version}
 * https://aws.amazon.com[An Amazon AWS account]
 * https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html[AWS CLI]
 * https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html[AWS SAM CLI], for local testing
 
-NOTE: Funqy Amazon Lambdas build off of our link:amazon-lambda[Quarkus Amazon Lambda support].
+NOTE: Funqy Amazon Lambdas build off of our xref:amazon-lambda.adoc[Quarkus Amazon Lambda support].
 
 == Installing AWS bits
 
@@ -235,8 +235,8 @@ call must set a specific environment variable:
 
 == Examine the POM
 
-There is nothing special about the POM other than the inclusion of the `quarkus-funqy-amazon-lambda` and `quarkus-test-amazon-lambda` extensions
-as a dependencies.  The extension automatically generates everything you might need for your lambda deployment.
+There is nothing special about the POM other than the inclusion of the `quarkus-funqy-amazon-lambda` extension
+as a dependency.  The extension automatically generates everything you might need for your lambda deployment.
 
 == Integration Testing
 

@@ -12,7 +12,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -65,7 +64,8 @@ public class BeanInfo implements InjectionTargetInfo {
 
     private final Map<InterceptionType, InterceptionInfo> lifecycleInterceptors;
 
-    private final Integer alternativePriority;
+    private final boolean alternative;
+    private final Integer priority;
 
     private final List<StereotypeInfo> stereotypes;
 
@@ -83,25 +83,26 @@ public class BeanInfo implements InjectionTargetInfo {
 
     private final Map<String, Object> params;
 
+    private final boolean forceApplicationClass;
+
+    private final String targetPackageName;
+
     BeanInfo(AnnotationTarget target, BeanDeployment beanDeployment, ScopeInfo scope, Set<Type> types,
-            Set<AnnotationInstance> qualifiers,
-            List<Injection> injections, BeanInfo declaringBean, DisposerInfo disposer, Integer alternativePriority,
-            List<StereotypeInfo> stereotypes,
-            String name, boolean isDefaultBean) {
+            Set<AnnotationInstance> qualifiers, List<Injection> injections, BeanInfo declaringBean, DisposerInfo disposer,
+            boolean alternative, List<StereotypeInfo> stereotypes, String name, boolean isDefaultBean, String targetPackageName,
+            Integer priority) {
         this(null, null, target, beanDeployment, scope, types, qualifiers, injections, declaringBean, disposer,
-                alternativePriority,
-                stereotypes, name, isDefaultBean, null, null,
-                Collections.emptyMap(), true);
+                alternative, stereotypes, name, isDefaultBean, null, null, Collections.emptyMap(), true, false,
+                targetPackageName, priority);
     }
 
     BeanInfo(ClassInfo implClazz, Type providerType, AnnotationTarget target, BeanDeployment beanDeployment, ScopeInfo scope,
-            Set<Type> types,
-            Set<AnnotationInstance> qualifiers,
-            List<Injection> injections, BeanInfo declaringBean, DisposerInfo disposer, Integer alternativePriority,
-            List<StereotypeInfo> stereotypes,
-            String name, boolean isDefaultBean, Consumer<MethodCreator> creatorConsumer,
-            Consumer<MethodCreator> destroyerConsumer,
-            Map<String, Object> params, boolean isRemovable) {
+            Set<Type> types, Set<AnnotationInstance> qualifiers, List<Injection> injections, BeanInfo declaringBean,
+            DisposerInfo disposer, boolean alternative,
+            List<StereotypeInfo> stereotypes, String name, boolean isDefaultBean, Consumer<MethodCreator> creatorConsumer,
+            Consumer<MethodCreator> destroyerConsumer, Map<String, Object> params, boolean isRemovable,
+            boolean forceApplicationClass, String targetPackageName, Integer priority) {
+
         this.target = Optional.ofNullable(target);
         if (implClazz == null && target != null) {
             implClazz = initImplClazz(target, beanDeployment);
@@ -127,7 +128,8 @@ public class BeanInfo implements InjectionTargetInfo {
         this.injections = injections;
         this.declaringBean = declaringBean;
         this.disposer = disposer;
-        this.alternativePriority = alternativePriority;
+        this.alternative = alternative;
+        this.priority = priority;
         this.stereotypes = stereotypes;
         this.name = name;
         this.defaultBean = isDefaultBean;
@@ -140,6 +142,8 @@ public class BeanInfo implements InjectionTargetInfo {
         this.interceptedMethods = new ConcurrentHashMap<>();
         this.decoratedMethods = new ConcurrentHashMap<>();
         this.lifecycleInterceptors = new ConcurrentHashMap<>();
+        this.forceApplicationClass = forceApplicationClass;
+        this.targetPackageName = targetPackageName;
     }
 
     @Override
@@ -240,6 +244,15 @@ public class BeanInfo implements InjectionTargetInfo {
         return qualifiers;
     }
 
+    public Optional<AnnotationInstance> getQualifier(DotName dotName) {
+        for (AnnotationInstance qualifier : qualifiers) {
+            if (qualifier.name().equals(dotName)) {
+                return Optional.of(qualifier);
+            }
+        }
+        return Optional.empty();
+    }
+
     public boolean hasDefaultQualifiers() {
         return qualifiers.size() == 2 && qualifiers.contains(BuiltinQualifier.DEFAULT.getInstance())
                 && qualifiers.contains(BuiltinQualifier.ANY.getInstance());
@@ -337,11 +350,17 @@ public class BeanInfo implements InjectionTargetInfo {
         }
     }
 
+    public boolean isForceApplicationClass() {
+        return forceApplicationClass;
+    }
+
     /**
+     * Note that the interceptors are not available until the bean is fully initialized, i.e. they are available after
+     * {@link BeanProcessor#initialize(Consumer, List)}.
      *
      * @return an ordered list of all interceptors associated with the bean
      */
-    List<InterceptorInfo> getBoundInterceptors() {
+    public List<InterceptorInfo> getBoundInterceptors() {
         if (lifecycleInterceptors.isEmpty() && interceptedMethods.isEmpty()) {
             return Collections.emptyList();
         }
@@ -364,7 +383,13 @@ public class BeanInfo implements InjectionTargetInfo {
         return bound;
     }
 
-    List<DecoratorInfo> getBoundDecorators() {
+    /**
+     * Note that the decorators are not available until the bean is fully initialized, i.e. they are available after
+     * {@link BeanProcessor#initialize(Consumer, List)}.
+     * 
+     * @return an ordered list of all decorators associated with the bean
+     */
+    public List<DecoratorInfo> getBoundDecorators() {
         if (decoratedMethods.isEmpty()) {
             return Collections.emptyList();
         }
@@ -376,12 +401,15 @@ public class BeanInfo implements InjectionTargetInfo {
                 }
             }
         }
-        // Sort by priority (highest goes first) and by bean class
+        // Sort by priority (highest goes first) and by bean class (reversed lexicographic-order)
         // Highest priority first because the decorators are instantiated in the reverse order, 
         // i.e. when the subclass constructor is generated the delegate subclass of the first decorator 
         // (lower priority) needs a reference to the next decorator in the chain (higher priority)
+        // Note that this set must be always reversed compared to the result coming from the BeanInfo#getNextDecorators(DecoratorInfo)
         Collections.sort(bound,
-                Comparator.comparing(DecoratorInfo::getPriority).reversed().thenComparing(DecoratorInfo::getBeanClass));
+                Comparator.comparing(DecoratorInfo::getPriority)
+                        .thenComparing(DecoratorInfo::getBeanClass)
+                        .reversed());
         return bound;
     }
 
@@ -390,11 +418,15 @@ public class BeanInfo implements InjectionTargetInfo {
     }
 
     public boolean isAlternative() {
-        return alternativePriority != null;
+        return alternative;
     }
 
     public Integer getAlternativePriority() {
-        return alternativePriority;
+        return alternative ? priority : null;
+    }
+
+    public Integer getPriority() {
+        return priority;
     }
 
     public List<StereotypeInfo> getStereotypes() {
@@ -435,6 +467,45 @@ public class BeanInfo implements InjectionTargetInfo {
 
     Map<String, Object> getParams() {
         return params;
+    }
+
+    public String getTargetPackageName() {
+        if (targetPackageName != null) {
+            return targetPackageName;
+        }
+        DotName providerTypeName;
+        if (isProducerMethod() || isProducerField()) {
+            providerTypeName = declaringBean.getProviderType().name();
+        } else {
+            if (providerType.kind() == org.jboss.jandex.Type.Kind.ARRAY
+                    || providerType.kind() == org.jboss.jandex.Type.Kind.PRIMITIVE) {
+                providerTypeName = implClazz.name();
+            } else {
+                providerTypeName = providerType.name();
+            }
+        }
+        String packageName = DotNames.packageName(providerTypeName);
+        if (packageName.startsWith("java.")) {
+            // It is not possible to place a class in a JDK package
+            packageName = AbstractGenerator.DEFAULT_PACKAGE;
+        }
+        return packageName;
+    }
+
+    public String getClientProxyPackageName() {
+        if (isProducerField() || isProducerMethod()) {
+            AnnotationTarget target = getTarget().get();
+            DotName typeName = target.kind() == Kind.FIELD ? target.asField().type().name()
+                    : target.asMethod().returnType().name();
+            String packageName = DotNames.packageName(typeName);
+            if (packageName.startsWith("java.")) {
+                // It is not possible to place a class in a JDK package
+                packageName = AbstractGenerator.DEFAULT_PACKAGE;
+            }
+            return packageName;
+        } else {
+            return getTargetPackageName();
+        }
     }
 
     void validate(List<Throwable> errors, List<BeanDeploymentValidator> validators,
@@ -517,7 +588,7 @@ public class BeanInfo implements InjectionTargetInfo {
             return Collections.emptyMap();
         }
         // A decorator is bound to a bean if the bean is assignable to the delegate injection point
-        List<DecoratorInfo> bound = new LinkedList<>();
+        List<DecoratorInfo> bound = new ArrayList<>();
         for (DecoratorInfo decorator : decorators) {
             if (Beans.matches(this, decorator.getDelegateInjectionPoint().getTypeAndQualifiers())) {
                 bound.add(decorator);
@@ -527,8 +598,10 @@ public class BeanInfo implements InjectionTargetInfo {
         Collections.sort(bound, Comparator.comparingInt(DecoratorInfo::getPriority).thenComparing(DecoratorInfo::getBeanClass));
 
         Map<MethodKey, DecorationInfo> candidates = new HashMap<>();
-        addDecoratedMethods(candidates, target.get().asClass(), bound,
-                new SubclassSkipPredicate(beanDeployment.getAssignabilityCheck()::isAssignableFrom));
+        ClassInfo classInfo = target.get().asClass();
+        addDecoratedMethods(candidates, classInfo, classInfo, bound,
+                new SubclassSkipPredicate(beanDeployment.getAssignabilityCheck()::isAssignableFrom,
+                        beanDeployment.getBeanArchiveIndex()));
 
         Map<MethodInfo, DecorationInfo> decoratedMethods = new HashMap<>(candidates.size());
         for (Entry<MethodKey, DecorationInfo> entry : candidates.entrySet()) {
@@ -538,8 +611,8 @@ public class BeanInfo implements InjectionTargetInfo {
     }
 
     private void addDecoratedMethods(Map<MethodKey, DecorationInfo> decoratedMethods, ClassInfo classInfo,
-            List<DecoratorInfo> boundDecorators, SubclassSkipPredicate skipPredicate) {
-        skipPredicate.startProcessing(classInfo);
+            ClassInfo originalClassInfo, List<DecoratorInfo> boundDecorators, SubclassSkipPredicate skipPredicate) {
+        skipPredicate.startProcessing(classInfo, originalClassInfo);
         for (MethodInfo method : classInfo.methods()) {
             if (skipPredicate.test(method)) {
                 continue;
@@ -553,7 +626,7 @@ public class BeanInfo implements InjectionTargetInfo {
         if (!classInfo.superName().equals(DotNames.OBJECT)) {
             ClassInfo superClassInfo = getClassByName(beanDeployment.getBeanArchiveIndex(), classInfo.superName());
             if (superClassInfo != null) {
-                addDecoratedMethods(decoratedMethods, superClassInfo, boundDecorators, skipPredicate);
+                addDecoratedMethods(decoratedMethods, superClassInfo, originalClassInfo, boundDecorators, skipPredicate);
             }
         }
     }
@@ -605,7 +678,10 @@ public class BeanInfo implements InjectionTargetInfo {
             addConstructorLevelBindings(target.get().asClass(), constructorLevelBindings);
             putLifecycleInterceptors(lifecycleInterceptors, classLevelBindings, InterceptionType.POST_CONSTRUCT);
             putLifecycleInterceptors(lifecycleInterceptors, classLevelBindings, InterceptionType.PRE_DESTROY);
-            constructorLevelBindings.addAll(classLevelBindings);
+            MethodInfo interceptedConstructor = findInterceptedConstructor(target.get().asClass());
+            if (beanDeployment.getAnnotation(interceptedConstructor, DotNames.NO_CLASS_INTERCEPTORS) == null) {
+                constructorLevelBindings.addAll(classLevelBindings);
+            }
             putLifecycleInterceptors(lifecycleInterceptors, constructorLevelBindings, InterceptionType.AROUND_CONSTRUCT);
             return lifecycleInterceptors;
         } else {
@@ -636,14 +712,17 @@ public class BeanInfo implements InjectionTargetInfo {
         }
     }
 
-    private void addConstructorLevelBindings(ClassInfo classInfo, Collection<AnnotationInstance> bindings) {
-        MethodInfo constructor;
+    private MethodInfo findInterceptedConstructor(ClassInfo clazz) {
         Optional<Injection> constructorWithInject = getConstructorInjection();
         if (constructorWithInject.isPresent()) {
-            constructor = constructorWithInject.get().target.asMethod();
+            return constructorWithInject.get().target.asMethod();
         } else {
-            constructor = classInfo.method(Methods.INIT);
+            return clazz.method(Methods.INIT);
         }
+    }
+
+    private void addConstructorLevelBindings(ClassInfo classInfo, Collection<AnnotationInstance> bindings) {
+        MethodInfo constructor = findInterceptedConstructor(classInfo);
         if (constructor != null) {
             beanDeployment.getAnnotations(constructor).stream()
                     .flatMap(a -> beanDeployment.extractInterceptorBindings(a).stream())
@@ -776,7 +855,7 @@ public class BeanInfo implements InjectionTargetInfo {
 
         private DisposerInfo disposer;
 
-        private Integer alternativePriority;
+        private boolean alternative;
 
         private List<StereotypeInfo> stereotypes;
 
@@ -791,6 +870,12 @@ public class BeanInfo implements InjectionTargetInfo {
         private Map<String, Object> params;
 
         private boolean removable = true;
+
+        private boolean forceApplicationClass;
+
+        private String targetPackageName;
+
+        private Integer priority;
 
         Builder() {
             injections = Collections.emptyList();
@@ -848,7 +933,16 @@ public class BeanInfo implements InjectionTargetInfo {
         }
 
         Builder alternativePriority(Integer alternativePriority) {
-            this.alternativePriority = alternativePriority;
+            return alternative(true).priority(priority);
+        }
+
+        Builder alternative(boolean value) {
+            this.alternative = value;
+            return this;
+        }
+
+        Builder priority(Integer value) {
+            this.priority = value;
             return this;
         }
 
@@ -887,12 +981,21 @@ public class BeanInfo implements InjectionTargetInfo {
             return this;
         }
 
-        BeanInfo build() {
-            return new BeanInfo(implClazz, providerType, target, beanDeployment, scope, types, qualifiers, injections,
-                    declaringBean, disposer, alternativePriority, stereotypes, name, isDefaultBean, creatorConsumer,
-                    destroyerConsumer, params, removable);
+        Builder targetPackageName(String name) {
+            this.targetPackageName = name;
+            return this;
         }
 
+        BeanInfo build() {
+            return new BeanInfo(implClazz, providerType, target, beanDeployment, scope, types, qualifiers, injections,
+                    declaringBean, disposer, alternative, stereotypes, name, isDefaultBean, creatorConsumer,
+                    destroyerConsumer, params, removable, forceApplicationClass, targetPackageName, priority);
+        }
+
+        public Builder forceApplicationClass(boolean forceApplicationClass) {
+            this.forceApplicationClass = forceApplicationClass;
+            return this;
+        }
     }
 
 }

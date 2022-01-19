@@ -4,14 +4,16 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.avro.generic.GenericData;
+import org.eclipse.microprofile.config.Config;
 import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.prebuild.CodeGenException;
@@ -37,8 +39,7 @@ public abstract class AvroCodeGenProviderBase implements CodeGenProvider {
     public boolean trigger(CodeGenContext context) throws CodeGenException {
         init();
         boolean filesGenerated = false;
-
-        AvroOptions options = new AvroOptions(context.properties(), inputExtension());
+        AvroOptions options = new AvroOptions(context.config(), inputExtension());
         Path input = context.inputDir();
         Path outputDir = context.outDir();
 
@@ -46,7 +47,7 @@ public abstract class AvroCodeGenProviderBase implements CodeGenProvider {
 
         // compile the imports first
         for (String imprt : options.imports) {
-            Path importPath = Paths.get(input.toAbsolutePath().toString(), imprt).toAbsolutePath();
+            Path importPath = Paths.get(input.toAbsolutePath().toString(), imprt.trim()).toAbsolutePath();
             if (Files.isDirectory(importPath)) {
                 for (Path file : gatherAllFiles(importPath)) {
                     compileSingleFile(file, outputDir, options);
@@ -90,7 +91,7 @@ public abstract class AvroCodeGenProviderBase implements CodeGenProvider {
 
         public static final String[] EMPTY = new String[0];
 
-        private final Map<String, String> properties;
+        private final Config config;
 
         /**
          * A list of files or directories that should be compiled first thus making them
@@ -142,8 +143,16 @@ public abstract class AvroCodeGenProviderBase implements CodeGenProvider {
          */
         final boolean optionalGettersForNullableFieldsOnly;
 
-        AvroOptions(Map<String, String> properties, String specificPropertyKey) {
-            this.properties = properties;
+        /**
+         * A list of custom converter classes to register on the avro compiler. <code>Conversions.UUIDConversion</code> is
+         * registered by default.
+         * <p>
+         * Passed as a comma-separated list.
+         */
+        final List<String> customConversions = new ArrayList<>();
+
+        AvroOptions(Config config, String specificPropertyKey) {
+            this.config = config;
             String imports = prop("avro.codegen." + specificPropertyKey + ".imports", "");
             this.imports = "".equals(imports) ? EMPTY : imports.split(",");
 
@@ -154,10 +163,16 @@ public abstract class AvroCodeGenProviderBase implements CodeGenProvider {
             gettersReturnOptional = getBooleanProperty("avro.codegen.gettersReturnOptional", false);
             optionalGettersForNullableFieldsOnly = getBooleanProperty("avro.codegen.optionalGettersForNullableFieldsOnly",
                     false);
+            String conversions = prop("avro.codegen.customConversions", "");
+            if (!"".equals(conversions)) {
+                for (String conversion : conversions.split(",")) {
+                    customConversions.add(conversion.trim());
+                }
+            }
         }
 
         private String prop(String propName, String defaultValue) {
-            return properties.getOrDefault(propName, defaultValue);
+            return config.getOptionalValue(propName, String.class).orElse(defaultValue);
         }
 
         private boolean getBooleanProperty(String propName, boolean defaultValue) {

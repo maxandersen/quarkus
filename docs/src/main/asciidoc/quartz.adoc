@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Scheduling Periodic Tasks with Quartz
+= Scheduling Periodic Tasks with Quartz
 
 include::./attributes.adoc[]
 :extension-status: preview
@@ -13,7 +13,7 @@ In this guide, you learn how to schedule periodic clustered tasks using the http
 
 include::./status-include.adoc[]
 
-TIP: If you only need to run in-memory scheduler use the link:scheduler[Scheduler] extension.
+TIP: If you only need to run in-memory scheduler use the xref:scheduler.adoc[Scheduler] extension.
 
 == Prerequisites
 
@@ -21,7 +21,7 @@ To complete this guide, you need:
 
 * less than 10 minutes
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 * Docker and Docker Compose installed on your machine
 
@@ -44,7 +44,7 @@ First, we need a new project. Create a new project with the following command:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=quartz-quickstart \
     -DclassName="org.acme.quartz.TaskResource" \
@@ -115,7 +115,7 @@ public class Task extends PanacheEntity { <1>
     }
 }
 ----
-1. Declare the entity using link:hibernate-orm-panache[Panache]
+1. Declare the entity using xref:hibernate-orm-panache.adoc[Panache]
 
 == Creating a scheduled job
 
@@ -145,7 +145,7 @@ public class TaskBean {
 1. Declare the bean in the _application_ scope
 2. Use the `@Scheduled` annotation to instruct Quarkus to run this method every 10 seconds and set the unique identifier for this job.
 3. Create a new `Task` with the current start time.
-4. Persist the task in database using link:hibernate-orm-panache[Panache].
+4. Persist the task in database using xref:hibernate-orm-panache.adoc[Panache].
 
 === Scheduling Jobs Programmatically
 
@@ -198,7 +198,7 @@ public class TaskBean {
 ----
 1. Inject the underlying `org.quartz.Scheduler` instance.
 2. Schedule a new job using the Quartz API.
-3. Invoke the `TaskBean#performTask()` method from the job. Jobs are also link:cdi[container-managed] beans if they belong to a link:cdi-reference[bean archive].
+3. Invoke the `TaskBean#performTask()` method from the job. Jobs are also xref:cdi.adoc[container-managed] beans if they belong to a link:cdi-reference[bean archive].
 
 NOTE: By default, the scheduler is not started unless a `@Scheduled` business method is found. You may need to force the start of the scheduler for "pure" programmatic scheduling. See also <<quartz-configuration-reference>>.  
 
@@ -353,7 +353,7 @@ services:
       - tasks-network
 
   postgres: <3>
-    image: postgres:13.1
+    image: postgres:14.1
     container_name: quarkus_test
     environment:
       - POSTGRES_USER=quarkus_test

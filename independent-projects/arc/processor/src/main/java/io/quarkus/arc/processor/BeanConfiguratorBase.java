@@ -32,7 +32,7 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
     protected final Set<Type> types;
     protected final Set<AnnotationInstance> qualifiers;
     protected ScopeInfo scope;
-    protected Integer alternativePriority;
+    protected boolean alternative;
     protected String name;
     protected Consumer<MethodCreator> creatorConsumer;
     protected Consumer<MethodCreator> destroyerConsumer;
@@ -40,6 +40,9 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
     protected boolean removable;
     protected final Map<String, Object> params;
     protected Type providerType;
+    protected boolean forceApplicationClass;
+    protected String targetPackageName;
+    protected Integer priority;
 
     protected BeanConfiguratorBase(DotName implClazz) {
         this.implClazz = implClazz;
@@ -63,10 +66,11 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
         types.addAll(base.types);
         qualifiers.clear();
         qualifiers.addAll(base.qualifiers);
+        forceApplicationClass = base.forceApplicationClass;
+        targetPackageName = base.targetPackageName;
         scope(base.scope);
-        if (base.alternativePriority != null) {
-            alternativePriority(base.alternativePriority);
-        }
+        alternative = base.alternative;
+        priority = base.priority;
         name(base.name);
         creator(base.creatorConsumer);
         destroyer(base.destroyerConsumer);
@@ -171,8 +175,30 @@ public abstract class BeanConfiguratorBase<B extends BeanConfiguratorBase<B, T>,
         return self();
     }
 
-    public B alternativePriority(int priority) {
-        this.alternativePriority = priority;
+    /**
+     * Forces the bean to be considered an 'application class', so it will be defined in the runtime
+     * ClassLoader and re-created on each redeployment.
+     *
+     * @return self
+     */
+    public B forceApplicationClass() {
+        this.forceApplicationClass = true;
+        return self();
+    }
+
+    public B targetPackageName(String name) {
+        this.targetPackageName = name;
+        return self();
+    }
+
+    public B alternativePriority(int value) {
+        this.alternative = true;
+        this.priority = value;
+        return self();
+    }
+
+    public B priority(int value) {
+        this.priority = value;
         return self();
     }
 

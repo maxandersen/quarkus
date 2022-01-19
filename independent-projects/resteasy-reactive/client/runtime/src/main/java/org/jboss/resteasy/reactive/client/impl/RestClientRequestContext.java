@@ -1,5 +1,8 @@
 package org.jboss.resteasy.reactive.client.impl;
 
+import io.netty.handler.codec.http.multipart.InterfaceHttpData;
+import io.smallrye.stork.api.ServiceInstance;
+import io.vertx.core.Context;
 import io.vertx.core.MultiMap;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpClient;
@@ -8,14 +11,18 @@ import io.vertx.core.http.HttpClientResponse;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import javax.ws.rs.RuntimeType;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.GenericType;
@@ -25,7 +32,11 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ReaderInterceptor;
 import javax.ws.rs.ext.WriterInterceptor;
+import org.jboss.resteasy.reactive.ClientWebApplicationException;
+import org.jboss.resteasy.reactive.RestResponse;
+import org.jboss.resteasy.reactive.client.impl.multipart.QuarkusMultipartForm;
 import org.jboss.resteasy.reactive.client.spi.ClientRestHandler;
+import org.jboss.resteasy.reactive.client.spi.MultipartResponseData;
 import org.jboss.resteasy.reactive.common.core.AbstractResteasyReactiveContext;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
@@ -37,6 +48,8 @@ import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
  * This is a stateful invocation, you can't invoke it twice.
  */
 public class RestClientRequestContext extends AbstractResteasyReactiveContext<RestClientRequestContext, ClientRestHandler> {
+
+    private static final String MP_INVOKED_METHOD_PROP = "org.eclipse.microprofile.rest.client.invokedMethod";
 
     private final HttpClient httpClient;
     // Changeable by the request filter
@@ -55,6 +68,9 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
     // see Javadoc of javax.ws.rs.client.Invocation or javax.ws.rs.client.SyncInvoker
     private final boolean checkSuccessfulFamily;
     private final CompletableFuture<ResponseImpl> result;
+    private final ClientRestHandler[] abortHandlerChainWithoutResponseFilters;
+
+    private final boolean disableContextualErrorMessages;
     /**
      * Only initialised if we have request or response filters
      */
@@ -70,8 +86,12 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
     private String responseReasonPhrase;
     private MultivaluedMap<String, String> responseHeaders;
     private ClientRequestContextImpl clientRequestContext;
+    private ClientResponseContextImpl clientResponseContext;
     private InputStream responseEntityStream;
+    private List<InterfaceHttpData> responseMultiParts;
     private Response abortedWith;
+    private ServiceInstance callStatsCollector;
+    private Map<Class<?>, MultipartResponseData> multipartResponsesData;
 
     public RestClientRequestContext(ClientImpl restClient,
             HttpClient httpClient, String httpMethod, URI uri,
@@ -79,6 +99,7 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
             Entity<?> entity, GenericType<?> responseType, boolean registerBodyHandler, Map<String, Object> properties,
             ClientRestHandler[] handlerChain,
             ClientRestHandler[] abortHandlerChain,
+            ClientRestHandler[] abortHandlerChainWithoutResponseFilters,
             ThreadSetupAction requestContext) {
         super(handlerChain, abortHandlerChain, requestContext);
         this.restClient = restClient;
@@ -88,26 +109,66 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
         this.requestHeaders = requestHeaders;
         this.configuration = configuration;
         this.entity = entity;
+        this.abortHandlerChainWithoutResponseFilters = abortHandlerChainWithoutResponseFilters;
         if (responseType == null) {
             this.responseType = new GenericType<>(String.class);
             this.checkSuccessfulFamily = false;
             this.responseTypeSpecified = false;
         } else {
             this.responseType = responseType;
-            boolean isJaxResponse = responseType.getRawType().equals(Response.class);
-            this.checkSuccessfulFamily = !isJaxResponse;
-            this.responseTypeSpecified = !isJaxResponse;
+            if (responseType.getRawType().equals(Response.class)) {
+                this.checkSuccessfulFamily = false;
+                this.responseTypeSpecified = false;
+            } else if (responseType.getRawType().equals(RestResponse.class)) {
+                if (responseType.getType() instanceof ParameterizedType) {
+                    ParameterizedType type = (ParameterizedType) responseType.getType();
+                    if (type.getActualTypeArguments().length == 1) {
+                        Type restResponseType = type.getActualTypeArguments()[0];
+                        this.responseType = new GenericType<>(restResponseType);
+                    }
+                }
+                this.checkSuccessfulFamily = false;
+                this.responseTypeSpecified = true;
+            } else {
+                this.checkSuccessfulFamily = true;
+                this.responseTypeSpecified = true;
+            }
         }
         this.registerBodyHandler = registerBodyHandler;
         this.result = new CompletableFuture<>();
         // each invocation gets a new set of properties based on the JAX-RS invoker
         this.properties = new HashMap<>(properties);
+
+        // this isn't a real configuration option because it's only really used to pass the TCKs
+        disableContextualErrorMessages = Boolean
+                .parseBoolean(System.getProperty("quarkus.rest-client.disable-contextual-error-messages", "false"));
     }
 
     public void abort() {
+        setAbortHandlerChainStarted(true);
         restart(abortHandlerChain);
     }
 
+    @Override
+    protected Throwable unwrapException(Throwable t) {
+        var res = super.unwrapException(t);
+        if (res instanceof WebApplicationException) {
+            var webApplicationException = (WebApplicationException) res;
+            var message = webApplicationException.getMessage();
+            var invokedMethodObject = properties.get(MP_INVOKED_METHOD_PROP);
+            if ((invokedMethodObject instanceof Method) && !disableContextualErrorMessages) {
+                var invokedMethod = (Method) invokedMethodObject;
+                message = "Received: '" + message + "' when invoking: Rest Client method: '"
+                        + invokedMethod.getDeclaringClass().getName() + "#"
+                        + invokedMethod.getName() + "'";
+            }
+            return new ClientWebApplicationException(message, webApplicationException,
+                    webApplicationException.getResponse());
+        }
+        return res;
+    }
+
+    @SuppressWarnings("unchecked")
     public <T> T readEntity(InputStream in,
             GenericType<T> responseType, MediaType mediaType,
             MultivaluedMap<String, Object> metadata)
@@ -119,8 +180,12 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
                 configuration);
     }
 
-    ReaderInterceptor[] getReaderInterceptors() {
+    public ReaderInterceptor[] getReaderInterceptors() {
         return configuration.getReaderInterceptors().toArray(Serialisers.NO_READER_INTERCEPTOR);
+    }
+
+    public Map<String, Object> getProperties() {
+        return properties;
     }
 
     public void initialiseResponse(HttpClientResponse vertxResponse) {
@@ -141,6 +206,13 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
 
     public ClientRequestContextImpl getClientRequestContext() {
         return clientRequestContext;
+    }
+
+    public ClientResponseContextImpl getOrCreateClientResponseContext() {
+        if (clientResponseContext == null) {
+            clientResponseContext = new ClientResponseContextImpl(this);
+        }
+        return clientResponseContext;
     }
 
     public ClientRequestContextImpl getOrCreateClientRequestContext() {
@@ -192,7 +264,14 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
     @Override
     protected Executor getEventLoop() {
         if (httpClientRequest == null) {
-            return restClient.getVertx().nettyEventLoopGroup().next();
+            // make sure we execute the client callbacks on the same context as the current thread
+            Context context = restClient.getVertx().getOrCreateContext();
+            return new Executor() {
+                @Override
+                public void execute(Runnable command) {
+                    context.runOnContext(v -> command.run());
+                }
+            };
         } else {
             return new Executor() {
                 @Override
@@ -226,7 +305,19 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
     public void close() {
         super.close();
         if (!result.isDone()) {
-            result.completeExceptionally(new IllegalStateException("Client request did not complete")); //should never happen
+            try {
+                ClientRestHandler[] handlers = this.handlers;
+                String[] handlerClassNames = new String[handlers.length];
+                for (int i = 0; i < handlers.length; i++) {
+                    handlerClassNames[i] = handlers[i].getClass().getName();
+                }
+                log.error("Client was closed, however the result was not completed. Handlers array is: "
+                        + Arrays.toString(handlerClassNames)
+                        + ". Last executed handler is: " + handlers[position - 1].getClass().getName());
+            } catch (Exception ignored) {
+                // we don't want some mistake in the code above to compromise the ability to return a result
+            }
+            result.completeExceptionally(new IllegalStateException("Client request did not complete"));
         }
     }
 
@@ -336,6 +427,19 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
         return this;
     }
 
+    public RestClientRequestContext setResponseMultipartParts(List<InterfaceHttpData> responseMultiParts) {
+        this.responseMultiParts = responseMultiParts;
+        return this;
+    }
+
+    public List<InterfaceHttpData> getResponseMultipartParts() {
+        return responseMultiParts;
+    }
+
+    public boolean isAborted() {
+        return getAbortedWith() != null;
+    }
+
     public Response getAbortedWith() {
         return abortedWith;
     }
@@ -343,5 +447,33 @@ public class RestClientRequestContext extends AbstractResteasyReactiveContext<Re
     public RestClientRequestContext setAbortedWith(Response abortedWith) {
         this.abortedWith = abortedWith;
         return this;
+    }
+
+    public boolean isMultipart() {
+        return entity != null && entity.getEntity() instanceof QuarkusMultipartForm;
+    }
+
+    public Map<String, Object> getClientFilterProperties() {
+        return properties;
+    }
+
+    public ClientRestHandler[] getAbortHandlerChainWithoutResponseFilters() {
+        return abortHandlerChainWithoutResponseFilters;
+    }
+
+    public void setCallStatsCollector(ServiceInstance serviceInstance) {
+        this.callStatsCollector = serviceInstance;
+    }
+
+    public ServiceInstance getCallStatsCollector() {
+        return callStatsCollector;
+    }
+
+    public Map<Class<?>, MultipartResponseData> getMultipartResponsesData() {
+        return multipartResponsesData;
+    }
+
+    public void setMultipartResponsesData(Map<Class<?>, MultipartResponseData> multipartResponsesData) {
+        this.multipartResponsesData = multipartResponsesData;
     }
 }

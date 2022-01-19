@@ -1,4 +1,5 @@
 ---
+artifact: ${project.groupId}:${project.artifactId}:${project.version}
 name: "AWS Lambda X-Ray"
 metadata:
   keywords:
@@ -9,4 +10,4 @@ metadata:
   guide: "https://quarkus.io/guides/amazon-lambda#tracing-with-aws-xray-and-graalvm"
   categories:
   - "cloud"
-  status: "preview"
+  status: "stable"

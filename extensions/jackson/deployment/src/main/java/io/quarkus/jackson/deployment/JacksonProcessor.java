@@ -18,6 +18,7 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Type;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.SimpleObjectIdResolver;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonSerializer;
@@ -30,13 +31,11 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.annotations.ExecutionTime;
-import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
@@ -47,9 +46,6 @@ import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.jackson.ObjectMapperCustomizer;
-import io.quarkus.jackson.runtime.JacksonBuildTimeConfig;
-import io.quarkus.jackson.runtime.JacksonConfigSupport;
-import io.quarkus.jackson.runtime.JacksonRecorder;
 import io.quarkus.jackson.runtime.ObjectMapperProducer;
 import io.quarkus.jackson.spi.ClassPathJacksonModuleBuildItem;
 import io.quarkus.jackson.spi.JacksonModuleBuildItem;
@@ -59,6 +55,8 @@ public class JacksonProcessor {
     private static final DotName JSON_DESERIALIZE = DotName.createSimple(JsonDeserialize.class.getName());
 
     private static final DotName JSON_SERIALIZE = DotName.createSimple(JsonSerialize.class.getName());
+
+    private static final DotName JSON_AUTO_DETECT = DotName.createSimple(JsonAutoDetect.class.getName());
 
     private static final DotName JSON_CREATOR = DotName.createSimple("com.fasterxml.jackson.annotation.JsonCreator");
 
@@ -85,7 +83,14 @@ public class JacksonProcessor {
     List<IgnoreJsonDeserializeClassBuildItem> ignoreJsonDeserializeClassBuildItems;
 
     @BuildStep
-    CapabilityBuildItem register(
+    void unremovable(Capabilities capabilities, BuildProducer<UnremovableBeanBuildItem> producer) {
+        if (capabilities.isPresent(Capability.VERTX_CORE)) {
+            producer.produce(UnremovableBeanBuildItem.beanTypes(ObjectMapper.class));
+        }
+    }
+
+    @BuildStep
+    void register(
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchyClass,
             BuildProducer<ReflectiveMethodBuildItem> reflectiveMethod,
@@ -127,6 +132,17 @@ public class JacksonProcessor {
                 // the Deserializers are constructed internally by Jackson using a no-args constructor
                 reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, usingValue.asClass().name().toString()));
             }
+            AnnotationValue keyUsingValue = deserializeInstance.value("keyUsing");
+            if (keyUsingValue != null) {
+                // the Deserializers are constructed internally by Jackson using a no-args constructor
+                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, keyUsingValue.asClass().name().toString()));
+            }
+            AnnotationValue contentUsingValue = deserializeInstance.value("contentUsing");
+            if (contentUsingValue != null) {
+                // the Deserializers are constructed internally by Jackson using a no-args constructor
+                reflectiveClass
+                        .produce(new ReflectiveClassBuildItem(false, false, contentUsingValue.asClass().name().toString()));
+            }
         }
 
         // handle the various @JsonSerialize cases
@@ -135,6 +151,31 @@ public class JacksonProcessor {
             if (usingValue != null) {
                 // the Serializers are constructed internally by Jackson using a no-args constructor
                 reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, usingValue.asClass().name().toString()));
+            }
+            AnnotationValue keyUsingValue = serializeInstance.value("keyUsing");
+            if (keyUsingValue != null) {
+                // the Deserializers are constructed internally by Jackson using a no-args constructor
+                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, keyUsingValue.asClass().name().toString()));
+            }
+            AnnotationValue contentUsingValue = serializeInstance.value("contentUsing");
+            if (contentUsingValue != null) {
+                // the Deserializers are constructed internally by Jackson using a no-args constructor
+                reflectiveClass
+                        .produce(new ReflectiveClassBuildItem(false, false, contentUsingValue.asClass().name().toString()));
+            }
+            AnnotationValue nullsUsingValue = serializeInstance.value("nullsUsing");
+            if (nullsUsingValue != null) {
+                // the Deserializers are constructed internally by Jackson using a no-args constructor
+                reflectiveClass
+                        .produce(new ReflectiveClassBuildItem(false, false, nullsUsingValue.asClass().name().toString()));
+            }
+        }
+
+        for (AnnotationInstance creatorInstance : index.getAnnotations(JSON_AUTO_DETECT)) {
+            if (creatorInstance.target().kind().equals(CLASS)) {
+                reflectiveClass
+                        .produce(
+                                new ReflectiveClassBuildItem(true, true, creatorInstance.target().asClass().name().toString()));
             }
         }
 
@@ -170,8 +211,6 @@ public class JacksonProcessor {
 
         // this needs to be registered manually since the runtime module is not indexed by Jandex
         additionalBeans.produce(new AdditionalBeanBuildItem(ObjectMapperProducer.class));
-
-        return new CapabilityBuildItem(Capability.JACKSON);
     }
 
     private void addReflectiveHierarchyClass(DotName className,
@@ -197,16 +236,6 @@ public class JacksonProcessor {
             classPathJacksonModules.produce(new ClassPathJacksonModuleBuildItem(moduleClassName));
         } catch (Exception ignored) {
         }
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.STATIC_INIT)
-    SyntheticBeanBuildItem pushConfigurationBean(JacksonRecorder jacksonRecorder,
-            JacksonBuildTimeConfig jacksonBuildTimeConfig) {
-        return SyntheticBeanBuildItem.configure(JacksonConfigSupport.class)
-                .scope(Singleton.class)
-                .supplier(jacksonRecorder.jacksonConfigSupport(jacksonBuildTimeConfig))
-                .done();
     }
 
     // Generate a ObjectMapperCustomizer bean that registers each serializer / deserializer as well as detected modules with the ObjectMapper

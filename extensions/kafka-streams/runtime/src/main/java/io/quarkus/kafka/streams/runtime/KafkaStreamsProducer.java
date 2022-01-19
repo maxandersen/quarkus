@@ -26,7 +26,6 @@ import javax.enterprise.event.Observes;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.inject.Inject;
-import javax.inject.Named;
 import javax.inject.Singleton;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -40,6 +39,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
@@ -48,6 +48,7 @@ import io.quarkus.arc.Arc;
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.Startup;
+import io.smallrye.common.annotation.Identifier;
 
 /**
  * Manages the lifecycle of a Kafka Streams pipeline. If there's a producer
@@ -67,17 +68,16 @@ public class KafkaStreamsProducer {
     private final KafkaStreamsTopologyManager kafkaStreamsTopologyManager;
     private final Admin kafkaAdminClient;
 
-    // TODO Replace @Named with @Identifier when it will be integrated
-
     @Inject
     public KafkaStreamsProducer(KafkaStreamsSupport kafkaStreamsSupport, KafkaStreamsRuntimeConfig runtimeConfig,
             Instance<Topology> topology, Instance<KafkaClientSupplier> kafkaClientSupplier,
-            @Named("default-kafka-broker") Instance<Map<String, Object>> defaultConfiguration,
-            Instance<StateListener> stateListener, Instance<StateRestoreListener> globalStateRestoreListener) {
+            @Identifier("default-kafka-broker") Instance<Map<String, Object>> defaultConfiguration,
+            Instance<StateListener> stateListener, Instance<StateRestoreListener> globalStateRestoreListener,
+            Instance<StreamsUncaughtExceptionHandler> uncaughtExceptionHandlerListener) {
         shutdown = false;
         // No producer for Topology -> nothing to do
         if (topology.isUnsatisfied()) {
-            LOGGER.debug("No Topology producer; Kafka Streams will not be started");
+            LOGGER.warn("No Topology producer; Kafka Streams will not be started");
             this.executorService = null;
             this.kafkaStreams = null;
             this.kafkaStreamsTopologyManager = null;
@@ -104,7 +104,8 @@ public class KafkaStreamsProducer {
         this.executorService = Executors.newSingleThreadExecutor();
 
         this.kafkaStreams = initializeKafkaStreams(kafkaStreamsProperties, runtimeConfig, kafkaAdminClient, topology.get(),
-                kafkaClientSupplier, stateListener, globalStateRestoreListener, executorService);
+                kafkaClientSupplier, stateListener, globalStateRestoreListener, uncaughtExceptionHandlerListener,
+                executorService);
         this.kafkaStreamsTopologyManager = new KafkaStreamsTopologyManager(kafkaAdminClient);
     }
 
@@ -149,7 +150,7 @@ public class KafkaStreamsProducer {
             KafkaStreamsRuntimeConfig runtimeConfig, Admin adminClient, Topology topology,
             Instance<KafkaClientSupplier> kafkaClientSupplier,
             Instance<StateListener> stateListener, Instance<StateRestoreListener> globalStateRestoreListener,
-            ExecutorService executorService) {
+            Instance<StreamsUncaughtExceptionHandler> uncaughtExceptionHandlerListener, ExecutorService executorService) {
         KafkaStreams kafkaStreams;
         if (kafkaClientSupplier.isUnsatisfied()) {
             kafkaStreams = new KafkaStreams(topology, kafkaStreamsProperties);
@@ -162,6 +163,9 @@ public class KafkaStreamsProducer {
         }
         if (!globalStateRestoreListener.isUnsatisfied()) {
             kafkaStreams.setGlobalStateRestoreListener(globalStateRestoreListener.get());
+        }
+        if (!uncaughtExceptionHandlerListener.isUnsatisfied()) {
+            kafkaStreams.setUncaughtExceptionHandler(uncaughtExceptionHandlerListener.get());
         }
 
         executorService.execute(new Runnable() {
@@ -255,9 +259,9 @@ public class KafkaStreamsProducer {
             setProperty(ssl.cipherSuites, streamsProperties, SslConfigs.SSL_CIPHER_SUITES_CONFIG);
             setProperty(ssl.enabledProtocols, streamsProperties, SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
 
-            setStoreConfig(ssl.truststore, streamsProperties, "ssl.truststore");
-            setStoreConfig(ssl.keystore, streamsProperties, "ssl.keystore");
-            setStoreConfig(ssl.key, streamsProperties, "ssl.key");
+            setTrustStoreConfig(ssl.truststore, streamsProperties);
+            setKeyStoreConfig(ssl.keystore, streamsProperties);
+            setKeyConfig(ssl.key, streamsProperties);
 
             setProperty(ssl.keymanagerAlgorithm, streamsProperties, SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
             setProperty(ssl.trustmanagerAlgorithm, streamsProperties, SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
@@ -269,11 +273,28 @@ public class KafkaStreamsProducer {
         return streamsProperties;
     }
 
-    private static void setStoreConfig(StoreConfig sc, Properties properties, String key) {
-        if (sc != null) {
-            setProperty(sc.type, properties, key + ".type");
-            setProperty(sc.location, properties, key + ".location");
-            setProperty(sc.password, properties, key + ".password");
+    private static void setTrustStoreConfig(TrustStoreConfig tsc, Properties properties) {
+        if (tsc != null) {
+            setProperty(tsc.type, properties, SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
+            setProperty(tsc.location, properties, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+            setProperty(tsc.password, properties, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+            setProperty(tsc.certificates, properties, SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
+        }
+    }
+
+    private static void setKeyStoreConfig(KeyStoreConfig ksc, Properties properties) {
+        if (ksc != null) {
+            setProperty(ksc.type, properties, SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
+            setProperty(ksc.location, properties, SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+            setProperty(ksc.password, properties, SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+            setProperty(ksc.key, properties, SslConfigs.SSL_KEYSTORE_KEY_CONFIG);
+            setProperty(ksc.certificateChain, properties, SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
+        }
+    }
+
+    private static void setKeyConfig(KeyConfig kc, Properties properties) {
+        if (kc != null) {
+            setProperty(kc.password, properties, SslConfigs.SSL_KEY_PASSWORD_CONFIG);
         }
     }
 

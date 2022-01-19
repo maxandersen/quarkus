@@ -2,6 +2,7 @@ package org.jboss.resteasy.reactive.client.impl;
 
 import io.vertx.core.http.HttpClient;
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.UriBuilder;
+import javax.ws.rs.ext.ParamConverterProvider;
 import org.jboss.resteasy.reactive.client.spi.ClientRestHandler;
 import org.jboss.resteasy.reactive.common.core.Serialisers;
 import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
@@ -23,19 +25,23 @@ public class WebTargetImpl implements WebTarget {
     private final ConfigurationImpl configuration;
     private boolean chunked = false;
     private final ClientImpl restClient;
-    final ClientRestHandler[] handlerChain;
-    final ClientRestHandler[] abortHandlerChain;
+    final HandlerChain handlerChain;
     final ThreadSetupAction requestContext;
+
+    // an additional handler that is passed to the handlerChain
+    // used to support observability features
+    private ClientRestHandler preClientSendHandler = null;
+    private List<ParamConverterProvider> paramConverterProviders = Collections.emptyList();
 
     public WebTargetImpl(ClientImpl restClient, HttpClient client, UriBuilder uriBuilder,
             ConfigurationImpl configuration,
-            ClientRestHandler[] handlerChain, ClientRestHandler[] abortHandlerChain, ThreadSetupAction requestContext) {
+            HandlerChain handlerChain,
+            ThreadSetupAction requestContext) {
         this.restClient = restClient;
         this.client = client;
         this.uriBuilder = uriBuilder;
         this.configuration = configuration;
         this.handlerChain = handlerChain;
-        this.abortHandlerChain = abortHandlerChain;
         this.requestContext = requestContext;
     }
 
@@ -262,8 +268,11 @@ public class WebTargetImpl implements WebTarget {
 
     protected WebTargetImpl newInstance(HttpClient client, UriBuilder uriBuilder,
             ConfigurationImpl configuration) {
-        return new WebTargetImpl(restClient, client, uriBuilder, configuration, handlerChain, abortHandlerChain,
+        WebTargetImpl result = new WebTargetImpl(restClient, client, uriBuilder, configuration,
+                handlerChain.setPreClientSendHandler(preClientSendHandler),
                 requestContext);
+        result.setPreClientSendHandler(preClientSendHandler);
+        return result;
     }
 
     @Override
@@ -298,8 +307,8 @@ public class WebTargetImpl implements WebTarget {
 
     protected InvocationBuilderImpl createQuarkusRestInvocationBuilder(HttpClient client, UriBuilder uri,
             ConfigurationImpl configuration) {
-        return new InvocationBuilderImpl(uri.build(), restClient, client, this, configuration, handlerChain,
-                abortHandlerChain, requestContext);
+        return new InvocationBuilderImpl(uri.build(), restClient, client, this, configuration,
+                handlerChain.setPreClientSendHandler(preClientSendHandler), requestContext);
     }
 
     @Override
@@ -372,12 +381,22 @@ public class WebTargetImpl implements WebTarget {
         return this;
     }
 
+    public WebTargetImpl setParamConverterProviders(List<ParamConverterProvider> providers) {
+        this.paramConverterProviders = providers;
+        return this;
+    }
+
     public <T> T proxy(Class<?> clazz) {
-        return restClient.getClientContext().getClientProxies().get(clazz, this);
+        return restClient.getClientContext().getClientProxies().get(clazz, this, paramConverterProviders);
     }
 
     public ClientImpl getRestClient() {
         return restClient;
+    }
+
+    @SuppressWarnings("unused")
+    public void setPreClientSendHandler(ClientRestHandler preClientSendHandler) {
+        this.preClientSendHandler = preClientSendHandler;
     }
 
     Serialisers getSerialisers() {

@@ -1,27 +1,56 @@
 package io.quarkus.deployment.logging;
 
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.stream.Collectors;
 
+import org.aesh.command.Command;
+import org.aesh.command.CommandDefinition;
+import org.aesh.command.CommandException;
+import org.aesh.command.CommandResult;
+import org.aesh.command.GroupCommand;
+import org.aesh.command.GroupCommandDefinition;
+import org.aesh.command.completer.CompleterInvocation;
+import org.aesh.command.completer.OptionCompleter;
+import org.aesh.command.invocation.CommandInvocation;
+import org.aesh.command.option.Option;
+import org.jboss.jandex.CompositeIndex;
+import org.jboss.jandex.DotName;
+import org.jboss.jandex.IndexView;
+import org.jboss.logging.Logger;
 import org.jboss.logmanager.EmbeddedConfigurator;
+import org.jboss.logmanager.LogManager;
 import org.objectweb.asm.Opcodes;
 
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.bootstrap.logging.InitialConfigurator;
+import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
+import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
+import io.quarkus.deployment.annotations.Produce;
 import io.quarkus.deployment.annotations.Record;
+import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.ConsoleCommandBuildItem;
 import io.quarkus.deployment.builditem.ConsoleFormatterBannerBuildItem;
+import io.quarkus.deployment.builditem.CuratedApplicationShutdownBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.LogCategoryBuildItem;
@@ -30,12 +59,23 @@ import io.quarkus.deployment.builditem.LogHandlerBuildItem;
 import io.quarkus.deployment.builditem.NamedLogHandlersBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
+import io.quarkus.deployment.builditem.WebSocketLogHandlerBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
+import io.quarkus.deployment.console.ConsoleInstalledBuildItem;
+import io.quarkus.deployment.console.QuarkusCommand;
+import io.quarkus.deployment.console.SetCompleter;
+import io.quarkus.deployment.dev.ExceptionNotificationBuildItem;
+import io.quarkus.deployment.dev.testing.MessageFormat;
+import io.quarkus.deployment.dev.testing.TestSetupBuildItem;
+import io.quarkus.deployment.ide.EffectiveIdeBuildItem;
 import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
 import io.quarkus.deployment.metrics.MetricsFactoryConsumerBuildItem;
+import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.steps.NativeOrNativeSourcesBuild;
+import io.quarkus.dev.console.CurrentAppExceptionHighlighter;
+import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.gizmo.AnnotationCreator;
 import io.quarkus.gizmo.BranchResult;
 import io.quarkus.gizmo.BytecodeCreator;
@@ -46,9 +86,9 @@ import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.configuration.ConfigInstantiator;
+import io.quarkus.runtime.console.ConsoleRuntimeConfig;
 import io.quarkus.runtime.logging.CategoryBuildTimeConfig;
 import io.quarkus.runtime.logging.CleanupFilterConfig;
 import io.quarkus.runtime.logging.InheritableLevel;
@@ -68,6 +108,8 @@ public final class LoggingResourceProcessor {
     private static final MethodDescriptor IS_MIN_LEVEL_ENABLED = MethodDescriptor.ofMethod(MIN_LEVEL_COMPUTE_CLASS_NAME,
             "isMinLevelEnabled",
             boolean.class, int.class, String.class);
+
+    private static final Logger log = Logger.getLogger(LoggingResourceProcessor.class);
 
     @BuildStep
     void setupLogFilters(BuildProducer<LogCleanupFilterBuildItem> filters) {
@@ -128,29 +170,43 @@ public final class LoggingResourceProcessor {
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
     LoggingSetupBuildItem setupLoggingRuntimeInit(LoggingSetupRecorder recorder, LogConfig log, LogBuildTimeConfig buildLog,
+            Optional<WebSocketLogHandlerBuildItem> logStreamHandlerBuildItem,
             List<LogHandlerBuildItem> handlerBuildItems,
             List<NamedLogHandlersBuildItem> namedHandlerBuildItems, List<LogConsoleFormatBuildItem> consoleFormatItems,
             Optional<ConsoleFormatterBannerBuildItem> possibleBannerBuildItem,
+            List<LogStreamBuildItem> logStreamBuildItems,
             LaunchModeBuildItem launchModeBuildItem,
             List<LogCleanupFilterBuildItem> logCleanupFilters) {
-        final List<RuntimeValue<Optional<Handler>>> handlers = handlerBuildItems.stream()
-                .map(LogHandlerBuildItem::getHandlerValue)
-                .collect(Collectors.toList());
-        final List<RuntimeValue<Map<String, Handler>>> namedHandlers = namedHandlerBuildItems.stream()
-                .map(NamedLogHandlersBuildItem::getNamedHandlersMap).collect(Collectors.toList());
+        if (!launchModeBuildItem.isAuxiliaryApplication()
+                || launchModeBuildItem.getAuxiliaryDevModeType().orElse(null) == DevModeType.TEST_ONLY) {
+            final List<RuntimeValue<Optional<Handler>>> handlers = handlerBuildItems.stream()
+                    .map(LogHandlerBuildItem::getHandlerValue)
+                    .collect(Collectors.toList());
+            final List<RuntimeValue<Map<String, Handler>>> namedHandlers = namedHandlerBuildItems.stream()
+                    .map(NamedLogHandlersBuildItem::getNamedHandlersMap).collect(Collectors.toList());
 
-        ConsoleFormatterBannerBuildItem bannerBuildItem = null;
-        RuntimeValue<Optional<Supplier<String>>> possibleSupplier = null;
-        if (possibleBannerBuildItem.isPresent()) {
-            bannerBuildItem = possibleBannerBuildItem.get();
-        }
-        if (bannerBuildItem != null) {
-            possibleSupplier = bannerBuildItem.getBannerSupplier();
-        }
-        recorder.initializeLogging(log, buildLog, handlers, namedHandlers,
-                consoleFormatItems.stream().map(LogConsoleFormatBuildItem::getFormatterValue).collect(Collectors.toList()),
-                possibleSupplier);
-        if (launchModeBuildItem.getLaunchMode() != LaunchMode.NORMAL) {
+            ConsoleFormatterBannerBuildItem bannerBuildItem = null;
+            RuntimeValue<Optional<Supplier<String>>> possibleSupplier = null;
+            if (possibleBannerBuildItem.isPresent()) {
+                bannerBuildItem = possibleBannerBuildItem.get();
+            }
+            if (bannerBuildItem != null) {
+                possibleSupplier = bannerBuildItem.getBannerSupplier();
+            }
+            // Dev UI Log Stream
+            RuntimeValue<Optional<Handler>> devUiLogHandler = null;
+            if (logStreamHandlerBuildItem.isPresent()) {
+                devUiLogHandler = logStreamHandlerBuildItem.get().getHandlerValue();
+            }
+            boolean alwaysEnableLogStream = false;
+            if (!logStreamBuildItems.isEmpty()) {
+                alwaysEnableLogStream = true;
+            }
+
+            recorder.initializeLogging(log, buildLog, alwaysEnableLogStream, devUiLogHandler, handlers,
+                    namedHandlers,
+                    consoleFormatItems.stream().map(LogConsoleFormatBuildItem::getFormatterValue).collect(Collectors.toList()),
+                    possibleSupplier, launchModeBuildItem.getLaunchMode());
             LogConfig logConfig = new LogConfig();
             ConfigInstantiator.handleObject(logConfig);
             for (LogCleanupFilterBuildItem i : logCleanupFilters) {
@@ -161,7 +217,9 @@ public final class LoggingResourceProcessor {
                         : filterElement.getTargetLevel();
                 logConfig.filters.put(filterElement.getLoggerName(), value);
             }
-            LoggingSetupRecorder.initializeBuildTimeLogging(logConfig, buildLog);
+            ConsoleRuntimeConfig crc = new ConsoleRuntimeConfig();
+            ConfigInstantiator.handleObject(crc);
+            LoggingSetupRecorder.initializeBuildTimeLogging(logConfig, buildLog, crc, launchModeBuildItem.getLaunchMode());
             ((QuarkusClassLoader) Thread.currentThread().getContextClassLoader()).addCloseTask(new Runnable() {
                 @Override
                 public void run() {
@@ -169,14 +227,73 @@ public final class LoggingResourceProcessor {
                 }
             });
         }
-
         return new LoggingSetupBuildItem();
+    }
+
+    @BuildStep(onlyIfNot = IsNormal.class)
+    @Produce(TestSetupBuildItem.class)
+    @Produce(LogConsoleFormatBuildItem.class)
+    @Consume(ConsoleInstalledBuildItem.class)
+    void setupStackTraceFormatter(ApplicationArchivesBuildItem item, EffectiveIdeBuildItem ideSupport,
+            BuildSystemTargetBuildItem buildSystemTargetBuildItem,
+            List<ExceptionNotificationBuildItem> exceptionNotificationBuildItems,
+            CuratedApplicationShutdownBuildItem curatedApplicationShutdownBuildItem) {
+        List<IndexView> indexList = new ArrayList<>();
+        for (ApplicationArchive i : item.getAllApplicationArchives()) {
+            if (i.getResolvedPaths().isSinglePath() && Files.isDirectory(i.getResolvedPaths().getSinglePath())) {
+                indexList.add(i.getIndex());
+            }
+        }
+        CompositeIndex index = CompositeIndex.create(indexList);
+        //awesome/horrible hack
+        //we know from the index which classes are part of the current application
+        //we add ANSI codes for bold and underline to their names to display them more prominently
+        CurrentAppExceptionHighlighter.THROWABLE_FORMATTER = new BiConsumer<LogRecord, Consumer<LogRecord>>() {
+            @Override
+            public void accept(LogRecord logRecord, Consumer<LogRecord> logRecordConsumer) {
+                StackTraceElement lastUserCode = null;
+                Map<Throwable, StackTraceElement[]> restore = new HashMap<>();
+                Throwable c = logRecord.getThrown();
+                while (c != null) {
+                    StackTraceElement[] stackTrace = c.getStackTrace();
+                    for (int i = 0; i < stackTrace.length; ++i) {
+                        var elem = stackTrace[i];
+                        if (index.getClassByName(DotName.createSimple(elem.getClassName())) != null) {
+                            lastUserCode = stackTrace[i];
+                            stackTrace[i] = new StackTraceElement(elem.getClassLoaderName(), elem.getModuleName(),
+                                    elem.getModuleVersion(),
+                                    MessageFormat.UNDERLINE + MessageFormat.BOLD + elem.getClassName()
+                                            + MessageFormat.NO_UNDERLINE + MessageFormat.NO_BOLD,
+                                    elem.getMethodName(), elem.getFileName(), elem.getLineNumber());
+                        }
+                    }
+                    restore.put(c, c.getStackTrace());
+                    c.setStackTrace(stackTrace);
+                    c = c.getCause();
+                }
+                try {
+                    logRecordConsumer.accept(logRecord);
+                } finally {
+                    for (Map.Entry<Throwable, StackTraceElement[]> entry : restore.entrySet()) {
+                        entry.getKey().setStackTrace(entry.getValue());
+                    }
+                }
+                if (logRecord.getThrown() != null) {
+                    for (ExceptionNotificationBuildItem i : exceptionNotificationBuildItems) {
+                        i.getExceptionHandler().accept(logRecord.getThrown(), lastUserCode);
+                    }
+                }
+            }
+        };
+        curatedApplicationShutdownBuildItem.addCloseTask(() -> CurrentAppExceptionHighlighter.THROWABLE_FORMATTER = null, true);
     }
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void setupLoggingStaticInit(LoggingSetupRecorder recorder) {
-        recorder.initializeLoggingForImageBuild();
+    void setupLoggingStaticInit(LoggingSetupRecorder recorder, LaunchModeBuildItem launchModeBuildItem) {
+        if (!launchModeBuildItem.isAuxiliaryApplication()) {
+            recorder.initializeLoggingForImageBuild();
+        }
     }
 
     // This is specifically to help out with presentations, to allow an env var to always override this value
@@ -398,5 +515,89 @@ public final class LoggingResourceProcessor {
         method.addAnnotation("com.oracle.svm.core.annotate.Substitute");
         method.addAnnotation("org.graalvm.compiler.api.replacements.Fold");
         method.returnValue(method.load(false));
+    }
+
+    @BuildStep
+    ConsoleCommandBuildItem logConsoleCommand() {
+        return new ConsoleCommandBuildItem(new LogCommand());
+    }
+
+    @GroupCommandDefinition(name = "log", description = "Logging Commands")
+    public static class LogCommand implements GroupCommand {
+
+        @Override
+        public List<Command> getCommands() {
+            return List.of(new SetLogLevelCommand());
+        }
+
+        @Override
+        public CommandResult execute(CommandInvocation commandInvocation) throws CommandException, InterruptedException {
+            return CommandResult.SUCCESS;
+        }
+    }
+
+    @CommandDefinition(name = "set-level", description = "Sets the log level for a logger")
+    public static class SetLogLevelCommand extends QuarkusCommand {
+
+        @Option(required = true, completer = LoggerCompleter.class)
+        private String logger;
+
+        @Option(required = true, completer = LevelCompleter.class)
+        private String level;
+
+        @Override
+        public CommandResult doExecute(CommandInvocation commandInvocation) throws CommandException, InterruptedException {
+            java.util.logging.Logger logger = LogManager.getLogManager().getLogger(this.logger);
+            Level level = org.jboss.logmanager.Level.parse(this.level);
+            logger.setLevel(level);
+            //we also update the handler level
+            //so that this works as expected
+            for (Handler i : logger.getHandlers()) {
+                if (i.getLevel().intValue() > level.intValue()) {
+                    i.setLevel(level);
+                }
+            }
+            return CommandResult.SUCCESS;
+        }
+    }
+
+    public static class LoggerCompleter implements OptionCompleter<CompleterInvocation> {
+
+        @Override
+        public void complete(CompleterInvocation completerInvocation) {
+            String soFar = completerInvocation.getGivenCompleteValue();
+            var loggers = LogManager.getLogManager().getLoggerNames();
+            Set<String> possible = new HashSet<>();
+            while (loggers.hasMoreElements()) {
+                String name = loggers.nextElement();
+
+                if (name.equals(soFar)) {
+                    possible.add(name);
+                } else if (name.startsWith(soFar)) {
+                    //we just want to complete the next segment
+                    int pos = name.indexOf('.', soFar.length() + 1);
+                    if (pos == -1) {
+                        possible.add(name);
+                    } else {
+                        possible.add(name.substring(0, pos) + ".");
+                        completerInvocation.setAppendSpace(false);
+                    }
+                }
+            }
+            completerInvocation.setCompleterValues(possible);
+        }
+    }
+
+    public static class LevelCompleter extends SetCompleter {
+
+        @Override
+        protected Set<String> allOptions(String soFar) {
+            return Set.of(Logger.Level.TRACE.name(),
+                    Logger.Level.DEBUG.name(),
+                    Logger.Level.INFO.name(),
+                    Logger.Level.WARN.name(),
+                    Logger.Level.ERROR.name(),
+                    Logger.Level.FATAL.name());
+        }
     }
 }

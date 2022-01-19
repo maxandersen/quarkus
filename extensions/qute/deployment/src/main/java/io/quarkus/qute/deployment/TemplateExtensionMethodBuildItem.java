@@ -7,7 +7,10 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
 import io.quarkus.builder.item.MultiBuildItem;
+import io.quarkus.qute.Namespaces;
 import io.quarkus.qute.TemplateExtension;
+import io.quarkus.qute.generator.ExtensionMethodGenerator;
+import io.quarkus.qute.generator.ExtensionMethodGenerator.Parameters;
 
 /**
  * Represents a template extension method.
@@ -23,6 +26,7 @@ public final class TemplateExtensionMethodBuildItem extends MultiBuildItem {
     private final Type matchType;
     private final int priority;
     private final String namespace;
+    private final Parameters params;
 
     public TemplateExtensionMethodBuildItem(MethodInfo method, String matchName, String matchRegex, Type matchType,
             int priority, String namespace) {
@@ -31,8 +35,9 @@ public final class TemplateExtensionMethodBuildItem extends MultiBuildItem {
         this.matchRegex = matchRegex;
         this.matchType = matchType;
         this.priority = priority;
-        this.namespace = namespace;
+        this.namespace = (namespace != null && !namespace.isEmpty()) ? Namespaces.requireValid(namespace) : namespace;
         this.matchPattern = (matchRegex == null || matchRegex.isEmpty()) ? null : Pattern.compile(matchRegex);
+        this.params = new ExtensionMethodGenerator.Parameters(method, matchPattern != null || matchesAny(), hasNamespace());
     }
 
     public MethodInfo getMethod() {
@@ -67,11 +72,19 @@ public final class TemplateExtensionMethodBuildItem extends MultiBuildItem {
         if (matchPattern != null) {
             return matchPattern.matcher(name).matches();
         }
-        return TemplateExtension.ANY.equals(matchName) ? true : matchName.equals(name);
+        return matchesAny() ? true : matchName.equals(name);
     }
 
-    boolean hasNamespace() {
+    boolean matchesAny() {
+        return TemplateExtension.ANY.equals(matchName);
+    }
+
+    public boolean hasNamespace() {
         return namespace != null && !namespace.isEmpty();
+    }
+
+    public Parameters getParams() {
+        return params;
     }
 
 }

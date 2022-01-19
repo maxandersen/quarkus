@@ -9,8 +9,9 @@ public class ResourceInterceptor<T>
         implements Comparable<ResourceInterceptor<T>>, SettableResourceInterceptor<T>, HasPriority {
 
     private BeanFactory<T> factory;
-    private Integer priority = Priorities.USER; // default priority as defined by spec
+    private int priority = Priorities.USER; // default priority as defined by spec
     private boolean nonBlockingRequired; // whether or not @NonBlocking was specified on the class
+    private boolean readBody; // whether or not 'readBody' was set true for this filter
 
     /**
      * The class names of the {@code @NameBinding} annotations that the method is annotated with.
@@ -36,7 +37,11 @@ public class ResourceInterceptor<T>
     }
 
     public void setPriority(Integer priority) {
-        this.priority = priority;
+        if (priority == null) {
+            this.priority = Priorities.USER;
+        } else {
+            this.priority = priority;
+        }
     }
 
     public Set<String> getNameBindingNames() {
@@ -62,6 +67,14 @@ public class ResourceInterceptor<T>
 
     public void setNonBlockingRequired(boolean nonBlockingRequired) {
         this.nonBlockingRequired = nonBlockingRequired;
+    }
+
+    public boolean isReadBody() {
+        return readBody;
+    }
+
+    public void setReadBody(boolean readBody) {
+        this.readBody = readBody;
     }
 
     // spec says that writer interceptors are sorted in ascending order

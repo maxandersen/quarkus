@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Type;
 import java.util.Set;
 import javax.ws.rs.container.ResourceInfo;
+import org.jboss.resteasy.reactive.server.util.MethodId;
 
 /**
  * A lazy representation of a Method
@@ -19,10 +20,12 @@ public class ResteasyReactiveResourceInfo implements ResourceInfo {
     private final Class[] parameterTypes;
     private final Set<String> classAnnotationNames;
     private final Set<String> methodAnnotationNames;
+
     private volatile Annotation[] classAnnotations;
     private volatile Method method;
     private volatile Annotation[] annotations;
     private volatile Type returnType;
+    private volatile String methodId;
 
     public ResteasyReactiveResourceInfo(String name, Class<?> declaringClass, Class[] parameterTypes,
             Set<String> classAnnotationNames, Set<String> methodAnnotationNames) {
@@ -101,5 +104,12 @@ public class ResteasyReactiveResourceInfo implements ResourceInfo {
     public Annotation[] getParameterAnnotations(int index) {
         // Should we cache this?
         return getMethod().getParameterAnnotations()[index];
+    }
+
+    public String getMethodId() {
+        if (methodId == null) {
+            methodId = MethodId.get(name, declaringClass, parameterTypes);
+        }
+        return methodId;
     }
 }

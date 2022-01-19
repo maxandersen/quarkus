@@ -4,9 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import javax.inject.Inject;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -17,13 +15,14 @@ public class TypeCheckExcludesTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(Movie.class, Machine.class, MachineStatus.class)
                     .addAsResource(new StringAsset("{@io.quarkus.qute.deployment.typesafe.Movie movie}"
                             + "{@io.quarkus.qute.deployment.typesafe.Machine machine}"
                             + "{movie.name}::{movie.superior}::{machine.ping}::{machine.neverEver}"), "templates/movie.html")
                     .addAsResource(new StringAsset(
-                            "quarkus.qute.type-check-excludes=io.quarkus.qute.deployment.typesafe.Movie.superior,io.quarkus.qute.deployment.typesafe.Machine.*"),
+                            "quarkus.qute.type-check-excludes=io.quarkus.qute.deployment.typesafe.Movie.superior,io.quarkus.qute.deployment.typesafe.Machine.*"
+                                    + "\nquarkus.qute.strict-rendering=false"),
                             "application.properties"));
 
     @Inject

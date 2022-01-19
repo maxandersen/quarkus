@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,7 @@ public class GreetingProfileTestCase {
                 .get("/greeting/Stu")
                 .then()
                 .statusCode(200)
-                .body(is("Bonjour Stu"));
+                .body(is("Hey Stu"));
     }
 
     @Test
@@ -42,6 +43,11 @@ public class GreetingProfileTestCase {
     public void testTestResourceState() {
         // 155 means that the TestResource was started but hasn't yet stopped
         Assertions.assertEquals(155, DummyTestResource.state.get());
+    }
+
+    @Test
+    public void testContext() {
+        Assertions.assertEquals(MyProfile.class.getName(), DummyTestResource.testProfile.get());
     }
 
     public static class MyProfile implements QuarkusTestProfile {
@@ -61,6 +67,16 @@ public class GreetingProfileTestCase {
             return Collections
                     .singletonList(new TestResourceEntry(DummyTestResource.class, Collections.singletonMap("num", "100")));
         }
+
+        @Override
+        public String[] commandLineParameters() {
+            return new String[] { "Hey" };
+        }
+
+        @Override
+        public boolean runMainMethod() {
+            return true;
+        }
     }
 
     /**
@@ -69,9 +85,15 @@ public class GreetingProfileTestCase {
     public static class DummyTestResource implements QuarkusTestResourceLifecycleManager {
 
         public static final AtomicInteger state = new AtomicInteger(0);
+        public static final AtomicReference<String> testProfile = new AtomicReference<>(null);
         public static final int START_DELTA = 55;
 
         private Integer numArg;
+
+        @Override
+        public void setContext(Context context) {
+            testProfile.set(context.testProfile());
+        }
 
         @Override
         public void init(Map<String, String> initArgs) {

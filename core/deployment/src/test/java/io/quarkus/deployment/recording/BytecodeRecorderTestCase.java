@@ -280,7 +280,7 @@ public class BytecodeRecorderTestCase {
             recorder.add(instance);
             recorder.add(instance);
             recorder.result(instance);
-        }, new TestJavaBean(null, 2));
+        }, new TestJavaBean(null, 2, 2));
     }
 
     @Test
@@ -336,6 +336,26 @@ public class BytecodeRecorderTestCase {
         }, duration);
     }
 
+    // Boxed booleans whose getter starts with `is`, in particular, used to be ignored.
+    @Test
+    public void testJavaBeanWithBoolean() throws Exception {
+        runTest(generator -> {
+            TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
+            TestJavaBeanWithBoolean newBean = new TestJavaBeanWithBoolean(true, true, true);
+            recorder.bean(newBean);
+        }, new TestJavaBeanWithBoolean(true, true, true));
+        runTest(generator -> {
+            TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
+            TestJavaBeanWithBoolean newBean = new TestJavaBeanWithBoolean(false, false, false);
+            recorder.bean(newBean);
+        }, new TestJavaBeanWithBoolean(false, false, false));
+        runTest(generator -> {
+            TestRecorder recorder = generator.getRecordingProxy(TestRecorder.class);
+            TestJavaBeanWithBoolean newBean = new TestJavaBeanWithBoolean(true, null, null);
+            recorder.bean(newBean);
+        }, new TestJavaBeanWithBoolean(true, null, null));
+    }
+
     void runTest(Consumer<BytecodeRecorderImpl> generator, Object... expected) throws Exception {
         TestRecorder.RESULT.clear();
         TestClassLoader tcl = new TestClassLoader(getClass().getClassLoader());
@@ -343,7 +363,7 @@ public class BytecodeRecorderTestCase {
         generator.accept(recorder);
         recorder.writeBytecode(new TestClassOutput(tcl));
 
-        StartupTask task = (StartupTask) tcl.loadClass(TEST_CLASS).newInstance();
+        StartupTask task = (StartupTask) tcl.loadClass(TEST_CLASS).getDeclaredConstructor().newInstance();
         task.deploy(new StartupContext());
         assertEquals(expected.length, TestRecorder.RESULT.size());
         for (Object i : expected) {

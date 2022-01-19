@@ -1,11 +1,14 @@
 package io.quarkus.spring.data.deployment.generate;
 
 import static io.quarkus.gizmo.FieldDescriptor.of;
+import static io.quarkus.spring.data.deployment.generate.GenerationUtil.getNamedQueryForMethod;
+import static java.util.function.Predicate.not;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,10 +20,10 @@ import java.util.regex.Pattern;
 import javax.transaction.Transactional;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
@@ -45,6 +48,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
 
     private static final String QUERY_VALUE_FIELD = "value";
     private static final String QUERY_COUNT_FIELD = "countQuery";
+    private static final String NAMED_QUERY_FIELD = "query";
 
     private static final Pattern SELECT_CLAUSE = Pattern.compile("select\\s+(.+)\\s+from", Pattern.CASE_INSENSITIVE);
     private static final Pattern FIELD_ALIAS = Pattern.compile(".*\\s+[as|AS]+\\s+([\\w\\.]+)");
@@ -66,23 +70,31 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
     }
 
     public void add(ClassCreator classCreator, FieldDescriptor entityClassFieldDescriptor, ClassInfo repositoryClassInfo,
-            ClassInfo entityClassInfo) {
+            ClassInfo entityClassInfo, String idTypeStr) {
 
         // Remember custom return types: {resultType:{methodName:[fieldNames]}}
         Map<DotName, Map<String, List<String>>> customResultTypes = new HashMap<>(3);
         Map<DotName, DotName> customResultTypeNames = new HashMap<>(3);
+        Set<DotName> entityFieldTypeNames = new HashSet<>();
 
         for (MethodInfo method : repositoryClassInfo.methods()) {
 
             AnnotationInstance queryInstance = method.annotation(DotNames.SPRING_DATA_QUERY);
-            if (queryInstance == null) { // handled by DerivedMethodsAdder
-                continue;
-            }
+            AnnotationInstance namedQueryInstance = getNamedQueryForMethod(method, entityClassInfo);
 
             String methodName = method.name();
             String repositoryName = repositoryClassInfo.name().toString();
-            verifyQueryAnnotation(queryInstance, methodName, repositoryName);
-            String queryString = queryInstance.value(QUERY_VALUE_FIELD).asString().trim();
+            String queryString;
+            if (queryInstance != null) {
+                verifyQueryAnnotation(queryInstance, methodName, repositoryName);
+                queryString = queryInstance.value(QUERY_VALUE_FIELD).asString().trim();
+            } else if (namedQueryInstance != null) {
+                queryString = namedQueryInstance.value(NAMED_QUERY_FIELD).asString().trim();
+            } else {
+                // handled by DerivedMethodsAdder
+                continue;
+            }
+
             if (queryString.contains("#{")) {
                 throw new IllegalArgumentException("spEL expressions are not currently supported. " +
                         "Offending method is " + methodName + " of Repository " + repositoryName);
@@ -96,7 +108,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                         "Offending method is " + methodName + " of Repository " + repositoryName);
             }
 
-            boolean useNamedParams = (method.annotation(DotNames.SPRING_DATA_PARAM) != null);
             List<Type> methodParameterTypes = method.parameters();
             String[] methodParameterTypesStr = new String[methodParameterTypes.size()];
             List<Integer> queryParameterIndexes = new ArrayList<>(methodParameterTypes.size());
@@ -120,7 +131,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                                 + " can be specified");
                     }
                     sortParameterIndex = i;
-                } else if (!useNamedParams) {
+                } else {
                     queryParameterIndexes.add(i);
                 }
             }
@@ -128,14 +139,21 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
             // go through the method annotations, find the @Param annotation on parameters
             // and map the name to the method param index
             Map<String, Integer> namedParameterToIndex = new HashMap<>();
-            List<AnnotationInstance> annotations = method.annotations();
-            for (AnnotationInstance annotation : annotations) {
-                if ((annotation.target().kind() != AnnotationTarget.Kind.METHOD_PARAMETER)
-                        || (!DotNames.SPRING_DATA_PARAM.equals(annotation.name()))) {
-                    continue;
+            for (AnnotationInstance annotation : method.annotations(DotNames.SPRING_DATA_PARAM)) {
+                var index = (int) annotation.target().asMethodParameter().position();
+                namedParameterToIndex.put(annotation.value().asString(), index);
+            }
+            // if no or only some parameters are annotated with @Param, add the compiled names (if present)
+            if (namedParameterToIndex.size() < methodParameterTypes.size()) {
+                for (int index = 0; index < methodParameterTypes.size(); index++) {
+                    if (namedParameterToIndex.values().contains(index)) {
+                        continue;
+                    }
+                    String parameterName = method.parameterName(index);
+                    if (parameterName != null) {
+                        namedParameterToIndex.put(parameterName, index);
+                    }
                 }
-                namedParameterToIndex.put(annotation.value().asString(),
-                        (int) annotation.target().asMethodParameter().position());
             }
 
             boolean isModifying = (method.annotation(DotNames.SPRING_DATA_MODIFYING) != null);
@@ -146,23 +164,26 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                                 "support Pageable and Sort method parameters");
             }
 
+            Set<String> usedNamedParameters = extractNamedParameters(queryString);
+            if (!usedNamedParameters.isEmpty()) {
+                Set<String> missingParameters = new LinkedHashSet<>(usedNamedParameters);
+                missingParameters.removeAll(namedParameterToIndex.keySet());
+                if (!missingParameters.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            method.name() + " of Repository " + repositoryClassInfo
+                                    + " is missing the named parameters " + missingParameters
+                                    + ", provided are " + namedParameterToIndex.keySet()
+                                    + ". Ensure that the parameters are correctly annotated with @Param.");
+                }
+                namedParameterToIndex.keySet().retainAll(usedNamedParameters);
+            } else {
+                namedParameterToIndex.clear();
+            }
+
             DotName methodReturnTypeDotName = method.returnType().name();
 
             try (MethodCreator methodCreator = classCreator.getMethodCreator(method.name(), methodReturnTypeDotName.toString(),
                     methodParameterTypesStr)) {
-
-                Set<String> usedNamedParameters = extractNamedParameters(queryString);
-                if (!usedNamedParameters.isEmpty()) {
-                    Set<String> missingParameters = new LinkedHashSet<>(usedNamedParameters);
-                    missingParameters.removeAll(namedParameterToIndex.keySet());
-                    if (!missingParameters.isEmpty()) {
-                        throw new IllegalArgumentException(
-                                method.name() + " of Repository " + repositoryClassInfo
-                                        + " is missing the named parameters " + missingParameters
-                                        + ", provided are " + namedParameterToIndex.keySet()
-                                        + ". Ensure that the parameters are correctly annotated with @Param.");
-                    }
-                }
                 if (isModifying) {
                     methodCreator.addAnnotation(Transactional.class);
                     AnnotationInstance modifyingAnnotation = method.annotation(DotNames.SPRING_DATA_MODIFYING);
@@ -180,7 +201,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                         // we need to strip 'delete' or else JpaOperations.delete will generate the wrong query
                         String deleteQueryString = queryString.substring("delete".length());
                         ResultHandle deleteCount;
-                        if (useNamedParams) {
+                        if (!namedParameterToIndex.isEmpty()) {
                             ResultHandle parameters = generateParametersObject(namedParameterToIndex, methodCreator);
 
                             // call JpaOperations.delete
@@ -218,25 +239,27 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                         }
 
                         ResultHandle updateCount;
-                        if (useNamedParams) {
+                        if (!namedParameterToIndex.isEmpty()) {
                             ResultHandle parameters = generateParametersObject(namedParameterToIndex, methodCreator);
                             ResultHandle parametersMap = methodCreator.invokeVirtualMethod(
                                     MethodDescriptor.ofMethod(Parameters.class, "map", Map.class),
                                     parameters);
 
                             // call JpaOperations.executeUpdate
-                            updateCount = methodCreator.invokeStaticMethod(
+                            updateCount = methodCreator.invokeVirtualMethod(
                                     MethodDescriptor.ofMethod(AbstractJpaOperations.class, "executeUpdate", int.class,
                                             String.class, Map.class),
+                                    methodCreator.readStaticField(operationsField),
                                     methodCreator.load(queryString),
                                     parametersMap);
                         } else {
                             ResultHandle paramsArray = generateParamsArray(queryParameterIndexes, methodCreator);
 
                             // call JpaOperations.executeUpdate
-                            updateCount = methodCreator.invokeStaticMethod(
+                            updateCount = methodCreator.invokeVirtualMethod(
                                     MethodDescriptor.ofMethod(AbstractJpaOperations.class, "executeUpdate",
                                             int.class, String.class, Object[].class),
+                                    methodCreator.readStaticField(operationsField),
                                     methodCreator.load(queryString),
                                     paramsArray);
                         }
@@ -256,7 +279,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                 } else {
                     // by default just hope that adding select count(*) will do
                     String countQueryString = "SELECT COUNT(*) " + queryString;
-                    if (queryInstance.value(QUERY_COUNT_FIELD) != null) { // if a countQuery is specified, use it
+                    if (queryInstance != null && queryInstance.value(QUERY_COUNT_FIELD) != null) { // if a countQuery is specified, use it
                         countQueryString = queryInstance.value(QUERY_COUNT_FIELD).asString().trim();
                     } else {
                         // otherwise try and derive the select query from the method name and use that to construct the count query
@@ -277,7 +300,9 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                     DotName customResultTypeName = resultType.name();
 
                     if (customResultTypeName.equals(entityClassInfo.name())
-                            || isHibernateSupportedReturnType(customResultTypeName)) {
+                            || customResultTypeName.toString().equals(idTypeStr)
+                            || isHibernateSupportedReturnType(customResultTypeName)
+                            || getFieldTypeNames(entityClassInfo, entityFieldTypeNames).contains(customResultTypeName)) {
                         // no special handling needed
                         customResultTypeName = null;
                     } else {
@@ -289,7 +314,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                         if (Modifier.isInterface(resultClassInfo.flags())) {
                             // Find the implementation name, and use that for subsequent query result generation
                             customResultTypeName = customResultTypeNames.computeIfAbsent(customResultTypeName,
-                                    k -> createSimpleInterfaceImpl(resultType.name()));
+                                    this::createSimpleInterfaceImpl);
 
                             // Remember the parameters for this usage of the custom type, we'll deal with it later
                             customResultTypes.computeIfAbsent(customResultTypeName,
@@ -303,7 +328,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                     }
 
                     ResultHandle panacheQuery;
-                    if (useNamedParams) {
+                    if (!namedParameterToIndex.isEmpty()) {
                         ResultHandle parameters = generateParametersObject(namedParameterToIndex, methodCreator);
 
                         // call JpaOperations.find()
@@ -314,7 +339,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                                 methodCreator.readStaticField(operationsField),
                                 methodCreator.readInstanceField(entityClassFieldDescriptor, methodCreator.getThis()),
                                 methodCreator.load(queryString), methodCreator.load(countQueryString),
-                                generateSort(sortParameterIndex, methodCreator), parameters);
+                                generateSort(sortParameterIndex, pageableParameterIndex, methodCreator), parameters);
 
                     } else {
                         ResultHandle paramsArray = generateParamsArray(queryParameterIndexes, methodCreator);
@@ -327,7 +352,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                                 methodCreator.readStaticField(operationsField),
                                 methodCreator.readInstanceField(entityClassFieldDescriptor, methodCreator.getThis()),
                                 methodCreator.load(queryString), methodCreator.load(countQueryString),
-                                generateSort(sortParameterIndex, methodCreator), paramsArray);
+                                generateSort(sortParameterIndex, pageableParameterIndex, methodCreator), paramsArray);
                     }
 
                     generateFindQueryResultHandling(methodCreator, panacheQuery, pageableParameterIndex, repositoryClassInfo,
@@ -391,7 +416,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
     }
 
     // ensure that Sort is correctly handled whether it's specified from the method name or a method param
-    private ResultHandle generateSort(Integer sortParameterIndex, MethodCreator methodCreator) {
+    private ResultHandle generateSort(Integer sortParameterIndex, Integer pageableParameterIndex, MethodCreator methodCreator) {
         ResultHandle sort = methodCreator.loadNull();
         if (sortParameterIndex != null) {
             sort = methodCreator.invokeStaticMethod(
@@ -399,6 +424,12 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                             io.quarkus.panache.common.Sort.class,
                             org.springframework.data.domain.Sort.class),
                     methodCreator.getMethodParam(sortParameterIndex));
+        } else if (pageableParameterIndex != null) {
+            sort = methodCreator.invokeStaticMethod(
+                    MethodDescriptor.ofMethod(TypesConverter.class, "pageToPanacheSort",
+                            io.quarkus.panache.common.Sort.class,
+                            org.springframework.data.domain.Pageable.class),
+                    methodCreator.getMethodParam(pageableParameterIndex));
         }
         return sort;
     }
@@ -506,5 +537,23 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                 break;
         }
         return resultHandle;
+    }
+
+    private Set<DotName> getFieldTypeNames(ClassInfo entityClassInfo, Set<DotName> entityFieldTypeNames) {
+        if (entityFieldTypeNames.isEmpty()) {
+            entityClassInfo.fields().stream()
+                    .filter(not(fieldInfo -> Modifier.isStatic(fieldInfo.flags())))
+                    .filter(not(FieldInfo::isSynthetic))
+                    .filter(not(fieldInfo -> fieldInfo.hasAnnotation(DotNames.JPA_TRANSIENT)))
+                    .map(fieldInfo -> fieldInfo.type().name())
+                    .forEach(entityFieldTypeNames::add);
+            // recurse until we reached Object
+            Type superClassType = entityClassInfo.superClassType();
+            if (superClassType != null && !superClassType.name().equals(DotNames.OBJECT)) {
+                var superEntityClassInfo = index.getClassByName(superClassType.name());
+                entityFieldTypeNames.addAll(getFieldTypeNames(superEntityClassInfo, new HashSet<>()));
+            }
+        }
+        return entityFieldTypeNames;
     }
 }

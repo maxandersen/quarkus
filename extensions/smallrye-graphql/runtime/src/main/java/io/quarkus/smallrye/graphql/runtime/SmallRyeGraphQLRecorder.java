@@ -13,7 +13,6 @@ import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.security.identity.CurrentIdentityAssociation;
 import io.quarkus.smallrye.graphql.runtime.spi.QuarkusClassloadingService;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
-import io.smallrye.graphql.cdi.config.GraphQLConfig;
 import io.smallrye.graphql.cdi.producer.GraphQLProducer;
 import io.smallrye.graphql.schema.model.Schema;
 import io.vertx.core.Handler;
@@ -25,30 +24,27 @@ public class SmallRyeGraphQLRecorder {
 
     public RuntimeValue<Boolean> createExecutionService(BeanContainer beanContainer, Schema schema) {
         GraphQLProducer graphQLProducer = beanContainer.instance(GraphQLProducer.class);
-        GraphQLConfig graphQLConfig = beanContainer.instance(GraphQLConfig.class);
-        GraphQLSchema graphQLSchema = graphQLProducer.initialize(schema, graphQLConfig);
+        GraphQLSchema graphQLSchema = graphQLProducer.initialize(schema);
         return new RuntimeValue<>(graphQLSchema != null);
     }
 
-    public Handler<RoutingContext> executionHandler(RuntimeValue<Boolean> initialized, boolean allowGet) {
+    public Handler<RoutingContext> executionHandler(RuntimeValue<Boolean> initialized, boolean allowGet,
+            boolean allowPostWithQueryParameters) {
         if (initialized.getValue()) {
-            Instance<CurrentIdentityAssociation> identityAssociations = CDI.current()
-                    .select(CurrentIdentityAssociation.class);
-            CurrentIdentityAssociation association;
-            if (identityAssociations.isResolvable()) {
-                association = identityAssociations.get();
-            } else {
-                association = null;
-            }
-            CurrentVertxRequest currentVertxRequest = CDI.current().select(CurrentVertxRequest.class).get();
-            return new SmallRyeGraphQLExecutionHandler(allowGet, association, currentVertxRequest);
+            return new SmallRyeGraphQLExecutionHandler(allowGet, allowPostWithQueryParameters, getCurrentIdentityAssociation(),
+                    CDI.current().select(CurrentVertxRequest.class).get());
         } else {
             return new SmallRyeGraphQLNoEndpointHandler();
         }
     }
 
-    public Handler<RoutingContext> schemaHandler(RuntimeValue<Boolean> initialized) {
-        if (initialized.getValue()) {
+    public Handler<RoutingContext> subscriptionHandler(BeanContainer beanContainer, RuntimeValue<Boolean> initialized) {
+        return new SmallRyeGraphQLSubscriptionHandler(getCurrentIdentityAssociation(),
+                CDI.current().select(CurrentVertxRequest.class).get());
+    }
+
+    public Handler<RoutingContext> schemaHandler(RuntimeValue<Boolean> initialized, boolean schemaAvailable) {
+        if (initialized.getValue() && schemaAvailable) {
             return new SmallRyeGraphQLSchemaHandler();
         } else {
             return new SmallRyeGraphQLNoEndpointHandler();
@@ -82,5 +78,14 @@ public class SmallRyeGraphQLRecorder {
                 route.handler(bodyHandler);
             }
         };
+    }
+
+    private CurrentIdentityAssociation getCurrentIdentityAssociation() {
+        Instance<CurrentIdentityAssociation> identityAssociations = CDI.current()
+                .select(CurrentIdentityAssociation.class);
+        if (identityAssociations.isResolvable()) {
+            return identityAssociations.get();
+        }
+        return null;
     }
 }

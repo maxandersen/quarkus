@@ -6,6 +6,8 @@ import static io.quarkus.deployment.util.ReflectUtil.reportError;
 import static io.quarkus.deployment.util.ReflectUtil.toError;
 import static io.quarkus.deployment.util.ReflectUtil.typeOfParameter;
 import static io.quarkus.deployment.util.ReflectUtil.unwrapInvocationTargetException;
+import static io.smallrye.config.Expressions.withoutExpansion;
+import static java.util.stream.Collectors.toSet;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -14,6 +16,7 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,11 +54,17 @@ import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.configuration.ConfigUtils;
+import io.quarkus.runtime.configuration.ConfigurationException;
 import io.quarkus.runtime.configuration.HyphenateEnumConverter;
 import io.quarkus.runtime.configuration.NameIterator;
+import io.quarkus.runtime.configuration.ProfileManager;
+import io.quarkus.runtime.configuration.PropertiesUtil;
+import io.smallrye.config.ConfigValue;
 import io.smallrye.config.Converters;
-import io.smallrye.config.Expressions;
+import io.smallrye.config.EnvConfigSource;
 import io.smallrye.config.SmallRyeConfig;
+import io.smallrye.config.SmallRyeConfigBuilder;
+import io.smallrye.config.SysPropConfigSource;
 
 /**
  * A configuration reader.
@@ -87,14 +96,17 @@ public final class BuildTimeConfigurationReader {
         List<RootDefinition> buildTimeRoots = new ArrayList<>();
         Map<Class<?>, GroupDefinition> groups = new HashMap<>();
         for (Class<?> configRoot : configRoots) {
+            String prefix = "quarkus";
             String name = ConfigItem.HYPHENATED_ELEMENT_NAME;
             ConfigPhase phase = ConfigPhase.BUILD_TIME;
             ConfigRoot annotation = configRoot.getAnnotation(ConfigRoot.class);
             if (annotation != null) {
+                prefix = annotation.prefix();
                 name = annotation.name();
                 phase = annotation.phase();
             }
             RootDefinition.Builder defBuilder = new RootDefinition.Builder();
+            defBuilder.setPrefix(prefix);
             defBuilder.setConfigPhase(phase);
             defBuilder.setRootName(name);
             processClass(defBuilder, configRoot, groups);
@@ -268,9 +280,7 @@ public final class BuildTimeConfigurationReader {
 
         ReadResult run() {
             final StringBuilder nameBuilder;
-            nameBuilder = new StringBuilder().append("quarkus");
-            // eager init first
-            int len = nameBuilder.length();
+            nameBuilder = new StringBuilder();
             for (RootDefinition root : buildTimeVisibleRoots) {
                 Class<?> clazz = root.getConfigurationClass();
                 Object instance;
@@ -288,27 +298,29 @@ public final class BuildTimeConfigurationReader {
                     throw toError(e);
                 }
                 objectsByRootClass.put(clazz, instance);
-                String rootName = root.getRootName();
-                if (!rootName.isEmpty()) {
-                    nameBuilder.append('.').append(rootName);
-                }
+                nameBuilder.append(root.getName());
                 readConfigGroup(root, instance, nameBuilder);
-                nameBuilder.setLength(len);
+                nameBuilder.setLength(0);
             }
+
+            Set<String> registeredRoots = allRoots.stream().map(RootDefinition::getPrefix).collect(toSet());
             // sweep-up
-            for (String propertyName : config.getPropertyNames()) {
+            SmallRyeConfig runtimeDefaultsConfig = getConfigForRuntimeDefaults();
+            for (String propertyName : getAllProperties(registeredRoots)) {
                 if (propertyName.equals(ConfigSource.CONFIG_ORDINAL)) {
                     continue;
                 }
 
                 NameIterator ni = new NameIterator(propertyName);
-                if (ni.hasNext() && ni.nextSegmentEquals("quarkus")) {
-                    ni.next();
+                if (ni.hasNext() && PropertiesUtil.isPropertyInRoot(registeredRoots, ni)) {
                     // build time patterns
                     Container matched = buildTimePatternMap.match(ni);
                     if (matched instanceof FieldContainer) {
-                        allBuildTimeValues.put(propertyName,
-                                config.getOptionalValue(propertyName, String.class).orElse(""));
+                        ConfigValue configValue = config.getConfigValue(propertyName);
+                        if (configValue.getValue() == null) {
+                            continue;
+                        }
+                        allBuildTimeValues.put(configValue.getNameProfiled(), configValue.getValue());
                         ni.goToEnd();
                         // cursor is located after group property key (if any)
                         getGroup((FieldContainer) matched, ni);
@@ -316,6 +328,10 @@ public final class BuildTimeConfigurationReader {
                         continue;
                     } else if (matched != null) {
                         assert matched instanceof MapContainer;
+                        ConfigValue configValue = config.getConfigValue(propertyName);
+                        if (configValue.getValue() == null) {
+                            continue;
+                        }
                         // it's a leaf value within a map
                         // these must always be explicitly set
                         ni.goToEnd();
@@ -325,26 +341,30 @@ public final class BuildTimeConfigurationReader {
                         // we always have to set the map entry ourselves
                         Field field = matched.findField();
                         Converter<?> converter = getConverter(config, field, ConverterType.of(field));
-                        map.put(key, config.getValue(propertyName, converter));
-                        allBuildTimeValues.put(propertyName,
-                                config.getOptionalValue(propertyName, String.class).orElse(""));
+                        map.put(key, config.convertValue(configValue.getNameProfiled(), configValue.getValue(), converter));
+                        allBuildTimeValues.put(configValue.getNameProfiled(), configValue.getValue());
                         continue;
                     }
                     // build time (run time visible) patterns
                     ni.goToStart();
-                    ni.next();
                     matched = buildTimeRunTimePatternMap.match(ni);
                     if (matched instanceof FieldContainer) {
+                        ConfigValue configValue = config.getConfigValue(propertyName);
+                        if (configValue.getValue() == null) {
+                            continue;
+                        }
                         ni.goToEnd();
                         // cursor is located after group property key (if any)
                         getGroup((FieldContainer) matched, ni);
-                        allBuildTimeValues.put(propertyName,
-                                config.getOptionalValue(propertyName, String.class).orElse(""));
-                        buildTimeRunTimeVisibleValues.put(propertyName,
-                                config.getOptionalValue(propertyName, String.class).orElse(""));
+                        allBuildTimeValues.put(configValue.getNameProfiled(), configValue.getValue());
+                        buildTimeRunTimeVisibleValues.put(configValue.getNameProfiled(), configValue.getValue());
                         continue;
                     } else if (matched != null) {
                         assert matched instanceof MapContainer;
+                        ConfigValue configValue = config.getConfigValue(propertyName);
+                        if (configValue.getValue() == null) {
+                            continue;
+                        }
                         // it's a leaf value within a map
                         // these must always be explicitly set
                         ni.goToEnd();
@@ -354,40 +374,44 @@ public final class BuildTimeConfigurationReader {
                         // we always have to set the map entry ourselves
                         Field field = matched.findField();
                         Converter<?> converter = getConverter(config, field, ConverterType.of(field));
-                        map.put(key, config.getValue(propertyName, converter));
+                        map.put(key, config.convertValue(configValue.getNameProfiled(), configValue.getValue(), converter));
                         // cache the resolved value
-                        buildTimeRunTimeVisibleValues.put(propertyName,
-                                config.getOptionalValue(propertyName, String.class).orElse(""));
-                        allBuildTimeValues.put(propertyName,
-                                config.getOptionalValue(propertyName, String.class).orElse(""));
+                        buildTimeRunTimeVisibleValues.put(configValue.getNameProfiled(), configValue.getValue());
+                        allBuildTimeValues.put(configValue.getNameProfiled(), configValue.getValue());
                         continue;
                     }
                     // run time patterns
                     ni.goToStart();
-                    ni.next();
                     matched = runTimePatternMap.match(ni);
                     if (matched != null) {
                         // it's a specified run-time default (record for later)
-                        specifiedRunTimeDefaultValues.put(propertyName, Expressions.withoutExpansion(
-                                () -> config.getOptionalValue(propertyName, String.class).orElse("")));
-
-                        continue;
+                        ConfigValue configValue = withoutExpansion(() -> runtimeDefaultsConfig.getConfigValue(propertyName));
+                        if (configValue.getValue() != null) {
+                            specifiedRunTimeDefaultValues.put(configValue.getNameProfiled(), configValue.getValue());
+                        }
                     }
                     // also check for the bootstrap properties since those need to be added to specifiedRunTimeDefaultValues as well
                     ni.goToStart();
-                    ni.next();
                     matched = bootstrapPatternMap.match(ni);
                     if (matched != null) {
                         // it's a specified run-time default (record for later)
-                        specifiedRunTimeDefaultValues.put(propertyName, Expressions.withoutExpansion(
-                                () -> config.getOptionalValue(propertyName, String.class).orElse("")));
+                        ConfigValue configValue = withoutExpansion(() -> runtimeDefaultsConfig.getConfigValue(propertyName));
+                        if (configValue.getValue() != null) {
+                            specifiedRunTimeDefaultValues.put(configValue.getNameProfiled(), configValue.getValue());
+                        }
                     }
                 } else {
                     // it's not managed by us; record it
-                    specifiedRunTimeDefaultValues.put(propertyName, Expressions.withoutExpansion(
-                            () -> config.getOptionalValue(propertyName, String.class).orElse("")));
+                    ConfigValue configValue = withoutExpansion(() -> runtimeDefaultsConfig.getConfigValue(propertyName));
+                    if (configValue.getValue() != null) {
+                        specifiedRunTimeDefaultValues.put(configValue.getNameProfiled(), configValue.getValue());
+                    }
                 }
             }
+
+            filterActiveProfileProperties(buildTimeRunTimeVisibleValues);
+            filterActiveProfileProperties(specifiedRunTimeDefaultValues);
+
             return new ReadResult(objectsByRootClass, specifiedRunTimeDefaultValues, buildTimeRunTimeVisibleValues,
                     allBuildTimeValues,
                     buildTimePatternMap, buildTimeRunTimePatternMap, bootstrapPatternMap, runTimePatternMap, allRoots,
@@ -623,11 +647,15 @@ public final class BuildTimeConfigurationReader {
         private void readConfigValue(String fullName, ClassDefinition.ItemMember member, Object instance) {
             Field field = member.getField();
             Converter<?> converter = getConverter(config, field, ConverterType.of(field));
-            Object val = config.getValue(fullName, converter);
+
             try {
+                Object val = config.getValue(fullName, converter);
                 field.set(instance, val);
             } catch (IllegalAccessException e) {
                 throw toError(e);
+            } catch (Exception e) {
+                throw new ConfigurationException(e.getMessage(), e, Collections.singleton(fullName));
+
             }
         }
 
@@ -679,7 +707,7 @@ public final class BuildTimeConfigurationReader {
                         throw toError(e);
                     }
                 } else {
-                    converter = config.getConverter(leaf.getLeafType());
+                    converter = config.requireConverter(leaf.getLeafType());
                 }
             } else if (valueType instanceof LowerBoundCheckOf) {
                 // todo: add in bounds checker
@@ -717,6 +745,69 @@ public final class BuildTimeConfigurationReader {
             }
             convByType.put(valueType, converter);
             return converter;
+        }
+
+        /**
+         * We collect all properties from eligible ConfigSources, because Config#getPropertyNames exclude the active
+         * profiled properties, meaning that the property is written in the default config source without the profile
+         * prefix. This may cause issues if we run with a different profile and fallback to defaults.
+         *
+         * We also filter the properties coming from the System with the registered roots, because we don't want to
+         * record properties set by the compiling JVM (or other properties that are only related to the build).
+         */
+        private Set<String> getAllProperties(final Set<String> registeredRoots) {
+            Set<String> properties = new HashSet<>();
+            for (ConfigSource configSource : config.getConfigSources()) {
+                if (configSource instanceof SysPropConfigSource) {
+                    for (String propertyName : configSource.getProperties().keySet()) {
+                        NameIterator ni = new NameIterator(propertyName);
+                        if (ni.hasNext() && PropertiesUtil.isPropertyInRoot(registeredRoots, ni)) {
+                            properties.add(propertyName);
+                        }
+                    }
+                } else {
+                    properties.addAll(configSource.getPropertyNames());
+                }
+            }
+            for (String propertyName : config.getPropertyNames()) {
+                properties.add(propertyName);
+            }
+            return properties;
+        }
+
+        /**
+         * Use this Config instance to record the specified runtime default values. We cannot use the main Config
+         * instance because it may record values coming from the EnvSource in build time. Environment variable values
+         * may be completely different between build and runtime, so it doesn't make sense to record these.
+         *
+         * We do exclude the properties coming from the EnvSource, but a call to getValue may still provide a result
+         * coming from the EnvSource, so we need to exclude it from the sources when recording values for runtime.
+         *
+         * We also do not want to completely exclude the EnvSource, because it may provide values for the build. This
+         * is only specific when recording the defaults.
+         *
+         * @return a new SmallRye instance without the EnvSources.
+         */
+        private SmallRyeConfig getConfigForRuntimeDefaults() {
+            SmallRyeConfigBuilder builder = ConfigUtils.emptyConfigBuilder();
+            for (ConfigSource configSource : config.getConfigSources()) {
+                if (configSource instanceof EnvConfigSource) {
+                    continue;
+                }
+                builder.withSources(configSource);
+            }
+            return builder.build();
+        }
+
+        private void filterActiveProfileProperties(final Map<String, String> properties) {
+            Set<String> propertiesToRemove = new HashSet<>();
+            for (String property : properties.keySet()) {
+                String profiledProperty = "%" + ProfileManager.getActiveProfile() + "." + property;
+                if (properties.containsKey(profiledProperty)) {
+                    propertiesToRemove.add(property);
+                }
+            }
+            properties.keySet().removeAll(propertiesToRemove);
         }
     }
 

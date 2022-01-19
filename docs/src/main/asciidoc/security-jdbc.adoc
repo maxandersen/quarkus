@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Using Security with JDBC
+= Using Security with JDBC
 
 include::./attributes.adoc[]
 
@@ -16,7 +16,7 @@ To complete this guide, you need:
 
 * less than 15 minutes
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 
 == Architecture
@@ -46,7 +46,7 @@ First, we need a new project. Create a new project with the following command:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=security-jdbc-quickstart \
     -Dextensions="elytron-security-jdbc,jdbc-postgresql,resteasy" \
@@ -312,4 +312,4 @@ include::{generated-dir}/config/quarkus-elytron-security-jdbc.adoc[opts=optional
 
 == References
 
-* link:security[Quarkus Security]
+* xref:security.adoc[Quarkus Security]

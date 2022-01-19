@@ -63,7 +63,7 @@ Don't forget to indicate your Quarkus, Java, Maven/Gradle and GraalVM version.
 Sometimes a bug has been fixed in the `main` branch of Quarkus and you want to confirm it is fixed for your own application.
 Testing the `main` branch is easy and you have two options:
 
-* either use the snapshots we publish daily on https://oss.sonatype.org/content/repositories/snapshots/
+* either use the snapshots we publish daily on https://s01.oss.sonatype.org/content/repositories/snapshots
 * or build Quarkus all by yourself
 
 This is a quick summary to get you to quickly test main.
@@ -73,9 +73,47 @@ If you are interested in having more details, refer to the [Build section](#buil
 
 Snapshots are published daily so you will have to wait for a snapshot containing the commits you are interested in.
 
-Then just add https://oss.sonatype.org/content/repositories/snapshots/ as a Maven repository **and** a plugin repository.
+Then just add https://s01.oss.sonatype.org/content/repositories/snapshots as a Maven repository **and** a plugin repository in your settings xml:
 
-You can check the last publication date here: https://oss.sonatype.org/content/repositories/snapshots/io/quarkus/ .
+```xml
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <profiles>
+    <profile>
+       <id>quarkus-snapshots</id>
+       <repositories>
+        <repository>
+          <id>quarkus-snapshots-repository</id>
+          <url>https://s01.oss.sonatype.org/content/repositories/snapshots/</url>
+          <releases>
+            <enabled>false</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>quarkus-snapshots-plugin-repository</id>
+          <url>https://s01.oss.sonatype.org/content/repositories/snapshots/</url>
+          <releases>
+            <enabled>false</enabled>
+          </releases>
+          <snapshots>
+            <enabled>true</enabled>
+          </snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+  <activeProfiles>
+    <activeProfile>quarkus-snapshots</activeProfile>
+  </activeProfiles>
+</settings>
+```
+You can check the last publication date here: https://s01.oss.sonatype.org/content/repositories/snapshots/io/quarkus/ .
 
 ### Building main
 
@@ -84,7 +122,7 @@ Just do the following:
 ```
 git clone git@github.com:quarkusio/quarkus.git
 cd quarkus
-export MAVEN_OPTS="-Xmx1563m"
+export MAVEN_OPTS="-Xmx4g"
 ./mvnw -Dquickly
 ```
 
@@ -92,9 +130,9 @@ Wait for a bit and you're done.
 
 ### Updating the version
 
-Be careful, when using the `main` branch, you need to use the `quarkus-bom` instead of the `quarkus-universe-bom`.
+When using the `main` branch, you need to use the group id `io.quarkus` instead of `io.quarkus.platform` for both the Quarkus BOM and the Quarkus Maven Plugin.
 
-Update both the versions of the `quarkus-bom` and the Quarkus Maven plugin to `999-SNAPSHOT`.
+In a standard Quarkus pom.xml set the `quarkus.platform.group-id`-property to `io.quarkus` and the `quarkus.platform.version`-property to `999-SNAPSHOT` to build your application against the locally installed main branch.
 
 You can now test your application.
 
@@ -115,7 +153,9 @@ We use this information to acknowledge your contributions in release announcemen
 
 ### Code reviews
 
-All submissions, including submissions by project members, need to be reviewed before being merged.
+All submissions, including submissions by project members, need to be reviewed by at least one Quarkus committer before being merged.
+
+[GitHub Pull Request Review Process](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/about-pull-request-reviews) is followed for every pull request.
 
 ### Coding Guidelines
 
@@ -146,7 +186,7 @@ Be sure to test your pull request in:
 If you have not done so on this machine, you need to:
  
 * Install Git and configure your GitHub access
-* Install Java SDK 8 or 11+ (OpenJDK recommended)
+* Install Java SDK 11+ (OpenJDK recommended)
 * Install [GraalVM](https://quarkus.io/guides/building-native-image)
 * Install platform C developer tools:
     * Linux
@@ -189,11 +229,27 @@ with `./mvnw -Dquickly`.
 
 ##### `OutOfMemoryError` while importing
 
-After creating an IDEA project, the first import will most likely fail with an `OutOfMemoryError`.
+After creating an IDEA project, the first import might fail with an `OutOfMemory` error,
+as the size of the project requires more memory than the IDEA default settings allow.
+
+**Note** In some IDEA versions the `OutOfMemory` error goes unreported. 
+So if no error is reported but IDEA is still failing to find symbols or the dependencies are wrong in the imported project, then importing might have failed due to an unreported `OutOfMemory` exception.
+One can further investigate this by inspecting the `org.jetbrains.idea.maven.server.RemoteMavenServer36` process (or processes) using `JConsole`.
 
 To fix that, open the _Preferences_ window (or _Settings_ depending on your edition),
 then navigate to _Build, Execution, Deployment_ > _Build Tools_ > _Maven_ > _Importing_.
-In _VM options for importer_, raise the heap to at least 2 GB, e.g. `-Xmx2g -Xms2g`.
+In _VM options for importer_, raise the heap to at least 2 GB; some people reported
+needing more, e.g. `-Xmx8g`.
+
+In recent IDEA versions (e.g. 2020.3) this might not work because _VM options for importer_ get ignored when `.mvn/jdk.config` is present (see [IDEA-250160](https://youtrack.jetbrains.com/issue/IDEA-250160))
+it disregards the _VM options for importer_ settings.
+An alternative solution is to go to _Help_ > _Edit Custom Properties..._ and
+add the following line:
+
+`idea.maven.embedder.xmx=8g`
+
+After these configurations, you might need to run  _File_ -> _Invalidate Caches and Restart_ 
+and then trigger a `Reload all Maven projects`.
 
 ##### `package sun.misc does not exist` while building
 
@@ -225,13 +281,14 @@ Do the same with _Names count to use static import with '\*'_.
 
 * Clone the repository: `git clone https://github.com/quarkusio/quarkus.git`
 * Navigate to the directory: `cd quarkus`
-* Set Maven heap to 1.5GB `export MAVEN_OPTS="-Xmx1563m"`
+* Set Maven heap to 4GB `export MAVEN_OPTS="-Xmx4g"`
 * Invoke `./mvnw -Dquickly` from the root directory
+* _Note: On Windows, it may be necessary to run the build from an elevated shell. If you experience a failed build with the error `"A required privilege is not held by the client"`, this should fix it._
 
 ```bash
 git clone https://github.com/quarkusio/quarkus.git
 cd quarkus
-export MAVEN_OPTS="-Xmx1563m"
+export MAVEN_OPTS="-Xmx4g"
 ./mvnw -Dquickly
 # Wait... success!
 ```
@@ -284,6 +341,40 @@ One way to accomplish this is by executing the following command:
 ```
 ./mvnw test -f integration-tests/resteasy-jackson/ -Dtest=GreetingResourceTest
 ```
+
+##### Maven Invoker tests
+
+For testing some scenarios, Quarkus uses the [Maven Invoker](https://maven.apache.org/shared/maven-invoker/) to run tests. For these cases, to run a single test, one needs to use the `invoker.test` property along with the name of the directory
+which houses the test project.
+
+For example, in order to only run the MySQL test project of the container-image tests, the Maven command would be:
+
+```
+./mvnw verify -f integration-tests/container-image/maven-invoker-way -Dinvoker.test=container-build-jib-with-mysql
+```
+
+Note that we use the `verify` goal instead of the `test` goal because the Maven Invoker is usually bound to the integration-test phase. 
+Furthermore, depending on the actual test being invoked, more options maybe needed (for the specific integration test mentioned above, `-Dstart-containers` and `-Dtest-containers` are needed).
+
+### Build with multiple threads
+
+The following standard Maven option can be used to build with multiple threads to speed things up (here 0.5 threads per CPU core):
+
+```
+./mvnw install -T0.5C
+```
+
+Please note that running tests in parallel is not supported at the moment!
+
+### Don't build any test modules
+
+To omit building currently way over 100 pure test modules, run:
+
+```
+./mvnw install -Dno-test-modules
+```
+
+This can come in handy when you are only interested in the actual "productive" artifacts, e.g. when bisecting.
 
 #### Automatic incremental build
 
@@ -446,17 +537,17 @@ This project is an open source project, please act responsibly, be nice, polite 
 
 * The Maven build fails with `OutOfMemoryException`
 
-  Set Maven options to use 1.5GB of heap: `export MAVEN_OPTS="-Xmx1563m"`.
+  Set Maven options to use more memory: `export MAVEN_OPTS="-Xmx4g"`.
 
 * IntelliJ fails to import Quarkus Maven project with `java.lang.OutOfMemoryError: GC overhead limit exceeded` 
 
-  In IntelliJ IDEA (version older than `2019.2`) if you see problems in the Maven view claiming `java.lang.OutOfMemoryError: GC overhead limit exceeded` that means the project import failed.
+  In IntelliJ IDEA if you see problems in the Maven view claiming `java.lang.OutOfMemoryError: GC overhead limit exceeded` that means the project import failed.
 
-  To fix the issue, you need to update the Maven importing settings:
-  `Build, Execution, Deployment` > `Build Tools`> `Maven` > `Importing` > `VM options for importer`
-  To import Quarkus you need to define the JVM Max Heap Size (E.g. `-Xmx1g`)
+  See section `IDEA Setup` as there are different possible solutions described.
 
-  **Note** As for now, we can't provide a unique Max Heap Size value. We have been reported to require from 768M to more than 3G to import Quarkus properly.
+* IntelliJ does not recognize the project as a Java 11 project
+
+  In the Maven pane, uncheck the `include-jdk-misc` and `compile-java8-release-flag` profiles
 
 * Build hangs with DevMojoIT running infinitely
   ```

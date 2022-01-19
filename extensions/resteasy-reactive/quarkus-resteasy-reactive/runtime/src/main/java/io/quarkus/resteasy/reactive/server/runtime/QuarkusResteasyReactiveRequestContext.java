@@ -1,5 +1,7 @@
 package io.quarkus.resteasy.reactive.server.runtime;
 
+import java.util.List;
+
 import javax.enterprise.event.Event;
 import javax.ws.rs.core.SecurityContext;
 
@@ -18,17 +20,21 @@ import io.vertx.ext.web.RoutingContext;
 public class QuarkusResteasyReactiveRequestContext extends VertxResteasyReactiveRequestContext {
 
     final CurrentIdentityAssociation association;
+    boolean userSetup = false;
 
     public QuarkusResteasyReactiveRequestContext(Deployment deployment, ProvidersImpl providers,
             RoutingContext context, ThreadSetupAction requestContext, ServerRestHandler[] handlerChain,
-            ServerRestHandler[] abortHandlerChain, CurrentIdentityAssociation currentIdentityAssociation) {
-        super(deployment, providers, context, requestContext, handlerChain, abortHandlerChain);
+            ServerRestHandler[] abortHandlerChain, ClassLoader devModeTccl,
+            CurrentIdentityAssociation currentIdentityAssociation, List<String> vertxContextPropsToCopy) {
+        super(deployment, providers, context, requestContext, handlerChain, abortHandlerChain, devModeTccl,
+                vertxContextPropsToCopy);
         this.association = currentIdentityAssociation;
     }
 
     protected void handleRequestScopeActivation() {
         super.handleRequestScopeActivation();
-        if (association != null) {
+        if (!userSetup && association != null) {
+            userSetup = true;
             QuarkusHttpUser existing = (QuarkusHttpUser) context.user();
             if (existing != null) {
                 SecurityIdentity identity = existing.getSecurityIdentity();
@@ -54,10 +60,16 @@ public class QuarkusResteasyReactiveRequestContext extends VertxResteasyReactive
     }
 
     @Override
+    public boolean handlesUnmappedException() {
+        return false; // false because handleUnmappedException just throws and lets QuarkusErrorHandler return the final response
+    }
+
+    @Override
     public void handleUnmappedException(Throwable throwable) {
         throw sneakyThrow(throwable);
     }
 
+    @SuppressWarnings("unchecked")
     private <E extends Throwable> RuntimeException sneakyThrow(Throwable e) throws E {
         throw (E) e;
     }

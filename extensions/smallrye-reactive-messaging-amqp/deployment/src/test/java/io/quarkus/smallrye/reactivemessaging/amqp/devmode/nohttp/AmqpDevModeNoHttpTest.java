@@ -4,13 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.LogRecord;
 import java.util.stream.Collectors;
 
 import org.apache.activemq.artemis.protocol.amqp.broker.ProtonProtocolManagerFactory;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -22,7 +21,7 @@ import io.quarkus.test.QuarkusDevModeTest;
 public class AmqpDevModeNoHttpTest {
     @RegisterExtension
     static QuarkusDevModeTest TEST = new QuarkusDevModeTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(Producer.class, Consumer.class,
                             AnonymousAmqpBroker.class, ProtonProtocolManagerFactory.class)
                     .addAsResource("broker.xml")
@@ -76,7 +75,7 @@ public class AmqpDevModeNoHttpTest {
     @Test
     public void testConsumerUpdate() {
         await().atMost(1, TimeUnit.MINUTES).untilAsserted(() -> {
-            List<LogRecord> log = TEST.getLogRecords();
+            List<LogRecord> log = new CopyOnWriteArrayList<>(TEST.getLogRecords());
             assertThat(log).hasSizeGreaterThanOrEqualTo(5);
 
             List<Long> nums = log.stream()

@@ -73,9 +73,15 @@ public class IfSectionTest {
     public void testCompositeParameters() {
         Engine engine = Engine.builder().addDefaults().build();
         assertEquals("OK", engine.parse("{#if (true || false) && true}OK{/if}").render());
-        assertEquals("OK", engine.parse("{#if (foo || false || true) && (true)}OK{/if}").render());
-        assertEquals("NOK", engine.parse("{#if foo || false}OK{#else}NOK{/if}").render());
-        assertEquals("OK", engine.parse("{#if false || (foo || (false || true))}OK{#else}NOK{/if}").render());
+        assertEquals("OK", engine.parse("{#if (true || false) && true && !false}OK{/if}").render());
+        assertEquals("OK", engine.parse("{#if  true && true && !(true || false)}NOK{#else}OK{/if}").render());
+        assertEquals("OK", engine.parse("{#if true && true  && !(true && false)}OK{#else}NOK{/if}").render());
+        assertEquals("OK", engine.parse("{#if true && !true && (true || false)}NOK{#else}OK{/if}").render());
+        assertEquals("OK", engine.parse("{#if true && (true  && ( true && false))}NOK{#else}OK{/if}").render());
+        assertEquals("OK", engine.parse("{#if true && (!false || false || (true || false))}OK{#else}NOK{/if}").render());
+        assertEquals("OK", engine.parse("{#if (foo.or(false) || false || true) && (true)}OK{/if}").render());
+        assertEquals("NOK", engine.parse("{#if foo.or(false) || false}OK{#else}NOK{/if}").render());
+        assertEquals("OK", engine.parse("{#if false || (foo.or(false) || (false || true))}OK{#else}NOK{/if}").render());
         assertEquals("NOK", engine.parse("{#if (true && false)}OK{#else}NOK{/if}").render());
         assertEquals("OK", engine.parse("{#if true && true}OK{#else}NOK{/if}").render());
         assertEquals("NOK", engine.parse("{#if true && false}OK{#else}NOK{/if}").render());
@@ -181,8 +187,8 @@ public class IfSectionTest {
         assertEquals("0", engine.parse("{#if arrayEmpty && name}1{#else}0{/if}").render(data));
         assertEquals("1", engine.parse("{#if array && intTwo}1{#else}0{/if}").render(data));
         assertEquals("1", engine.parse("{#if (array && intZero) || true}1{#else}0{/if}").render(data));
-        assertEquals("0", engine.parse("{#if nonExistent}1{#else}0{/if}").render(data));
-        assertEquals("1", engine.parse("{#if !nonExistent}1{#else}0{/if}").render(data));
+        assertEquals("0", engine.parse("{#if nonExistent.or(false)}1{#else}0{/if}").render(data));
+        assertEquals("1", engine.parse("{#if !nonExistent.or(false)}1{#else}0{/if}").render(data));
     }
 
     @Test
@@ -194,6 +200,64 @@ public class IfSectionTest {
                         + "{#else}\n"
                         + "BAZ\n"
                         + "{/if}").render());
+    }
+
+    @Test
+    public void testStandaloneLinesLinebreaks() {
+        Engine engine = Engine.builder().addDefaults().removeStandaloneLines(true).build();
+        assertEquals("FOO\n\n\n\n",
+                engine.parse("FOO\n\n\n\n").render());
+        assertEquals("FOO\n\n\n\n",
+                engine.parse("FOO\n\n{#if false}\nBAZ\n{/if}\n\n\n").render());
+        assertEquals("FOO\n\n",
+                engine.parse("FOO\n\n{#if false}\nBAZ\n{/if}\n").render());
+    }
+
+    @Test
+    public void testSafeExpression() {
+        Engine engine = Engine.builder().strictRendering(true).addDefaults().build();
+        try {
+            engine.parse("{#if val.is.not.there}NOK{#else}OK{/if}").render();
+            fail();
+        } catch (TemplateException expected) {
+            assertEquals("Entry \"val\" not found in the data map in expression {val.is.not.there} in template 1 on line 1",
+                    expected.getMessage());
+        }
+        assertEquals("OK", engine.parse("{#if val.is.not.there??}NOK{#else}OK{/if}").render());
+        assertEquals("OK", engine.parse("{#if hero??}NOK{#else}OK{/if}").render());
+        assertEquals("OK", engine.parse("{#if hero??}OK{#else}NOK{/if}").data("hero", true).render());
+    }
+
+    @Test
+    public void testFromageCondition() {
+        Engine engine = Engine.builder().addDefaults().addValueResolver(new ReflectionValueResolver())
+                .addNamespaceResolver(NamespaceResolver.builder("ContentStatus").resolve(ec -> ContentStatus.NEW).build())
+                .build();
+        assertEquals("OK",
+                engine.parse("{#if user && target.status == ContentStatus:NEW && !target.voted(user)}NOK{#else}OK{/if}")
+                        .data("user", "Stef", "target", new Target(ContentStatus.ACCEPTED)).render());
+        assertEquals("OK",
+                engine.parse("{#if user && target.status == ContentStatus:NEW && !target.voted(user)}OK{#else}NOK{/if}")
+                        .data("user", "Stef", "target", new Target(ContentStatus.NEW)).render());
+    }
+
+    public static class Target {
+
+        public ContentStatus status;
+
+        public Target(ContentStatus status) {
+            this.status = status;
+        }
+
+        public boolean voted(String user) {
+            return false;
+        }
+
+    }
+
+    public enum ContentStatus {
+        NEW,
+        ACCEPTED
     }
 
     private void assertParserError(String template, String message, int line) {

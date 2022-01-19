@@ -34,6 +34,17 @@ final class EntityDataAccessImplementor implements DataAccessImplementor {
     }
 
     /**
+     * Implements <code>Entity.findAll().page(page).list()</code>
+     */
+    @Override
+    public ResultHandle findAll(BytecodeCreator creator, ResultHandle page) {
+        ResultHandle query = creator.invokeStaticMethod(ofMethod(entityClassName, "findAll", PanacheQuery.class));
+        creator.invokeInterfaceMethod(ofMethod(PanacheQuery.class, "page", PanacheQuery.class, Page.class), query,
+                page);
+        return creator.invokeInterfaceMethod(ofMethod(PanacheQuery.class, "list", List.class), query);
+    }
+
+    /**
      * Implements <code>Entity.findAll(sort).page(page).list()</code>
      */
     @Override
@@ -55,12 +66,12 @@ final class EntityDataAccessImplementor implements DataAccessImplementor {
     }
 
     /**
-     * Implements <code>JpaOperations.getEntityManager().merge(entity)</code>
+     * Implements <code>Entity.getEntityManager().merge(entity)</code>
      */
     @Override
     public ResultHandle update(BytecodeCreator creator, ResultHandle entity) {
-        ResultHandle entityManager = creator.invokeVirtualMethod(
-                ofMethod(entityClassName, "getEntityManager", EntityManager.class), entity);
+        ResultHandle entityManager = creator.invokeStaticMethod(
+                ofMethod(entityClassName, "getEntityManager", EntityManager.class));
         return creator.invokeInterfaceMethod(
                 ofMethod(EntityManager.class, "merge", Object.class, Object.class), entityManager, entity);
     }

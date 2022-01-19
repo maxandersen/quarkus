@@ -1,24 +1,22 @@
 package io.quarkus.qute;
 
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 
 class ResolutionContextImpl implements ResolutionContext {
 
     private final Object data;
-    private final List<NamespaceResolver> namespaceResolvers;
     private final Evaluator evaluator;
     private final Map<String, SectionBlock> extendingBlocks;
-    private final TemplateInstance templateInstance;
+    private final Function<String, Object> attributeFun;
 
-    ResolutionContextImpl(Object data, List<NamespaceResolver> namespaceResolvers,
-            Evaluator evaluator, Map<String, SectionBlock> extendingBlocks, TemplateInstance templateInstance) {
+    ResolutionContextImpl(Object data,
+            Evaluator evaluator, Map<String, SectionBlock> extendingBlocks, Function<String, Object> attributeFun) {
         this.data = data;
-        this.namespaceResolvers = namespaceResolvers;
         this.evaluator = evaluator;
         this.extendingBlocks = extendingBlocks;
-        this.templateInstance = templateInstance;
+        this.attributeFun = attributeFun;
     }
 
     @Override
@@ -42,11 +40,6 @@ class ResolutionContextImpl implements ResolutionContext {
     }
 
     @Override
-    public List<NamespaceResolver> getNamespaceResolvers() {
-        return namespaceResolvers;
-    }
-
-    @Override
     public ResolutionContextImpl getParent() {
         return null;
     }
@@ -61,7 +54,7 @@ class ResolutionContextImpl implements ResolutionContext {
 
     @Override
     public Object getAttribute(String key) {
-        return templateInstance.getAttribute(key);
+        return attributeFun.apply(key);
     }
 
     @Override
@@ -74,11 +67,13 @@ class ResolutionContextImpl implements ResolutionContext {
         private final ResolutionContext parent;
         private final Object data;
         private final Map<String, SectionBlock> extendingBlocks;
+        private final Evaluator evaluator;
 
         public ChildResolutionContext(ResolutionContext parent, Object data, Map<String, SectionBlock> extendingBlocks) {
             this.parent = parent;
             this.data = data;
             this.extendingBlocks = extendingBlocks;
+            this.evaluator = parent.getEvaluator();
         }
 
         @Override
@@ -89,7 +84,7 @@ class ResolutionContextImpl implements ResolutionContext {
         @Override
         public CompletionStage<Object> evaluate(Expression expression) {
             // Make sure we use the correct resolution context
-            return getEvaluator().evaluate(expression, this);
+            return evaluator.evaluate(expression, this);
         }
 
         @Override
@@ -100,11 +95,6 @@ class ResolutionContextImpl implements ResolutionContext {
         @Override
         public Object getData() {
             return data;
-        }
-
-        @Override
-        public List<NamespaceResolver> getNamespaceResolvers() {
-            return parent.getNamespaceResolvers();
         }
 
         @Override
@@ -119,9 +109,9 @@ class ResolutionContextImpl implements ResolutionContext {
                 if (block != null) {
                     return block;
                 }
-                if (parent != null) {
-                    return parent.getExtendingBlock(name);
-                }
+            }
+            if (parent != null) {
+                return parent.getExtendingBlock(name);
             }
             return null;
         }
@@ -133,7 +123,7 @@ class ResolutionContextImpl implements ResolutionContext {
 
         @Override
         public Evaluator getEvaluator() {
-            return parent.getEvaluator();
+            return evaluator;
         }
 
     }

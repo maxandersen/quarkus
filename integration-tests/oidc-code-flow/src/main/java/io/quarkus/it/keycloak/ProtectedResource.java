@@ -18,6 +18,8 @@ import io.quarkus.oidc.IdTokenCredential;
 import io.quarkus.oidc.OIDCException;
 import io.quarkus.oidc.OidcConfigurationMetadata;
 import io.quarkus.oidc.RefreshToken;
+import io.quarkus.oidc.UserInfo;
+import io.quarkus.oidc.common.runtime.OidcConstants;
 import io.quarkus.security.Authenticated;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.vertx.ext.web.RoutingContext;
@@ -48,13 +50,28 @@ public class ProtectedResource {
     @Inject
     RefreshToken refreshToken;
 
+    @Inject
+    UserInfo userInfo;
+
     @Context
     SecurityContext securityContext;
 
+    @Inject
+    RoutingContext routingContext;
+
     @GET
-    @Path("sec")
-    public String hello() {
+    @Path("test-security")
+    public String testSecurity() {
         return securityContext.getUserPrincipal().getName();
+    }
+
+    @GET
+    @Path("test-security-oidc")
+    public String testSecurityJwt() {
+        return idToken.getName() + ":" + idToken.getGroups().iterator().next()
+                + ":" + idToken.getClaim("email")
+                + ":" + userInfo.getString("sub")
+                + ":" + configMetadata.get("audience");
     }
 
     @GET
@@ -74,7 +91,7 @@ public class ProtectedResource {
         if (!idTokenCredential.getToken().equals(idToken.getRawToken())) {
             throw new OIDCException("ID token values are not equal");
         }
-        if (idTokenCredential.getRoutingContext() != identity.getAttribute(RoutingContext.class.getName())) {
+        if (identity.getAttribute(RoutingContext.class.getName()) == null) {
             throw new OIDCException("SecurityIdentity must have a RoutingContext attribute");
         }
         return idToken.getName();
@@ -155,9 +172,12 @@ public class ProtectedResource {
     @GET
     @Path("access")
     public String getAccessToken() {
-        if (accessToken.getRawToken() != null && !accessTokenCredential.getToken().equals(accessToken.getRawToken())) {
+        if (accessToken.getRawToken() != null &&
+                (!accessTokenCredential.getToken().equals(accessToken.getRawToken())
+                        || !identity.getAttribute(OidcConstants.ACCESS_TOKEN_VALUE).equals(accessToken.getRawToken()))) {
             throw new OIDCException("Access token values are not equal");
         }
+
         return accessToken.getRawToken() != null && !accessToken.getRawToken().isEmpty() ? "AT injected" : "no access";
     }
 
@@ -198,7 +218,7 @@ public class ProtectedResource {
         }
         if (refreshToken.getToken() != null && !refreshToken.getToken().isEmpty()) {
             String message = "RT injected";
-            String listenerMessage = idTokenCredential.getRoutingContext().get("listener-message");
+            String listenerMessage = routingContext.get("listener-message");
             if (listenerMessage != null) {
                 message += ("(" + listenerMessage + ")");
             }

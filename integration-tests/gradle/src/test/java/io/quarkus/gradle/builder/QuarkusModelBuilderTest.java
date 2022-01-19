@@ -1,10 +1,7 @@
 package io.quarkus.gradle.builder;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -15,70 +12,87 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.Properties;
 
-import org.assertj.core.util.Files;
-import org.gradle.api.artifacts.ResolvedArtifact;
-import org.gradle.api.artifacts.ResolvedModuleVersion;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.bootstrap.model.ApplicationModel;
 import io.quarkus.bootstrap.resolver.QuarkusGradleModelFactory;
-import io.quarkus.bootstrap.resolver.model.QuarkusModel;
-import io.quarkus.bootstrap.resolver.model.SourceSet;
-import io.quarkus.bootstrap.resolver.model.Workspace;
-import io.quarkus.bootstrap.resolver.model.WorkspaceModule;
+import io.quarkus.bootstrap.workspace.SourceDir;
+import io.quarkus.bootstrap.workspace.WorkspaceModule;
+import io.quarkus.paths.PathTree;
 
 class QuarkusModelBuilderTest {
 
     @Test
-    void testToAppDependency() {
-        ResolvedArtifact artifact = mock(ResolvedArtifact.class);
-        ResolvedModuleVersion version = mock(ResolvedModuleVersion.class);
-        when(version.toString()).thenReturn(":commons-lang3-3.9:");
-        when(artifact.getModuleVersion()).thenReturn(version);
-        when(artifact.getFile()).thenReturn(Files.currentFolder());
-        assertThatCode(() -> QuarkusModelBuilder.toDependency(artifact)).doesNotThrowAnyException();
-    }
-
-    @Test
     public void shouldLoadSimpleModuleModel() throws URISyntaxException, IOException {
         File projectDir = getResourcesProject("builder/simple-module-project");
-        final QuarkusModel quarkusModel = QuarkusGradleModelFactory.create(projectDir, "TEST");
+        final ApplicationModel quarkusModel = QuarkusGradleModelFactory.create(projectDir, "TEST");
 
         assertNotNull(quarkusModel);
-        Workspace workspace = quarkusModel.getWorkspace();
-        assertWorkspace(workspace.getMainModule(), projectDir);
-        assertEquals(1, quarkusModel.getWorkspace().getAllModules().size());
+        assertNotNull(quarkusModel.getApplicationModule());
+        assertThat(quarkusModel.getWorkspaceModules()).isEmpty();
     }
 
     @Test
     public void shouldLoadMultiModuleModel() throws URISyntaxException, IOException {
         File projectDir = getResourcesProject("builder/multi-module-project");
-        createFakeBuildOutput(projectDir);
 
-        final QuarkusModel quarkusModel = QuarkusGradleModelFactory.create(new File(projectDir, "application"), "TEST");
+        final ApplicationModel quarkusModel = QuarkusGradleModelFactory.create(new File(projectDir, "application"), "TEST");
 
         assertNotNull(quarkusModel);
-        assertEquals(2, quarkusModel.getWorkspace().getAllModules().size());
 
-        for (WorkspaceModule module : quarkusModel.getWorkspace().getAllModules()) {
-            assertWorkspace(module, new File(projectDir, module.getArtifactCoords().getArtifactId()));
+        assertProjectModule(quarkusModel.getApplicationModule(),
+                new File(projectDir, quarkusModel.getApplicationModule().getId().getArtifactId()), true);
+
+        final Collection<WorkspaceModule> projectModules = quarkusModel.getWorkspaceModules();
+        assertEquals(projectModules.size(), 1);
+        for (WorkspaceModule p : projectModules) {
+            assertProjectModule(p, new File(projectDir, p.getId().getArtifactId()), false);
         }
     }
 
-    private void assertWorkspace(WorkspaceModule workspaceModule, File projectDir) {
-        assertNotNull(workspaceModule);
-        assertEquals(projectDir, workspaceModule.getProjectRoot());
-        assertEquals(new File(projectDir, "build"), workspaceModule.getBuildDir());
-        final SourceSet sourceSet = workspaceModule.getSourceSet();
-        assertNotNull(sourceSet);
-        assertNull(sourceSet.getResourceDirectory());
-        assertThat(sourceSet.getSourceDirectories()).containsAnyOf(new File(projectDir, "build/classes/java/main"),
-                new File(projectDir, "build/classes/java/test"));
-        final SourceSet sourceSourceSet = workspaceModule.getSourceSourceSet();
-        assertEquals(new File(projectDir, "src/main/resources"), sourceSourceSet.getResourceDirectory());
-        assertEquals(1, sourceSourceSet.getSourceDirectories().size());
-        assertEquals(new File(projectDir, "src/main/java"), sourceSourceSet.getSourceDirectories().iterator().next());
+    private void assertProjectModule(WorkspaceModule projectModule, File projectDir, boolean withTests) {
+        assertNotNull(projectModule);
+        assertEquals(projectDir, projectModule.getModuleDir());
+        assertEquals(new File(projectDir, "build"), projectModule.getBuildDir());
+
+        SourceDir src = projectModule.getMainSources().getSourceDirs().iterator().next();
+        assertNotNull(src);
+        assertThat(src.getOutputDir()).isEqualTo(projectDir.toPath().resolve("build/classes/java/main"));
+        PathTree sourceTree = src.getSourceTree();
+        assertThat(sourceTree).isNotNull();
+        assertThat(sourceTree.getRoots()).hasSize(1);
+        assertThat(sourceTree.getRoots().iterator().next()).isEqualTo(projectDir.toPath().resolve("src/main/java"));
+
+        src = projectModule.getMainSources().getResourceDirs().iterator().next();
+        assertNotNull(src);
+        assertThat(src.getOutputDir()).isEqualTo(projectDir.toPath().resolve("build/resources/main"));
+        sourceTree = src.getSourceTree();
+        assertThat(sourceTree).isNotNull();
+        assertThat(sourceTree.getRoots()).hasSize(1);
+        assertThat(sourceTree.getRoots().iterator().next()).isEqualTo(projectDir.toPath().resolve("src/main/resources"));
+
+        if (withTests) {
+            src = projectModule.getTestSources().getSourceDirs().iterator().next();
+            assertNotNull(src);
+            assertThat(src.getOutputDir()).isEqualTo(projectDir.toPath().resolve("build/classes/java/test"));
+            sourceTree = src.getSourceTree();
+            assertThat(sourceTree).isNotNull();
+            assertThat(sourceTree.getRoots()).hasSize(1);
+            assertThat(sourceTree.getRoots().iterator().next()).isEqualTo(projectDir.toPath().resolve("src/test/java"));
+
+            src = projectModule.getTestSources().getResourceDirs().iterator().next();
+            assertNotNull(src);
+            assertThat(src.getOutputDir()).isEqualTo(projectDir.toPath().resolve("build/resources/test"));
+            sourceTree = src.getSourceTree();
+            assertThat(sourceTree).isNotNull();
+            assertThat(sourceTree.getRoots()).hasSize(1);
+            assertThat(sourceTree.getRoots().iterator().next()).isEqualTo(projectDir.toPath().resolve("src/test/resources"));
+        } else {
+            assertThat(projectModule.getTestSources()).isNull();
+        }
     }
 
     private File getResourcesProject(String projectName) throws URISyntaxException, IOException {
@@ -96,14 +110,6 @@ class QuarkusModelBuilderTest {
             props.store(os, "Quarkus Gradle TS");
         }
         return projectDir;
-    }
-
-    private void createFakeBuildOutput(File projectDir) {
-        String[] modules = new String[] { "application", "common" };
-        for (String module : modules) {
-            new File(projectDir, module + "/build/classes/java/main").mkdirs();
-            new File(projectDir, module + "/build/classes/java/main").mkdirs();
-        }
     }
 
     protected String getQuarkusVersion() throws IOException {

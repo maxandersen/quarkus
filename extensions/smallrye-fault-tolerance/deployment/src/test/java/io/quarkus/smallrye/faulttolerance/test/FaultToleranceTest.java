@@ -15,8 +15,6 @@ import javax.inject.Inject;
 import org.eclipse.microprofile.faulttolerance.exceptions.BulkheadException;
 import org.eclipse.microprofile.faulttolerance.exceptions.CircuitBreakerOpenException;
 import org.eclipse.microprofile.faulttolerance.exceptions.TimeoutException;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -27,11 +25,13 @@ import io.quarkus.smallrye.faulttolerance.test.fallback.FallbackBean;
 import io.quarkus.smallrye.faulttolerance.test.retry.RetryBean;
 import io.quarkus.smallrye.faulttolerance.test.timeout.TimeoutBean;
 import io.quarkus.test.QuarkusUnitTest;
+import io.smallrye.faulttolerance.api.CircuitBreakerMaintenance;
+import io.smallrye.faulttolerance.api.CircuitBreakerState;
 
 public class FaultToleranceTest {
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(FallbackBean.class, BulkheadBean.class, TimeoutBean.class, RetryBean.class,
                             CircuitBreakerBean.class, AsynchronousBean.class));
 
@@ -46,7 +46,7 @@ public class FaultToleranceTest {
     @Inject
     CircuitBreakerBean circuitbreaker;
     @Inject
-    CircuitBreakerBean.Observer circuitBreakerObserver;
+    CircuitBreakerMaintenance circuitBreakerMaintenance;
     @Inject
     AsynchronousBean asynchronous;
 
@@ -97,11 +97,23 @@ public class FaultToleranceTest {
         assertThrows(RuntimeException.class, () -> circuitbreaker.breakCircuit());
         assertThrows(RuntimeException.class, () -> circuitbreaker.breakCircuit());
         assertThrows(CircuitBreakerOpenException.class, () -> circuitbreaker.breakCircuit());
-        assertTrue(circuitBreakerObserver.isOpen());
+        assertEquals(CircuitBreakerState.OPEN, circuitBreakerMaintenance.currentState("my-cb"));
     }
 
     @Test
     public void testAsynchronous() throws ExecutionException, InterruptedException {
         assertEquals("hello", asynchronous.asynchronous().toCompletableFuture().get());
     }
+
+    @Test
+    public void undefinedCircuitBreaker() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            circuitBreakerMaintenance.currentState("undefined");
+        });
+
+        assertThrows(IllegalArgumentException.class, () -> {
+            circuitBreakerMaintenance.reset("undefined");
+        });
+    }
+
 }

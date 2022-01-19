@@ -1,5 +1,6 @@
 package io.quarkus.oidc;
 
+import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -13,9 +14,40 @@ import io.vertx.ext.web.RoutingContext;
  */
 public interface TokenStateManager {
 
-    String createTokenState(RoutingContext routingContext, OidcTenantConfig oidcConfig, AuthorizationCodeTokens tokens);
+    /**
+     * Convert the authorization code flow tokens into a token state.
+     *
+     * @param routingContext the request context
+     * @param oidcConfig the tenant configuration
+     * @param tokens the authorization code flow tokens
+     * @param requestContext the request context
+     *
+     * @return the token state
+     */
+    Uni<String> createTokenState(RoutingContext routingContext, OidcTenantConfig oidcConfig,
+            AuthorizationCodeTokens tokens, OidcRequestContext<String> requestContext);
 
-    AuthorizationCodeTokens getTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState);
+    /**
+     * Convert the token state into the authorization code flow tokens.
+     *
+     * @param routingContext the request context
+     * @param oidcConfig the tenant configuration
+     * @param tokenState the token state
+     * @param requestContext the request context
+     *
+     * @return the authorization code flow tokens
+     */
+    Uni<AuthorizationCodeTokens> getTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig,
+            String tokenState, OidcRequestContext<AuthorizationCodeTokens> requestContext);
 
-    void deleteTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState);
+    /**
+     * Delete the token state.
+     *
+     * @param routingContext the request context
+     * @param oidcConfig the tenant configuration
+     * @param tokenState the token state
+     */
+    Uni<Void> deleteTokens(RoutingContext routingContext, OidcTenantConfig oidcConfig, String tokenState,
+            OidcRequestContext<Void> requestContext);
+
 }

@@ -22,14 +22,13 @@ import java.util.Properties;
 import org.apache.commons.lang3.SystemUtils;
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.app.AdditionalDependency;
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.deployment.util.ProcessUtil;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
 import io.quarkus.dev.spi.DevModeType;
+import io.quarkus.maven.dependency.ArtifactKey;
+import io.quarkus.paths.PathList;
 
 /**
  * The main entry point for the dev mojo execution
@@ -87,15 +86,15 @@ public class DevModeMain implements Closeable {
                     }
                 }
             }
-            final PathsCollection.Builder appRoots = PathsCollection.builder();
-            Path p = Paths.get(context.getApplicationRoot().getClassesPath());
+            final PathList.Builder appRoots = PathList.builder();
+            Path p = Path.of(context.getApplicationRoot().getMain().getClassesPath());
             if (Files.exists(p)) {
                 appRoots.add(p);
             }
-            if (context.getApplicationRoot().getResourcesOutputPath() != null
-                    && !context.getApplicationRoot().getResourcesOutputPath()
-                            .equals(context.getApplicationRoot().getClassesPath())) {
-                p = Paths.get(context.getApplicationRoot().getResourcesOutputPath());
+            if (context.getApplicationRoot().getMain().getResourcesOutputPath() != null
+                    && !context.getApplicationRoot().getMain().getResourcesOutputPath()
+                            .equals(context.getApplicationRoot().getMain().getClassesPath())) {
+                p = Paths.get(context.getApplicationRoot().getMain().getResourcesOutputPath());
                 if (Files.exists(p)) {
                     appRoots.add(p);
                 }
@@ -116,19 +115,8 @@ public class DevModeMain implements Closeable {
             } else {
                 bootstrapBuilder.setProjectRoot(new File(".").toPath());
             }
-            for (AppArtifactKey i : context.getLocalArtifacts()) {
+            for (ArtifactKey i : context.getLocalArtifacts()) {
                 bootstrapBuilder.addLocalArtifact(i);
-            }
-
-            for (DevModeContext.ModuleInfo i : context.getAllModules()) {
-                if (i.getClassesPath() != null) {
-                    Path classesPath = Paths.get(i.getClassesPath());
-                    bootstrapBuilder.addAdditionalApplicationArchive(new AdditionalDependency(classesPath, true, false));
-                }
-                if (i.getResourcesOutputPath() != null && !i.getResourcesOutputPath().equals(i.getClassesPath())) {
-                    Path resourceOutputPath = Paths.get(i.getResourcesOutputPath());
-                    bootstrapBuilder.addAdditionalApplicationArchive(new AdditionalDependency(resourceOutputPath, true, false));
-                }
             }
 
             linkDotEnvFile();
@@ -188,6 +176,7 @@ public class DevModeMain implements Closeable {
             } catch (IOException | InterruptedException e) {
                 log.warn("Unable to link .env file", e);
             }
+            link.toFile().deleteOnExit();
         }
     }
 
@@ -225,5 +214,7 @@ public class DevModeMain implements Closeable {
         if (ApplicationStateNotification.getState() == ApplicationStateNotification.State.STARTED) {
             ApplicationStateNotification.waitForApplicationStop();
         }
+        curatedApplication.close();
+        curatedApplication = null;
     }
 }

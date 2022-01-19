@@ -43,7 +43,7 @@ import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.security.deployment.AdditionalSecurityCheckBuildItem;
 import io.quarkus.security.deployment.SecurityTransformerUtils;
 import io.quarkus.security.runtime.SecurityCheckRecorder;
-import io.quarkus.security.runtime.interceptor.check.SecurityCheck;
+import io.quarkus.security.spi.runtime.SecurityCheck;
 import io.quarkus.spring.di.deployment.SpringBeanNameToDotNameBuildItem;
 import io.quarkus.spring.security.runtime.interceptor.SpringPreauthorizeInterceptor;
 import io.quarkus.spring.security.runtime.interceptor.SpringSecuredInterceptor;
@@ -58,12 +58,6 @@ class SpringSecurityProcessor {
 
     private static final int PARAMETER_EQ_PRINCIPAL_USERNAME_PARAMETER_NAME_GROUP = 1;
     private static final int PARAMETER_EQ_PRINCIPAL_USERNAME_PROPERTY_ACCESSOR_MATCHER_GROUP = 3;
-
-    static final int ANNOTATION = 0x00002000;
-
-    static boolean isAnnotation(final int mod) {
-        return (mod & ANNOTATION) != 0;
-    }
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -209,7 +203,7 @@ class SpringSecurityProcessor {
                 continue;
             }
             ClassInfo classInfo = instance.target().asClass();
-            if (isAnnotation(classInfo.flags())) {
+            if (classInfo.isAnnotation()) {
                 // if the instance is an annotation we need to record it and handle it later
                 metaAnnotations.put(classInfo.name(), classInfo);
                 continue;

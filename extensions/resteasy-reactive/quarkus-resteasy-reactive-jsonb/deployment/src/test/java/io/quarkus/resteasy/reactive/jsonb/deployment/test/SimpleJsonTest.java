@@ -1,5 +1,6 @@
 package io.quarkus.resteasy.reactive.jsonb.deployment.test;
 
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
@@ -22,7 +23,7 @@ public class SimpleJsonTest {
                 @Override
                 public JavaArchive get() {
                     return ShrinkWrap.create(JavaArchive.class)
-                            .addClasses(Person.class, SimpleJsonResource.class, SuperClass.class);
+                            .addClasses(Person.class, SimpleJsonResource.class, SuperClass.class, DataItem.class, Item.class);
                 }
             });
 
@@ -140,6 +141,7 @@ public class SimpleJsonTest {
         RestAssured
                 .with()
                 .body(postBody)
+                .accept("application/json")
                 .contentType("application/json")
                 .post("/simple/person-validated")
                 .then()
@@ -150,6 +152,7 @@ public class SimpleJsonTest {
         RestAssured
                 .with()
                 .body(postBody)
+                .accept("application/json")
                 .contentType("application/json")
                 .post("/simple/person-invalid-result")
                 .then()
@@ -159,6 +162,7 @@ public class SimpleJsonTest {
         RestAssured
                 .with()
                 .body("{\"first\": \"Bob\"}")
+                .accept("application/json")
                 .contentType("application/json")
                 .post("/simple/person-validated")
                 .then()
@@ -199,5 +203,18 @@ public class SimpleJsonTest {
                 .statusCode(200)
                 .contentType("application/json")
                 .body(Matchers.equalTo("[]"));
+    }
+
+    @Test
+    public void testGenericInput() {
+        RestAssured
+                .with()
+                .body("{\"content\": {\"name\":\"foo\", \"email\":\"bar\"}}")
+                .contentType("application/json; charset=utf-8")
+                .post("/simple/genericInput")
+                .then()
+                .statusCode(200)
+                .contentType("text/plain")
+                .body(is("foo"));
     }
 }

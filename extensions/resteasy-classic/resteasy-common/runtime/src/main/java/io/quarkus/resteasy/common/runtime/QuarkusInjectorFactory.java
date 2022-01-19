@@ -18,17 +18,20 @@ import org.jboss.resteasy.spi.ResteasyProviderFactory;
 import org.jboss.resteasy.spi.metadata.ResourceClass;
 import org.jboss.resteasy.spi.metadata.ResourceConstructor;
 
-import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.arc.runtime.ClientProxyUnwrapper;
 
 public class QuarkusInjectorFactory extends InjectorFactoryImpl {
 
     private static final Logger log = Logger.getLogger("io.quarkus.resteasy.runtime");
-    static volatile BeanContainer CONTAINER = null;
-    static volatile Function<Object, Object> PROXY_UNWRAPPER;
+    static final Function<Object, Object> PROXY_UNWRAPPER = new ClientProxyUnwrapper();
 
     @SuppressWarnings("rawtypes")
     @Override
     public ConstructorInjector createConstructor(Constructor constructor, ResteasyProviderFactory providerFactory) {
+        if (constructor == null) {
+            throw new IllegalStateException(
+                    "Unable to locate proper constructor for dynamically registered provider. Make sure the class has a no-args constructor and that it uses '@Context' for field injection if necessary.");
+        }
         log.debugf("Create constructor: %s", constructor);
         return new QuarkusConstructorInjector(constructor, super.createConstructor(constructor, providerFactory));
     }

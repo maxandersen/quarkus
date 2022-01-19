@@ -5,6 +5,7 @@ import io.quarkus.bootstrap.resolver.CollectDependenciesBase;
 import io.quarkus.bootstrap.resolver.TsArtifact;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
 import io.quarkus.bootstrap.util.IoUtils;
+import io.quarkus.maven.dependency.DependencyFlags;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -30,7 +31,7 @@ public class SystemPropertyOverridesPomPropertyDependencyTestCase extends Collec
         setSystemProperty("x.version", "3");
 
         // it is expected that the system property will dominate
-        addCollectedDep(x13);
+        addCollectedDep(x13, DependencyFlags.DIRECT);
     }
 
     @Override

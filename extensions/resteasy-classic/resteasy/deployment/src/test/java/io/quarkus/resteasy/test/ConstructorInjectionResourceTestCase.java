@@ -1,8 +1,6 @@
 package io.quarkus.resteasy.test;
 
 import org.hamcrest.Matchers;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -13,11 +11,17 @@ public class ConstructorInjectionResourceTestCase {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(ConstructorInjectionResource.class, Service.class));
+            .withApplicationRoot((jar) -> jar
+                    .addClasses(ConstructorInjectionResource.class, SingletonConstructorInjectionResource.class,
+                            Service.class));
 
     @Test
     public void testConstructorInjectionResource() {
         RestAssured.when().get("/ctor").then().body(Matchers.is("service"));
+    }
+
+    @Test
+    public void testSingletonConstructorInjectionResource() {
+        RestAssured.when().get("/ctor-single").then().body(Matchers.is("service"));
     }
 }

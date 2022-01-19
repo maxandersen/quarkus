@@ -11,8 +11,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.jboss.logging.Logger;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.cli.common.ExitCode;
 import org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments;
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageLocation;
@@ -23,6 +21,7 @@ import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler;
 import org.jetbrains.kotlin.config.Services;
 
 import io.quarkus.deployment.dev.CompilationProvider;
+import io.quarkus.paths.PathCollection;
 
 public class KotlinCompilationProvider implements CompilationProvider {
 
@@ -46,7 +45,7 @@ public class KotlinCompilationProvider implements CompilationProvider {
             compilerArguments.setPluginClasspaths(context.getCompilePluginArtifacts().toArray(new String[0]));
         }
         if (context.getCompilerPluginOptions() != null && !context.getCompilerPluginOptions().isEmpty()) {
-            List<String> sanitizedOptions = new ArrayList<>(context.getCompilerOptions().size());
+            List<String> sanitizedOptions = new ArrayList<>(context.getCompilerPluginOptions().size());
             for (String rawOption : context.getCompilerPluginOptions()) {
                 Matcher matcher = OPTION_PATTERN.matcher(rawOption);
                 if (!matcher.matches()) {
@@ -70,9 +69,12 @@ public class KotlinCompilationProvider implements CompilationProvider {
                 context.getClasspath().stream().map(File::getAbsolutePath).collect(Collectors.joining(File.pathSeparator)));
         compilerArguments.setDestination(context.getOutputDirectory().getAbsolutePath());
         compilerArguments.setFreeArgs(filesToCompile.stream().map(File::getAbsolutePath).collect(Collectors.toList()));
+
         compilerArguments.setSuppressWarnings(true);
         SimpleKotlinCompilerMessageCollector messageCollector = new SimpleKotlinCompilerMessageCollector();
-        ExitCode exitCode = new K2JVMCompiler().exec(
+        K2JVMCompiler compiler = new K2JVMCompiler();
+
+        ExitCode exitCode = compiler.exec(
                 messageCollector,
                 new Services.Builder().build(),
                 compilerArguments);
@@ -87,7 +89,7 @@ public class KotlinCompilationProvider implements CompilationProvider {
     }
 
     @Override
-    public Path getSourcePath(Path classFilePath, Set<String> sourcePaths, String classesPath) {
+    public Path getSourcePath(Path classFilePath, PathCollection sourcePaths, String classesPath) {
         // return same class so it is not removed
         return classFilePath;
     }
@@ -123,8 +125,7 @@ public class KotlinCompilationProvider implements CompilationProvider {
         }
 
         @Override
-        public void report(@NotNull CompilerMessageSeverity severity, @NotNull String s,
-                @Nullable CompilerMessageSourceLocation location) {
+        public void report(CompilerMessageSeverity severity, String s, CompilerMessageSourceLocation location) {
             if (severity.isError()) {
                 if ((location != null) && (location.getLineContent() != null)) {
                     errors.add(String.format("%s%n%s:%d:%d%nReason: %s", location.getLineContent(), location.getPath(),

@@ -5,6 +5,8 @@ import java.util.Optional;
 import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
+import io.quarkus.runtime.annotations.ConvertWith;
+import io.quarkus.runtime.configuration.TrimmedStringConverter;
 
 @ConfigGroup
 public class HibernateOrmRuntimeConfigPersistenceUnit {
@@ -17,6 +19,13 @@ public class HibernateOrmRuntimeConfigPersistenceUnit {
     public HibernateOrmConfigPersistenceUnitDatabase database = new HibernateOrmConfigPersistenceUnitDatabase();
 
     /**
+     * Database scripts related configuration.
+     */
+    @ConfigItem
+    @ConfigDocSection
+    public HibernateOrmConfigPersistenceUnitScripts scripts = new HibernateOrmConfigPersistenceUnitScripts();
+
+    /**
      * Logging configuration.
      */
     @ConfigItem
@@ -25,6 +34,7 @@ public class HibernateOrmRuntimeConfigPersistenceUnit {
 
     public boolean isAnyPropertySet() {
         return database.isAnyPropertySet() ||
+                scripts.isAnyPropertySet() ||
                 log.isAnyPropertySet();
     }
 
@@ -36,6 +46,36 @@ public class HibernateOrmRuntimeConfigPersistenceUnit {
          */
         @ConfigItem
         public HibernateOrmConfigPersistenceUnitDatabaseGeneration generation = new HibernateOrmConfigPersistenceUnitDatabaseGeneration();
+
+        /**
+         * The default catalog to use for the database objects.
+         */
+        @ConfigItem
+        @ConvertWith(TrimmedStringConverter.class)
+        public Optional<String> defaultCatalog;
+
+        /**
+         * The default schema to use for the database objects.
+         */
+        @ConfigItem
+        @ConvertWith(TrimmedStringConverter.class)
+        public Optional<String> defaultSchema;
+
+        public boolean isAnyPropertySet() {
+            return generation.isAnyPropertySet()
+                    || defaultCatalog.isPresent()
+                    || defaultSchema.isPresent();
+        }
+    }
+
+    @ConfigGroup
+    public static class HibernateOrmConfigPersistenceUnitScripts {
+
+        /**
+         * Schema generation configuration.
+         */
+        @ConfigItem
+        public HibernateOrmConfigPersistenceUnitScriptGeneration generation = new HibernateOrmConfigPersistenceUnitScriptGeneration();
 
         public boolean isAnyPropertySet() {
             return generation.isAnyPropertySet();
@@ -50,9 +90,13 @@ public class HibernateOrmRuntimeConfigPersistenceUnit {
          *
          * `drop-and-create` is awesome in development mode.
          *
-         * Accepted values: `none`, `create`, `drop-and-create`, `drop`, `update`.
+         * This defaults to 'none', however if Dev Services is in use and no other extensions that manage the schema are present
+         * this will default to 'drop-and-create'.
+         *
+         * Accepted values: `none`, `create`, `drop-and-create`, `drop`, `update`, `validate`.
          */
         @ConfigItem(name = ConfigItem.PARENT, defaultValue = "none")
+        @ConvertWith(TrimmedStringConverter.class)
         public String generation = "none";
 
         /**
@@ -71,6 +115,39 @@ public class HibernateOrmRuntimeConfigPersistenceUnit {
             return !"none".equals(generation)
                     || createSchemas
                     || haltOnError;
+        }
+    }
+
+    @ConfigGroup
+    public static class HibernateOrmConfigPersistenceUnitScriptGeneration {
+
+        /**
+         * Select whether the database schema DDL files are generated or not.
+         *
+         * Accepted values: `none`, `create`, `drop-and-create`, `drop`, `update`, `validate`.
+         */
+        @ConfigItem(name = ConfigItem.PARENT, defaultValue = "none")
+        @ConvertWith(TrimmedStringConverter.class)
+        public String generation = "none";
+
+        /**
+         * Filename or URL where the database create DDL file should be generated.
+         */
+        @ConfigItem
+        @ConvertWith(TrimmedStringConverter.class)
+        public Optional<String> createTarget = Optional.empty();
+
+        /**
+         * Filename or URL where the database drop DDL file should be generated.
+         */
+        @ConfigItem
+        @ConvertWith(TrimmedStringConverter.class)
+        public Optional<String> dropTarget = Optional.empty();
+
+        public boolean isAnyPropertySet() {
+            return !"none".equals(generation)
+                    || createTarget.isPresent()
+                    || dropTarget.isPresent();
         }
     }
 
@@ -97,8 +174,14 @@ public class HibernateOrmRuntimeConfigPersistenceUnit {
         @ConfigItem(defaultValueDocumentation = "depends on dialect")
         public Optional<Boolean> jdbcWarnings = Optional.empty();
 
+        /**
+         * If set, Hibernate will log queries that took more than specified number of milliseconds to execute.
+         */
+        @ConfigItem
+        public Optional<Long> queriesSlowerThanMs = Optional.empty();
+
         public boolean isAnyPropertySet() {
-            return sql || !formatSql || jdbcWarnings.isPresent();
+            return sql || !formatSql || jdbcWarnings.isPresent() || queriesSlowerThanMs.isPresent();
         }
     }
 

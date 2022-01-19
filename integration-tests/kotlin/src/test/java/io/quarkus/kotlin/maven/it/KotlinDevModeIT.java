@@ -53,4 +53,21 @@ public class KotlinDevModeIT extends RunAndCheckMojoTestBase {
                 .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello/bean").contains(newUuid));
     }
+
+    @Test
+    public void testThatTheApplicationIsReloadedOnKotlinChangeWithCustomCompilerArgs()
+            throws MavenInvocationException, IOException {
+        testDir = initProject("projects/kotlin-compiler-args", "projects/kotlin-compiler-args-change");
+        runAndCheck(false);
+
+        // Edit the "Hello" message.
+        File jaxRsResource = new File(testDir, "src/main/kotlin/org/acme/HelloResource.kt");
+        String uuid = UUID.randomUUID().toString();
+        filter(jaxRsResource, ImmutableMap.of("\"hello\"", "\"" + uuid + "\""));
+
+        // Wait until we get "uuid"
+        await()
+                .pollDelay(1, TimeUnit.SECONDS)
+                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains(uuid));
+    }
 }

@@ -134,7 +134,7 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public List<Decorator<?>> resolveDecorators(Set<Type> types, Annotation... qualifiers) {
-        throw new UnsupportedOperationException();
+        return ArcContainerImpl.instance().resolveDecorators(types, qualifiers);
     }
 
     @Override
@@ -161,8 +161,8 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public boolean isQualifier(Class<? extends Annotation> annotationType) {
-        // BeforeBeanDiscovery.addQualifier() and equivalents are not supported
-        return annotationType.isAnnotationPresent(Qualifier.class);
+        return annotationType.isAnnotationPresent(Qualifier.class)
+                || ArcContainerImpl.instance().getCustomQualifiers().contains(annotationType.getName());
     }
 
     @Override

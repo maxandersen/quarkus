@@ -1,6 +1,6 @@
 package org.jboss.resteasy.reactive.server.core;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -28,10 +28,12 @@ public class DeploymentInfo {
     private ParamConverterProviders paramConverterProviders;
     private Supplier<Application> applicationSupplier;
     private Function<Class<?>, BeanFactory<?>> factoryCreator;
-    private ResteasyReactiveConfig config;
+    private ResteasyReactiveConfig resteasyReactiveConfig;
     private Function<Object, Object> clientProxyUnwrapper;
     private String applicationPath;
-    private List<HandlerChainCustomizer> globalHandlerCustomers = Collections.emptyList();
+    private List<HandlerChainCustomizer> globalHandlerCustomizers = new ArrayList<>();
+    private boolean developmentMode;
+    private boolean resumeOn404;
 
     public ResourceInterceptors getInterceptors() {
         return interceptors;
@@ -141,12 +143,12 @@ public class DeploymentInfo {
         return this;
     }
 
-    public ResteasyReactiveConfig getConfig() {
-        return config;
+    public ResteasyReactiveConfig getResteasyReactiveConfig() {
+        return resteasyReactiveConfig;
     }
 
-    public DeploymentInfo setConfig(ResteasyReactiveConfig config) {
-        this.config = config;
+    public DeploymentInfo setResteasyReactiveConfig(ResteasyReactiveConfig resteasyReactiveConfig) {
+        this.resteasyReactiveConfig = resteasyReactiveConfig;
         return this;
     }
 
@@ -160,11 +162,29 @@ public class DeploymentInfo {
     }
 
     public List<HandlerChainCustomizer> getGlobalHandlerCustomizers() {
-        return globalHandlerCustomers;
+        return globalHandlerCustomizers;
     }
 
-    public DeploymentInfo setGlobalHandlerCustomers(List<HandlerChainCustomizer> globalHandlerCustomers) {
-        this.globalHandlerCustomers = globalHandlerCustomers;
+    public DeploymentInfo setGlobalHandlerCustomizers(List<HandlerChainCustomizer> globalHandlerCustomers) {
+        this.globalHandlerCustomizers = globalHandlerCustomers;
+        return this;
+    }
+
+    public boolean isDevelopmentMode() {
+        return developmentMode;
+    }
+
+    public DeploymentInfo setDevelopmentMode(boolean developmentMode) {
+        this.developmentMode = developmentMode;
+        return this;
+    }
+
+    public boolean isResumeOn404() {
+        return resumeOn404;
+    }
+
+    public DeploymentInfo setResumeOn404(boolean resumeOn404) {
+        this.resumeOn404 = resumeOn404;
         return this;
     }
 }

@@ -2,13 +2,12 @@ name: maven-wrapper
 type: tooling
 output-strategy:
   "mvnw": "executable"
-  "mvnw.cmd": "executable"
 language:
   base:
     data:
       maven:
-        version: 3.6.3
-        wrapper-version: 0.5.6
+        version: 3.8.4
+        wrapper-version: 3.1.0
     shared-data:
       buildtool:
         cli: ./mvnw

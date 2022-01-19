@@ -11,10 +11,10 @@ import io.vertx.core.eventbus.MessageCodec;
 /**
  * Marks a business method to be automatically registered as a Vertx message consumer.
  * <p>
- * The method must accept exactly one parameter. If it accepts {@link io.vertx.core.eventbus.Message} then the return type must
- * be void. For any other type the {@link io.vertx.core.eventbus.Message#body()} is passed as the parameter value and the method
- * may return an object that is passed to
- * {@link io.vertx.core.eventbus.Message#reply(Object)}, either directly or via
+ * The method must accept exactly one parameter. If it accepts {@link io.vertx.core.eventbus.Message} or
+ * {@link io.vertx.mutiny.core.eventbus.Message} then the return type must be void. For any other type the
+ * {@link io.vertx.core.eventbus.Message#body()} is passed as the parameter value and the method
+ * may return an object that is passed to {@link io.vertx.core.eventbus.Message#reply(Object)}, either directly or via
  * {@link java.util.concurrent.CompletionStage#thenAccept(java.util.function.Consumer)} in case of the method returns a
  * completion stage.
  * 
@@ -40,11 +40,19 @@ import io.vertx.core.eventbus.MessageCodec;
  * </pre>
  * 
  * <p>
- * The CDI request context is active during notification of the registered message consumer.
+ * The CDI request context is always active during notification of the registered message consumer.
+ * <p>
+ * If a method annotated with {@link ConsumeEvent} throws an exception then:
+ * <ul>
+ * <li>if a reply handler is set the failure is propagated back to the sender via an
+ * {@link io.vertx.core.eventbus.ReplyException} with code {@link #FAILURE_CODE} and the exception message,</li>
+ * <li>if no reply handler is set then the exception is rethrown (and wrapped in a {@link java.lang.RuntimeException} if
+ * necessary) and can be handled by the default exception handler, i.e. {@link io.vertx.core.Vertx#exceptionHandler().}</li>
+ * </ul>
  * 
  * @see io.vertx.core.eventbus.EventBus
  */
-@Target({ METHOD })
+@Target(METHOD)
 @Retention(RUNTIME)
 public @interface ConsumeEvent {
 

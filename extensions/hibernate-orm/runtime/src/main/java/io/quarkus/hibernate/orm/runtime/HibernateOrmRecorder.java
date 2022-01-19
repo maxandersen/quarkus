@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.hibernate.MultiTenancyStrategy;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
@@ -20,6 +22,7 @@ import io.quarkus.arc.runtime.BeanContainerListener;
 import io.quarkus.hibernate.orm.runtime.boot.QuarkusPersistenceUnitDefinition;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrationRuntimeDescriptor;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
+import io.quarkus.hibernate.orm.runtime.schema.SchemaManagementIntegrator;
 import io.quarkus.hibernate.orm.runtime.session.ForwardingSession;
 import io.quarkus.hibernate.orm.runtime.tenant.DataSourceTenantConnectionResolver;
 import io.quarkus.runtime.annotations.Recorder;
@@ -54,6 +57,12 @@ public class HibernateOrmRecorder {
     public BeanContainerListener initMetadata(List<QuarkusPersistenceUnitDefinition> parsedPersistenceXmlDescriptors,
             Scanner scanner, Collection<Class<? extends Integrator>> additionalIntegrators,
             PreGeneratedProxies proxyDefinitions) {
+        SchemaManagementIntegrator.clearDsMap();
+        for (QuarkusPersistenceUnitDefinition i : parsedPersistenceXmlDescriptors) {
+            if (i.getDataSource().isPresent()) {
+                SchemaManagementIntegrator.mapDatasource(i.getDataSource().get(), i.getName());
+            }
+        }
         return new BeanContainerListener() {
             @Override
             public void created(BeanContainer beanContainer) {
@@ -73,7 +82,7 @@ public class HibernateOrmRecorder {
     }
 
     public Supplier<DataSourceTenantConnectionResolver> dataSourceTenantConnectionResolver(String persistenceUnitName,
-            String dataSourceName,
+            Optional<String> dataSourceName,
             MultiTenancyStrategy multiTenancyStrategy, String multiTenancySchemaDataSourceName) {
         return new Supplier<DataSourceTenantConnectionResolver>() {
             @Override
@@ -119,4 +128,24 @@ public class HibernateOrmRecorder {
         };
     }
 
+    public void doValidation(String puName) {
+        Optional<String> val;
+        if (puName.equals(PersistenceUnitUtil.DEFAULT_PERSISTENCE_UNIT_NAME)) {
+            val = ConfigProvider.getConfig().getOptionalValue("quarkus.hibernate-orm.database.generation", String.class);
+        } else {
+            val = ConfigProvider.getConfig().getOptionalValue("quarkus.hibernate-orm.\"" + puName + "\".database.generation",
+                    String.class);
+        }
+        //if hibernate is already managing the schema we don't do this
+        if (val.isPresent() && !val.get().equals("none")) {
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                SchemaManagementIntegrator.runPostBootValidation(puName);
+            }
+        }, "Hibernate post-boot validation thread for " + puName).start();
+
+    }
 }

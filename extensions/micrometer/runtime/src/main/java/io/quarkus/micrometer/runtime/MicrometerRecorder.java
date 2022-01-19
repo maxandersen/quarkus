@@ -1,7 +1,6 @@
 package io.quarkus.micrometer.runtime;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,7 +94,7 @@ public class MicrometerRecorder {
                     .getReference(i, MeterRegistry.class, beanManager.createCreationalContext(i));
 
             // Add & configure non-root registries
-            if (registry != Metrics.globalRegistry) {
+            if (registry != Metrics.globalRegistry && registry != null) {
                 applyMeterFilters(registry, globalFilters);
                 applyMeterFilters(registry, classMeterFilters.get(registry.getClass()));
                 log.debugf("Adding configured registry %s", registry.getClass(), registry);
@@ -104,7 +103,7 @@ public class MicrometerRecorder {
         }
 
         // Base JVM Metrics
-        if (config.binder.jvm) {
+        if (config.checkBinderEnabledWithDefault(() -> config.binder.jvm)) {
             new ClassLoaderMetrics().bindTo(Metrics.globalRegistry);
             new JvmHeapPressureMetrics().bindTo(Metrics.globalRegistry);
             new JvmMemoryMetrics().bindTo(Metrics.globalRegistry);
@@ -115,8 +114,8 @@ public class MicrometerRecorder {
             }
         }
 
-        // System
-        if (config.binder.system) {
+        // System metrics
+        if (config.checkBinderEnabledWithDefault(() -> config.binder.system)) {
             new UptimeMetrics().bindTo(Metrics.globalRegistry);
             new ProcessorMetrics().bindTo(Metrics.globalRegistry);
             new FileDescriptorMetrics().bindTo(Metrics.globalRegistry);
@@ -127,21 +126,24 @@ public class MicrometerRecorder {
         // configured, some measurements may be missed.
         Instance<MeterBinder> allBinders = beanManager.createInstance()
                 .select(MeterBinder.class, Any.Literal.INSTANCE);
-        allBinders.forEach(x -> x.bindTo(Metrics.globalRegistry));
+        for (MeterBinder meterBinder : allBinders) {
+            meterBinder.bindTo(Metrics.globalRegistry);
+        }
 
         context.addShutdownTask(new Runnable() {
             @Override
             public void run() {
                 if (LaunchMode.current() == LaunchMode.DEVELOPMENT) {
                     // Drop existing meters (recreated on next use)
-                    Collection<Meter> meters = new ArrayList<>(Metrics.globalRegistry.getMeters());
-                    meters.forEach(m -> Metrics.globalRegistry.remove(m));
+                    for (Meter meter : Metrics.globalRegistry.getMeters()) {
+                        Metrics.globalRegistry.remove(meter);
+                    }
                 }
-                Collection<MeterRegistry> cleanup = new ArrayList<>(Metrics.globalRegistry.getRegistries());
-                cleanup.forEach(x -> {
-                    x.close();
-                    Metrics.removeRegistry(x);
-                });
+                // iterate over defensive copy to avoid ConcurrentModificationException
+                for (MeterRegistry meterRegistry : new ArrayList<>(Metrics.globalRegistry.getRegistries())) {
+                    meterRegistry.close();
+                    Metrics.removeRegistry(meterRegistry);
+                }
             }
         });
     }
@@ -173,7 +175,7 @@ public class MicrometerRecorder {
         Class<?> clazz = null;
         try {
             clazz = Class.forName(classname, false, Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException e) {
+        } catch (ClassNotFoundException ignored) {
         }
         log.debugf("getClass: TCCL: %s ## %s : %s", Thread.currentThread().getContextClassLoader(), classname, (clazz != null));
         return clazz;

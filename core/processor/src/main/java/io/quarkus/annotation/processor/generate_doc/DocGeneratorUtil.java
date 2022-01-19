@@ -335,45 +335,6 @@ public class DocGeneratorUtil {
     }
 
     /**
-     * Guess extension name from given configuration root class name
-     */
-    public static String computeExtensionGeneralConfigDocFileName(String configRoot) {
-        StringBuilder extensionNameBuilder = new StringBuilder();
-        final Matcher matcher = Constants.PKG_PATTERN.matcher(configRoot);
-        if (!matcher.find()) {
-            extensionNameBuilder.append(configRoot);
-        } else {
-            String extensionName = matcher.group(1);
-            final String subgroup = matcher.group(2);
-            extensionNameBuilder.append(Constants.QUARKUS);
-            extensionNameBuilder.append(Constants.DASH);
-
-            if (Constants.DEPLOYMENT.equals(extensionName) || Constants.RUNTIME.equals(extensionName)) {
-                extensionNameBuilder.append(CORE);
-            } else if (subgroup != null && !Constants.DEPLOYMENT.equals(subgroup)
-                    && !Constants.RUNTIME.equals(subgroup) && !Constants.COMMON.equals(subgroup)
-                    && subgroup.matches(Constants.DIGIT_OR_LOWERCASE)) {
-                extensionNameBuilder.append(extensionName);
-                extensionNameBuilder.append(Constants.DASH);
-                extensionNameBuilder.append(subgroup);
-
-                final String qualifier = matcher.group(3);
-                if (qualifier != null && !Constants.DEPLOYMENT.equals(qualifier)
-                        && !Constants.RUNTIME.equals(qualifier) && !Constants.COMMON.equals(qualifier)
-                        && qualifier.matches(Constants.DIGIT_OR_LOWERCASE)) {
-                    extensionNameBuilder.append(Constants.DASH);
-                    extensionNameBuilder.append(qualifier);
-                }
-            } else {
-                extensionNameBuilder.append(extensionName);
-            }
-        }
-
-        extensionNameBuilder.append(Constants.ADOC_EXTENSION);
-        return extensionNameBuilder.toString();
-    }
-
-    /**
      * Guess config group file name from given configuration group class name
      */
     public static String computeConfigGroupDocFileName(String configGroupClassName) {
@@ -487,22 +448,39 @@ public class DocGeneratorUtil {
         return type.substring(1 + type.lastIndexOf(Constants.DOT));
     }
 
-    static String deriveConfigRootName(String simpleClassName, ConfigPhase configPhase) {
+    static String getName(String prefix, String name, String simpleClassName, ConfigPhase configPhase) {
+        if (name.equals(Constants.HYPHENATED_ELEMENT_NAME)) {
+            return deriveConfigRootName(simpleClassName, prefix, configPhase);
+        }
+
+        if (!prefix.isEmpty()) {
+            if (!name.isEmpty()) {
+                return prefix + Constants.DOT + name;
+            } else {
+                return prefix;
+            }
+        } else {
+            return name;
+        }
+    }
+
+    static String deriveConfigRootName(String simpleClassName, String prefix, ConfigPhase configPhase) {
         String simpleNameInLowerCase = simpleClassName.toLowerCase();
         int length = simpleNameInLowerCase.length();
 
         if (simpleNameInLowerCase.endsWith(CONFIG.toLowerCase())) {
             String sanitized = simpleClassName.substring(0, length - CONFIG.length());
-            return deriveConfigRootName(sanitized, configPhase);
+            return deriveConfigRootName(sanitized, prefix, configPhase);
         } else if (simpleNameInLowerCase.endsWith(CONFIGURATION.toLowerCase())) {
             String sanitized = simpleClassName.substring(0, length - CONFIGURATION.length());
-            return deriveConfigRootName(sanitized, configPhase);
+            return deriveConfigRootName(sanitized, prefix, configPhase);
         } else if (simpleNameInLowerCase.endsWith(configPhase.getConfigSuffix().toLowerCase())) {
             String sanitized = simpleClassName.substring(0, length - configPhase.getConfigSuffix().length());
-            return deriveConfigRootName(sanitized, configPhase);
+            return deriveConfigRootName(sanitized, prefix, configPhase);
         }
 
-        return Constants.QUARKUS + Constants.DOT + hyphenate(simpleClassName);
+        return !prefix.isEmpty() ? prefix + Constants.DOT + hyphenate(simpleClassName)
+                : Constants.QUARKUS + Constants.DOT + hyphenate(simpleClassName);
     }
 
     /**

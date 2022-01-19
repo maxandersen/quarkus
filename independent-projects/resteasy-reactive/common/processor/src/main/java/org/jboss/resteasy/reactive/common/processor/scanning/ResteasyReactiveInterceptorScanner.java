@@ -1,5 +1,6 @@
 package org.jboss.resteasy.reactive.common.processor.scanning;
 
+import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -13,7 +14,6 @@ import org.jboss.resteasy.reactive.common.model.ResourceInterceptor;
 import org.jboss.resteasy.reactive.common.model.ResourceInterceptors;
 import org.jboss.resteasy.reactive.common.processor.NameBindingUtil;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
-import org.jboss.resteasy.reactive.common.util.ReflectionBeanFactoryCreator;
 import org.jboss.resteasy.reactive.spi.BeanFactory;
 
 /**
@@ -29,7 +29,7 @@ public class ResteasyReactiveInterceptorScanner {
      * Creates a fully populated resource interceptors instance, that are created via reflection.
      */
     public static ResourceInterceptors createResourceInterceptors(IndexView indexView, ApplicationScanningResult result) {
-        return createResourceInterceptors(indexView, result, new ReflectionBeanFactoryCreator());
+        return createResourceInterceptors(indexView, result, null);
     }
 
     /**
@@ -40,7 +40,9 @@ public class ResteasyReactiveInterceptorScanner {
         ResourceInterceptors interceptors = new ResourceInterceptors();
         scanForInterceptors(interceptors, indexView, result);
         scanForIOInterceptors(interceptors, indexView, result);
-        interceptors.initializeDefaultFactories(factoryCreator);
+        if (factoryCreator != null) {
+            interceptors.initializeDefaultFactories(factoryCreator);
+        }
         return interceptors;
     }
 
@@ -84,6 +86,9 @@ public class ResteasyReactiveInterceptorScanner {
     private static <T> void handleDiscoveredInterceptor(
             ApplicationScanningResult applicationResultBuildItem, InterceptorContainer<T> interceptorContainer, IndexView index,
             ClassInfo filterClass) {
+        if (Modifier.isAbstract(filterClass.flags())) {
+            return;
+        }
         ApplicationScanningResult.KeepProviderResult keepProviderResult = applicationResultBuildItem.keepProvider(filterClass);
         if (keepProviderResult != ApplicationScanningResult.KeepProviderResult.DISCARD) {
             ResourceInterceptor<T> interceptor = interceptorContainer.create();

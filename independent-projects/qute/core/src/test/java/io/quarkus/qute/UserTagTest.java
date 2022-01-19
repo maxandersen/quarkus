@@ -15,7 +15,9 @@ public class UserTagTest {
                 .addSectionHelper(new UserTagSectionHelper.Factory("myTag", "my-tag-id"))
                 .build();
 
-        Template tag = engine.parse("{#if showImage}{it.name}{#else}nope{/if}");
+        Template tag = engine.parse("{#if showImage.or(false)}{it.name}{#else}nope{/if}");
+        // showImage.or(false), it.name
+        assertEquals(2, tag.getExpressions().size());
         engine.putTemplate("my-tag-id", tag);
 
         Map<String, Object> order = new HashMap<>();
@@ -36,7 +38,7 @@ public class UserTagTest {
                 .addSectionHelper(new UserTagSectionHelper.Factory("myTag", "my-tag-id"))
                 .build();
 
-        Template tag = engine.parse("{#if showImage}<b>{nested-content}</b>{#else}nope{/if}");
+        Template tag = engine.parse("{#if showImage.or(false)}<b>{nested-content}</b>{#else}nope{/if}");
         engine.putTemplate("my-tag-id", tag);
 
         Map<String, Object> order = new HashMap<>();
@@ -72,7 +74,56 @@ public class UserTagTest {
         assertEquals("<b><i>Herbert</i></b>",
                 engine.parse("{#myTag showImage=true}{#myTag2 showImage2=true}{order.name}{/myTag2}{/myTag}")
                         .render(Collections.singletonMap("order", order)));
+    }
 
+    @Test
+    public void testUserTagLoopParam() {
+        Engine engine = Engine.builder().addDefaults().addValueResolver(new ReflectionValueResolver())
+                .addSectionHelper(new UserTagSectionHelper.Factory("myTag", "my-tag-id"))
+                .build();
+
+        Template tag = engine.parse("{it} {surname}");
+        engine.putTemplate("my-tag-id", tag);
+
+        assertEquals("KOUBA kouba",
+                engine.parse("{#each surnames}{#myTag it.toUpperCase surname=it.toLowerCase /}{/each}")
+                        .data("surnames", Collections.singleton("Kouba")).render());
+        assertEquals("KOUBA kouba",
+                engine.parse(
+                        "{#for surname in surnames}{#each surnames}{#myTag it.toUpperCase surname=surname.toLowerCase /}{/each}{/for}")
+                        .data("surnames", Collections.singleton("Kouba")).render());
+    }
+
+    @Test
+    public void testEval() {
+        Engine engine = Engine.builder().addDefaults().addValueResolver(new ReflectionValueResolver())
+                .addSectionHelper(new UserTagSectionHelper.Factory("itemDetail", "my-tag-id"))
+                .build();
+
+        Template tag = engine.parse("{#set item=items.get(itemId)}{#eval myNestedContent item=item /}{/set}");
+        engine.putTemplate("my-tag-id", tag);
+
+        assertEquals("10 kg",
+                engine.parse("{#itemDetail itemId=1 myNestedContent=\"{item.quantity} {item.unit}\" /}")
+                        .data("items", Map.of(1, Map.of("quantity", 10, "unit", "kg"))).render());
+    }
+
+    @Test
+    public void testDefaultedKey() {
+        Engine engine = Engine.builder()
+                .addDefaults()
+                .addSectionHelper(new UserTagSectionHelper.Factory("myTag", "my-tag-id"))
+                .strictRendering(false)
+                .build();
+
+        Template tag = engine.parse("{it}:{name}:{isCool}:{age}:{foo.bar}:{foo}");
+        engine.putTemplate("my-tag-id", tag);
+        assertEquals("Ondrej:Ondrej:true:2:NOT_FOUND:NOT_FOUND",
+                engine.parse("{#myTag name age=2 isCool foo.length _isolated=true/}")
+                        .data("name", "Ondrej", "isCool", true, "foo", "bzzz").render());
+        assertEquals("Ondrej:Ondrej:true:2:NOT_FOUND:NOT_FOUND",
+                engine.parse("{#myTag name age=2 isCool foo.length _isolated /}")
+                        .data("name", "Ondrej", "isCool", true, "foo", "bzzz").render());
     }
 
 }

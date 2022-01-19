@@ -35,7 +35,7 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
-final class Beans {
+public final class Beans {
 
     static final Logger LOGGER = Logger.getLogger(Beans.class);
 
@@ -43,104 +43,7 @@ final class Beans {
     }
 
     static BeanInfo createClassBean(ClassInfo beanClass, BeanDeployment beanDeployment, InjectionPointModifier transformer) {
-        Set<AnnotationInstance> qualifiers = new HashSet<>();
-        List<ScopeInfo> scopes = new ArrayList<>();
-        Set<Type> types = Types.getClassBeanTypeClosure(beanClass, beanDeployment);
-        Integer alternativePriority = null;
-        boolean isAlternative = false;
-        boolean isDefaultBean = false;
-        List<StereotypeInfo> stereotypes = new ArrayList<>();
-        String name = null;
-
-        for (AnnotationInstance annotation : beanDeployment.getAnnotations(beanClass)) {
-            if (DotNames.NAMED.equals(annotation.name())) {
-                AnnotationValue nameValue = annotation.value();
-                if (nameValue != null) {
-                    name = nameValue.asString();
-                } else {
-                    name = getDefaultName(beanClass);
-                    annotation = normalizedNamedQualifier(name, annotation);
-                }
-            }
-            Collection<AnnotationInstance> qualifierCollection = beanDeployment.extractQualifiers(annotation);
-            for (AnnotationInstance qualifierAnnotation : qualifierCollection) {
-                // Qualifiers
-                qualifiers.add(qualifierAnnotation);
-            }
-            // Treat the case when an additional bean defining annotation that is also a qualifier declares the default scope
-            StereotypeInfo stereotype = beanDeployment.getStereotype(annotation.name());
-            if (stereotype != null) {
-                stereotypes.add(stereotype);
-                continue;
-            }
-            if (!qualifierCollection.isEmpty()) {
-                // we needn't process it further, the annotation was a qualifier (or multiple repeating ones)
-                continue;
-            }
-            if (annotation.name()
-                    .equals(DotNames.ALTERNATIVE)) {
-                isAlternative = true;
-                continue;
-            }
-            if (annotation.name()
-                    .equals(DotNames.ALTERNATIVE_PRIORITY)) {
-                isAlternative = true;
-                alternativePriority = annotation.value().asInt();
-                continue;
-            }
-            if (DotNames.DEFAULT_BEAN.equals(annotation.name())) {
-                isDefaultBean = true;
-                continue;
-            }
-            if (annotation.name()
-                    .equals(DotNames.PRIORITY) && alternativePriority == null) {
-                alternativePriority = annotation.value()
-                        .asInt();
-                continue;
-            }
-            ScopeInfo scopeAnnotation = beanDeployment.getScope(annotation.name());
-            if (scopeAnnotation != null) {
-                scopes.add(scopeAnnotation);
-                continue;
-            }
-        }
-
-        if (scopes.size() > 1) {
-            throw multipleScopesFound("Bean class " + beanClass, scopes);
-        }
-        ScopeInfo scope;
-        if (scopes.isEmpty()) {
-            // try to search stereotypes for scope
-            scope = initStereotypeScope(stereotypes, beanClass);
-            // if that fails, try inheriting them
-            if (scope == null) {
-                scope = inheritScope(beanClass, beanDeployment);
-            }
-        } else {
-            scope = scopes.get(0);
-        }
-        if (!isAlternative) {
-            isAlternative = initStereotypeAlternative(stereotypes);
-        }
-        if (name == null) {
-            name = initStereotypeName(stereotypes, beanClass);
-        }
-
-        if (isAlternative) {
-            alternativePriority = initAlternativePriority(beanClass, alternativePriority, stereotypes, beanDeployment);
-            if (alternativePriority == null) {
-                // after all attempts, priority is still null, bean will be ignored
-                LOGGER.debugf(
-                        "Ignoring bean defined via %s - declared as an @Alternative but not selected by @Priority, @AlternativePriority or quarkus.arc.selected-alternatives",
-                        beanClass.name());
-                return null;
-            }
-        }
-
-        BeanInfo bean = new BeanInfo(beanClass, beanDeployment, scope, types, qualifiers,
-                Injection.forBean(beanClass, null, beanDeployment, transformer), null, null,
-                isAlternative ? alternativePriority : null, stereotypes, name, isDefaultBean);
-        return bean;
+        return new ClassBeanFactory(beanClass, beanDeployment, transformer).create();
     }
 
     private static ScopeInfo inheritScope(ClassInfo beanClass, BeanDeployment beanDeployment) {
@@ -171,7 +74,7 @@ final class Beans {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
         List<ScopeInfo> scopes = new ArrayList<>();
         Set<Type> types = Types.getProducerMethodTypeClosure(producerMethod, beanDeployment);
-        Integer alternativePriority = null;
+        Integer priority = null;
         boolean isAlternative = false;
         boolean isDefaultBean = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
@@ -207,7 +110,16 @@ final class Beans {
             }
             if (DotNames.ALTERNATIVE_PRIORITY.equals(annotation.name())) {
                 isAlternative = true;
-                alternativePriority = annotation.value().asInt();
+                priority = annotation.value().asInt();
+                continue;
+            }
+            // This is not supported ATM but should work once we upgrade to Common Annotations 2.1 
+            if ((!isAlternative || priority == null) && annotation.name().equals(DotNames.PRIORITY)) {
+                priority = annotation.value().asInt();
+                continue;
+            }
+            if (priority == null && DotNames.ARC_PRIORITY.equals(annotation.name())) {
+                priority = annotation.value().asInt();
                 continue;
             }
             if (DotNames.DEFAULT_BEAN.equals(annotation.name())) {
@@ -231,7 +143,7 @@ final class Beans {
         }
         ScopeInfo scope;
         if (scopes.isEmpty()) {
-            scope = initStereotypeScope(stereotypes, producerMethod);
+            scope = initStereotypeScope(stereotypes, producerMethod, beanDeployment);
         } else {
             scope = scopes.get(0);
         }
@@ -243,11 +155,11 @@ final class Beans {
         }
 
         if (isAlternative) {
-            if (alternativePriority == null) {
-                alternativePriority = declaringBean.getAlternativePriority();
+            if (priority == null) {
+                priority = declaringBean.getAlternativePriority();
             }
-            alternativePriority = initAlternativePriority(producerMethod, alternativePriority, stereotypes, beanDeployment);
-            if (alternativePriority == null) {
+            priority = initAlternativePriority(producerMethod, priority, stereotypes, beanDeployment);
+            if (priority == null) {
                 // after all attempts, priority is still null, bean will be ignored
                 LOGGER.debugf(
                         "Ignoring producer method %s - declared as an @Alternative but not selected by @AlternativePriority or quarkus.arc.selected-alternatives",
@@ -256,9 +168,12 @@ final class Beans {
             }
         }
 
-        BeanInfo bean = new BeanInfo(producerMethod, beanDeployment, scope, types, qualifiers,
-                Injection.forBean(producerMethod, declaringBean, beanDeployment, transformer), declaringBean,
-                disposer, alternativePriority, stereotypes, name, isDefaultBean);
+        List<Injection> injections = Injection.forBean(producerMethod, declaringBean, beanDeployment, transformer);
+        BeanInfo bean = new BeanInfo(producerMethod, beanDeployment, scope, types, qualifiers, injections, declaringBean,
+                disposer, isAlternative, stereotypes, name, isDefaultBean, null, priority);
+        for (Injection injection : injections) {
+            injection.init(bean);
+        }
         return bean;
     }
 
@@ -267,7 +182,7 @@ final class Beans {
         Set<AnnotationInstance> qualifiers = new HashSet<>();
         List<ScopeInfo> scopes = new ArrayList<>();
         Set<Type> types = Types.getProducerFieldTypeClosure(producerField, beanDeployment);
-        Integer alternativePriority = null;
+        Integer priority = null;
         boolean isAlternative = false;
         boolean isDefaultBean = false;
         List<StereotypeInfo> stereotypes = new ArrayList<>();
@@ -298,7 +213,16 @@ final class Beans {
             }
             if (DotNames.ALTERNATIVE_PRIORITY.equals(annotation.name())) {
                 isAlternative = true;
-                alternativePriority = annotation.value().asInt();
+                priority = annotation.value().asInt();
+                continue;
+            }
+            // This is not supported ATM but should work once we upgrade to Common Annotations 2.1 
+            if ((!isAlternative || priority == null) && annotation.name().equals(DotNames.PRIORITY)) {
+                priority = annotation.value().asInt();
+                continue;
+            }
+            if (priority == null && DotNames.ARC_PRIORITY.equals(annotation.name())) {
+                priority = annotation.value().asInt();
                 continue;
             }
             ScopeInfo scopeAnnotation = beanDeployment.getScope(annotation.name());
@@ -322,7 +246,7 @@ final class Beans {
         }
         ScopeInfo scope;
         if (scopes.isEmpty()) {
-            scope = initStereotypeScope(stereotypes, producerField);
+            scope = initStereotypeScope(stereotypes, producerField, beanDeployment);
         } else {
             scope = scopes.get(0);
         }
@@ -334,12 +258,12 @@ final class Beans {
         }
 
         if (isAlternative) {
-            if (alternativePriority == null) {
-                alternativePriority = declaringBean.getAlternativePriority();
+            if (priority == null) {
+                priority = declaringBean.getAlternativePriority();
             }
-            alternativePriority = initAlternativePriority(producerField, alternativePriority, stereotypes, beanDeployment);
+            priority = initAlternativePriority(producerField, priority, stereotypes, beanDeployment);
             // after all attempts, priority is still null
-            if (alternativePriority == null) {
+            if (priority == null) {
                 LOGGER.debugf(
                         "Ignoring producer field %s - declared as an @Alternative but not selected by @AlternativePriority or quarkus.arc.selected-alternatives",
                         producerField);
@@ -348,7 +272,7 @@ final class Beans {
         }
 
         BeanInfo bean = new BeanInfo(producerField, beanDeployment, scope, types, qualifiers, Collections.emptyList(),
-                declaringBean, disposer, alternativePriority, stereotypes, name, isDefaultBean);
+                declaringBean, disposer, isAlternative, stereotypes, name, isDefaultBean, null, priority);
         return bean;
     }
 
@@ -364,7 +288,8 @@ final class Beans {
                 + scopes.stream().map(s -> s.getDotName().toString()).collect(Collectors.joining(", ")));
     }
 
-    private static ScopeInfo initStereotypeScope(List<StereotypeInfo> stereotypes, AnnotationTarget target) {
+    private static ScopeInfo initStereotypeScope(List<StereotypeInfo> stereotypes, AnnotationTarget target,
+            BeanDeployment beanDeployment) {
         if (stereotypes.isEmpty()) {
             return null;
         }
@@ -372,7 +297,18 @@ final class Beans {
         final Set<ScopeInfo> additionalBDAScopes = new HashSet<>();
         for (StereotypeInfo stereotype : stereotypes) {
             if (!stereotype.isAdditionalBeanDefiningAnnotation()) {
-                stereotypeScopes.add(stereotype.getDefaultScope());
+                ScopeInfo defaultScope = stereotype.getDefaultScope();
+                if (defaultScope == null) {
+                    List<StereotypeInfo> parentStereotypes = new ArrayList<>(stereotype.getParentStereotypes().size());
+                    for (AnnotationInstance annotation : stereotype.getParentStereotypes()) {
+                        StereotypeInfo parentStereotype = beanDeployment.getStereotype(annotation.name());
+                        parentStereotypes.add(parentStereotype);
+                    }
+                    defaultScope = initStereotypeScope(parentStereotypes, target, beanDeployment);
+                }
+                if (defaultScope != null) {
+                    stereotypeScopes.add(defaultScope);
+                }
             } else {
                 additionalBDAScopes.add(stereotype.getDefaultScope());
             }
@@ -427,13 +363,13 @@ final class Beans {
         return null;
     }
 
-    static boolean matches(BeanInfo bean, TypeAndQualifiers typeAndQualifiers) {
+    public static boolean matches(BeanInfo bean, TypeAndQualifiers typeAndQualifiers) {
         return matches(bean, typeAndQualifiers.type, typeAndQualifiers.qualifiers);
     }
 
     static boolean matches(BeanInfo bean, Type requiredType, Set<AnnotationInstance> requiredQualifiers) {
         // Bean has all the required qualifiers and a bean type that matches the required type
-        return hasQualifiers(bean, requiredQualifiers) && matchesType(bean, requiredType);
+        return matchesType(bean, requiredType) && hasQualifiers(bean, requiredQualifiers);
     }
 
     static boolean matchesType(BeanInfo bean, Type requiredType) {
@@ -454,15 +390,19 @@ final class Beans {
         }
         BuiltinBean builtinBean = BuiltinBean.resolve(injectionPoint);
         if (builtinBean != null) {
-            if (BuiltinBean.INJECTION_POINT.equals(builtinBean)
+            if (BuiltinBean.INJECTION_POINT == builtinBean
                     && (target.kind() != TargetKind.BEAN || !BuiltinScope.DEPENDENT.is(target.asBean().getScope()))) {
                 errors.add(new DefinitionException("Only @Dependent beans can access metadata about an injection point: "
                         + injectionPoint.getTargetInfo()));
-            }
-            if (BuiltinBean.EVENT_METADATA.equals(builtinBean)
+            } else if (BuiltinBean.EVENT_METADATA == builtinBean
                     && target.kind() != TargetKind.OBSERVER) {
                 errors.add(new DefinitionException("EventMetadata can be only injected into an observer method: "
                         + injectionPoint.getTargetInfo()));
+            } else if (BuiltinBean.INSTANCE == builtinBean
+                    && injectionPoint.getType().kind() != Kind.PARAMETERIZED_TYPE) {
+                errors.add(
+                        new DefinitionException("An injection point of raw type javax.enterprise.inject.Instance is defined: "
+                                + injectionPoint.getTargetInfo()));
             }
             // Skip built-in beans
             return;
@@ -506,7 +446,7 @@ final class Beans {
 
     private static void addStandardErroneousDependencyMessage(InjectionTargetInfo target, InjectionPointInfo injectionPoint,
             StringBuilder message) {
-        message.append(injectionPoint.getRequiredType());
+        message.append(injectionPoint.getType());
         message.append(" and qualifiers ");
         message.append(injectionPoint.getRequiredQualifiers());
         message.append("\n\t- java member: ");
@@ -603,20 +543,26 @@ final class Beans {
     static boolean hasQualifier(BeanDeployment beanDeployment, AnnotationInstance requiredQualifier,
             Collection<AnnotationInstance> qualifiers) {
         ClassInfo requiredClazz = beanDeployment.getQualifier(requiredQualifier.name());
-        List<AnnotationValue> values = new ArrayList<>();
-        Set<String> nonBindingFields = beanDeployment.getQualifierNonbindingMembers(requiredQualifier.name());
-        for (AnnotationValue val : requiredQualifier.values()) {
-            if (!requiredClazz.method(val.name()).hasAnnotation(DotNames.NONBINDING)
-                    && !nonBindingFields.contains(val.name())) {
-                values.add(val);
-            }
-        }
+        List<AnnotationValue> values = null;
         for (AnnotationInstance qualifier : qualifiers) {
             if (requiredQualifier.name().equals(qualifier.name())) {
                 // Must have the same annotation member value for each member which is not annotated @Nonbinding
                 boolean matches = true;
+
+                if (values == null) {
+                    //this list is relatively expensive to initialize in some cases
+                    //as this is called in a tight loop we only do it if necessary
+                    values = new ArrayList<>();
+                    Set<String> nonBindingFields = beanDeployment.getQualifierNonbindingMembers(requiredQualifier.name());
+                    for (AnnotationValue val : requiredQualifier.valuesWithDefaults(beanDeployment.getBeanArchiveIndex())) {
+                        if (!requiredClazz.method(val.name()).hasAnnotation(DotNames.NONBINDING)
+                                && !nonBindingFields.contains(val.name())) {
+                            values.add(val);
+                        }
+                    }
+                }
                 for (AnnotationValue value : values) {
-                    if (!value.equals(qualifier.value(value.name()))) {
+                    if (!value.equals(qualifier.valueWithDefault(beanDeployment.getBeanArchiveIndex(), value.name()))) {
                         matches = false;
                         break;
                     }
@@ -631,7 +577,7 @@ final class Beans {
 
     static List<MethodInfo> getCallbacks(ClassInfo beanClass, DotName annotation, IndexView index) {
         List<MethodInfo> callbacks = new ArrayList<>();
-        collectCallbacks(beanClass, callbacks, annotation, index);
+        collectCallbacks(beanClass, callbacks, annotation, index, new HashSet<>());
         Collections.reverse(callbacks);
         return callbacks;
     }
@@ -693,10 +639,7 @@ final class Beans {
                         }
 
                     } else {
-                        errors.add(new DeploymentException(
-                                "It's not possible to add a synthetic constructor with no parameters to the unproxyable bean class: "
-                                        +
-                                        beanClass));
+                        errors.add(cannotAddSyntheticNoArgsConstructor(beanClass));
                     }
                 } else {
                     errors.add(new DeploymentException(String
@@ -760,9 +703,7 @@ final class Beans {
                                 classesReceivingNoArgsCtor.add(returnTypeClass.name());
                             }
                         } else {
-                            errors.add(new DeploymentException(String
-                                    .format("It's not possible to add a synthetic constructor with no parameters to the unproxyable return type of "
-                                            + bean)));
+                            errors.add(cannotAddSyntheticNoArgsConstructor(returnTypeClass));
                         }
                     } else {
                         errors.add(new DefinitionException(String
@@ -806,10 +747,7 @@ final class Beans {
                             classesReceivingNoArgsCtor.add(beanClass.name());
                         }
                     } else {
-                        errors.add(new DeploymentException(
-                                "It's not possible to add a synthetic constructor with no parameters to the unproxyable bean class: "
-                                        +
-                                        beanClass));
+                        errors.add(cannotAddSyntheticNoArgsConstructor(beanClass));
                     }
                 } else {
                     errors.add(new DeploymentException(String
@@ -818,6 +756,11 @@ final class Beans {
                 }
             }
         }
+    }
+
+    private static DeploymentException cannotAddSyntheticNoArgsConstructor(ClassInfo beanClass) {
+        String message = "It's not possible to automatically add a synthetic no-args constructor to an unproxyable bean class. You need to manually add a non-private no-args constructor to %s in order to fulfill the requirements for normal scoped/intercepted/decorated beans.";
+        return new DeploymentException(String.format(message, beanClass));
     }
 
     private static void fetchType(Type type, BeanDeployment beanDeployment) {
@@ -832,16 +775,21 @@ final class Beans {
         }
     }
 
-    private static void collectCallbacks(ClassInfo clazz, List<MethodInfo> callbacks, DotName annotation, IndexView index) {
+    private static void collectCallbacks(ClassInfo clazz, List<MethodInfo> callbacks, DotName annotation, IndexView index,
+            Set<String> knownMethods) {
         for (MethodInfo method : clazz.methods()) {
-            if (method.hasAnnotation(annotation) && method.returnType().kind() == Kind.VOID && method.parameters().isEmpty()) {
-                callbacks.add(method);
+            if (method.returnType().kind() == Kind.VOID && method.parameters().isEmpty()) {
+                if (method.hasAnnotation(annotation) && !knownMethods.contains(method.name())) {
+                    callbacks.add(method);
+                }
+                knownMethods.add(method.name());
             }
+
         }
         if (clazz.superName() != null) {
             ClassInfo superClass = getClassByName(index, clazz.superName());
             if (superClass != null) {
-                collectCallbacks(superClass, callbacks, annotation, index);
+                collectCallbacks(superClass, callbacks, annotation, index, knownMethods);
             }
         }
     }
@@ -981,6 +929,183 @@ final class Beans {
             };
         }
 
+    }
+
+    private static class ClassBeanFactory {
+
+        private final ClassInfo beanClass;
+        private final BeanDeployment beanDeployment;
+        private final InjectionPointModifier transformer;
+
+        private String name;
+        private Integer priority;
+        private boolean isAlternative;
+        private boolean isDefaultBean;
+
+        ClassBeanFactory(ClassInfo beanClass, BeanDeployment beanDeployment, InjectionPointModifier transformer) {
+            this.beanClass = beanClass;
+            this.beanDeployment = beanDeployment;
+            this.transformer = transformer;
+            this.priority = null;
+            this.isAlternative = false;
+            this.isDefaultBean = false;
+            this.name = null;
+        }
+
+        void processInheritedAnnotation(
+                AnnotationInstance annotation,
+                BeanDeployment beanDeployment,
+                Set<AnnotationInstance> qualifiers,
+                List<StereotypeInfo> stereotypes) {
+            Collection<AnnotationInstance> qualifierCollection = beanDeployment.extractQualifiers(annotation);
+            for (AnnotationInstance qualifierAnnotation : qualifierCollection) {
+                if (beanDeployment.isInheritedQualifier(qualifierAnnotation.name())
+                        && !Annotations.contains(qualifiers, qualifierAnnotation.name())) {
+                    qualifiers.add(qualifierAnnotation);
+                }
+            }
+            StereotypeInfo stereotype = beanDeployment.getStereotype(annotation.name());
+            if (stereotype != null) {
+                if (stereotype.isInherited()) {
+                    stereotypes.add(stereotype);
+                }
+            }
+        }
+
+        void processAnnotation(AnnotationInstance annotation,
+                ClassInfo beanClass,
+                BeanDeployment beanDeployment,
+                Set<AnnotationInstance> qualifiers,
+                List<StereotypeInfo> stereotypes,
+                List<ScopeInfo> scopes) {
+            if (DotNames.NAMED.equals(annotation.name())) {
+                AnnotationValue nameValue = annotation.value();
+                if (nameValue != null) {
+                    name = nameValue.asString();
+                } else {
+                    name = getDefaultName(beanClass);
+                    annotation = normalizedNamedQualifier(name, annotation);
+                }
+            }
+            // Qualifiers
+            Collection<AnnotationInstance> qualifierCollection = beanDeployment.extractQualifiers(annotation);
+            for (AnnotationInstance qualifierAnnotation : qualifierCollection) {
+                qualifiers.add(qualifierAnnotation);
+            }
+            // Treat the case when an additional bean defining annotation that is also a qualifier declares the default scope
+            StereotypeInfo stereotype = beanDeployment.getStereotype(annotation.name());
+            if (stereotype != null) {
+                stereotypes.add(stereotype);
+                return;
+            }
+            if (!qualifierCollection.isEmpty()) {
+                // we needn't process it further, the annotation was a qualifier (or multiple repeating ones)
+                return;
+            }
+            if (annotation.name()
+                    .equals(DotNames.ALTERNATIVE)) {
+                isAlternative = true;
+                return;
+            }
+            if (annotation.name()
+                    .equals(DotNames.ALTERNATIVE_PRIORITY)) {
+                isAlternative = true;
+                priority = annotation.value().asInt();
+                return;
+            }
+            if (DotNames.DEFAULT_BEAN.equals(annotation.name())) {
+                isDefaultBean = true;
+                return;
+            }
+            if ((!isAlternative || priority == null) && annotation.name().equals(DotNames.PRIORITY)) {
+                priority = annotation.value().asInt();
+                return;
+            }
+            if (priority == null && annotation.name().equals(DotNames.ARC_PRIORITY)) {
+                priority = annotation.value().asInt();
+                return;
+            }
+            ScopeInfo scopeAnnotation = beanDeployment.getScope(annotation.name());
+            if (scopeAnnotation != null) {
+                if (!scopes.contains(scopeAnnotation)) {
+                    scopes.add(scopeAnnotation);
+                }
+            }
+        }
+
+        BeanInfo create() {
+            Set<AnnotationInstance> qualifiers = new HashSet<>();
+            List<ScopeInfo> scopes = new ArrayList<>();
+            Set<Type> types = Types.getClassBeanTypeClosure(beanClass, beanDeployment);
+
+            List<StereotypeInfo> stereotypes = new ArrayList<>();
+            Collection<AnnotationInstance> annotations = beanDeployment.getAnnotations(beanClass);
+
+            for (AnnotationInstance annotation : annotations) {
+                processAnnotation(annotation, beanClass, beanDeployment, qualifiers, stereotypes, scopes);
+            }
+            processSuperClass(beanClass, beanDeployment, qualifiers, stereotypes);
+
+            if (scopes.size() > 1) {
+                throw multipleScopesFound("Bean class " + beanClass, scopes);
+            }
+            ScopeInfo scope;
+            if (scopes.isEmpty()) {
+                // try to search stereotypes for scope
+                scope = initStereotypeScope(stereotypes, beanClass, beanDeployment);
+                // if that fails, try inheriting them
+                if (scope == null) {
+                    scope = inheritScope(beanClass, beanDeployment);
+                }
+            } else {
+                scope = scopes.get(0);
+            }
+            if (!isAlternative) {
+                isAlternative = initStereotypeAlternative(stereotypes);
+            }
+            if (name == null) {
+                name = initStereotypeName(stereotypes, beanClass);
+            }
+
+            if (isAlternative) {
+                priority = initAlternativePriority(beanClass, priority, stereotypes, beanDeployment);
+                if (priority == null) {
+                    // after all attempts, priority is still null, bean will be ignored
+                    LOGGER.debugf(
+                            "Ignoring bean defined via %s - declared as an @Alternative but not selected by @Priority, @AlternativePriority or quarkus.arc.selected-alternatives",
+                            beanClass.name());
+                    return null;
+                }
+            }
+
+            List<Injection> injections = Injection.forBean(beanClass, null, beanDeployment, transformer);
+            BeanInfo bean = new BeanInfo(beanClass, beanDeployment, scope, types, qualifiers,
+                    injections, null, null, isAlternative, stereotypes, name, isDefaultBean, null, priority);
+            for (Injection injection : injections) {
+                injection.init(bean);
+            }
+            return bean;
+        }
+
+        void processSuperClass(ClassInfo beanClass, BeanDeployment beanDeployment,
+                Set<AnnotationInstance> qualifiers, List<StereotypeInfo> stereotypes) {
+            DotName superClassName = beanClass.superName();
+            while (!superClassName.equals(DotNames.OBJECT)) {
+                ClassInfo classFromIndex = getClassByName(beanDeployment.getBeanArchiveIndex(), superClassName);
+                if (classFromIndex == null) {
+                    // class not in index
+                    LOGGER.warnf("Unable to get inherited qualifier of stereotype for bean %s because its " +
+                            "super class %s is not part of Jandex index. This inheritance will not apply.",
+                            beanClass,
+                            superClassName);
+                    break;
+                }
+                for (AnnotationInstance annotation : beanDeployment.getAnnotationStore().getAnnotations(classFromIndex)) {
+                    processInheritedAnnotation(annotation, beanDeployment, qualifiers, stereotypes);
+                }
+                superClassName = classFromIndex.superName();
+            }
+        }
     }
 
 }

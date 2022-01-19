@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Funqy HTTP Binding (Standalone)
+= Funqy HTTP Binding (Standalone)
 
 include::./attributes.adoc[]
 :extension-status: preview
@@ -23,9 +23,9 @@ than these alternatives (except Vert.x which is still super fast).
 To complete this guide, you need:
 
 * less than 15 minutes
-* Read about link:funqy[Funqy Basics].  This is a short read!
+* Read about xref:funqy.adoc[Funqy Basics].  This is a short read!
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 
 == The Quickstart

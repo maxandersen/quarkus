@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import org.jboss.resteasy.reactive.server.core.multipart.FormData;
 
 public interface ServerHttpRequest {
 
@@ -30,10 +31,6 @@ public interface ServerHttpRequest {
 
     void closeConnection();
 
-    String getFormAttribute(String name);
-
-    List<String> getAllFormAttributes(String name);
-
     String getQueryParam(String name);
 
     List<String> getAllQueryParams(String name);
@@ -43,8 +40,6 @@ public interface ServerHttpRequest {
     Collection<String> queryParamNames();
 
     boolean isRequestEnded();
-
-    void setExpectMultipart(boolean expectMultipart);
 
     InputStream createInputStream(ByteBuffer existingData);
 
@@ -64,6 +59,17 @@ public interface ServerHttpRequest {
      * @return
      */
     <T> T unwrap(Class<T> theType);
+
+    /**
+     * If the underlying transport has handled multipart this can return the result, instead of using resteasy reactives
+     * built in parser.
+     *
+     */
+    default FormData getExistingParsedForm() {
+        return null;
+    }
+
+    boolean isOnIoThread();
 
     interface ReadCallback {
 

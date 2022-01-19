@@ -115,6 +115,24 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+         <dependency>
+            <groupId>io.dekorate</groupId>
+            <artifactId>servicebinding-annotations</artifactId>
+            <classifier>noapt</classifier>
+        </dependency>
+
+        <!-- needed for the customization of the build chain -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-kubernetes-spi</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
 
         <!-- Minimal test dependencies to *-deployment artifacts for consistent build order -->
         <dependency>

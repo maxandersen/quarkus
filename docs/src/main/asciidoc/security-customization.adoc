@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Security Tips and Tricks
+= Security Tips and Tricks
 
 include::./attributes.adoc[]
 
@@ -105,7 +105,7 @@ public class RolesAugmentor implements SecurityIdentityAugmentor {
 }
 ----
 
-Here is another example showing how to use the client certificate available in the current link:security-built-in-authentication#mutual-tls[Mutual TLS] request to add more roles:
+Here is another example showing how to use the client certificate available in the current xref:security-built-in-authentication.adoc#mutual-tls[Mutual TLS] request to add more roles:
 
 [source,java]
 ----
@@ -156,10 +156,10 @@ public class RolesAugmentor implements SecurityIdentityAugmentor {
 ----
 
 [NOTE]
-===
+====
 If more than one custom `SecurityIdentityAugmentor` is registered then they will be considered equal candidates and invoked in random order.
 You can enforce the order by implementing a default `SecurityIdentityAugmentor#priority` method. Augmentors with higher priorities will be invoked first.
-===
+====
 
 [[jaxrs-security-context]]
 == Custom JAX-RS SecurityContext
@@ -236,6 +236,8 @@ public class DisabledAuthController extends AuthorizationController {
 }
 ----
 
+Please also see xref:security-testing.adoc#testing-security[TestingSecurity Annotation] section on how to disable the security checks using `TestSecurity` annotation.
+
 == Registering Security Providers
 
 === Default providers
@@ -272,6 +274,7 @@ and add the BouncyCastle provider dependency:
 </dependency>
 ----
 
+[[bouncy-castle-jsse]]
 === BouncyCastle JSSE
 
 If you need to register an `org.bouncycastle.jsse.provider.BouncyCastleJsseProvider` JSSE provider and use it instead of the default SunJSSE provider then please set a `BCJSSE` provider name:
@@ -299,6 +302,7 @@ and add the BouncyCastle TLS dependency:
 </dependency>
 ----
 
+[[bouncy-castle-fips]]
 === BouncyCastle FIPS
 
 If you need to register an `org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider` JCE provider then please set a `BCFIPS` provider name:
@@ -319,6 +323,19 @@ and add the BouncyCastle FIPS provider dependency:
 </dependency>
 ----
 
+[NOTE]
+====
+`BCFIPS` provider option is supported in native image but the algorithm self-tests which rely on `java.security.SecureRandom` to verify the generated keys have been removed for these tests to pass. The following classes have been affected:
+- `org.bouncycastle.crypto.general.DSA`
+- `org.bouncycastle.crypto.general.DSTU4145`
+- `org.bouncycastle.crypto.general.ECGOST3410`
+- `org.bouncycastle.crypto.general.GOST3410`
+- `org.bouncycastle.crypto.fips.FipsDSA`
+- `org.bouncycastle.crypto.fips.FipsEC`
+- `org.bouncycastle.crypto.fips.FipsRSA`
+====
+
+[[bouncy-castle-jsse-fips]]
 === BouncyCastle JSSE FIPS
 
 If you need to register an `org.bouncycastle.jsse.provider.BouncyCastleJsseProvider` JSSE provider and use it in combination with `org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider` instead of the default SunJSSE provider then please set a `BCFIPSJSSE` provider name:
@@ -363,6 +380,11 @@ One can generate a keystore with this type and provider like this:
 keytool -genkey -alias server -keyalg RSA -keystore server-keystore.jks -keysize 2048 -keypass password -provider org.bouncycastle.jcajce.provider.BouncyCastleFipsProvider -providerpath $PATH_TO_BC_FIPS_JAR -storetype BCFKS
 ----
 
+[NOTE]
+====
+`BCFIPSJSSE` provider option is currently not supported in native image.
+====
+
 == Reactive Security
 
 If you are going to use security in a reactive environment, you will likely need SmallRye Context Propagation:
@@ -378,8 +400,8 @@ If you are going to use security in a reactive environment, you will likely need
 This will allow you to propagate the identity throughout the reactive callbacks. You also need to make sure you
 are using an executor that is capable of propagating the identity (e.g. no `CompletableFuture.supplyAsync`),
 to make sure that Quarkus can propagate it. For more information see the
-link:context-propagation[Context Propagation Guide].
+xref:context-propagation.adoc[Context Propagation Guide].
 
 == References
 
-* link:security[Quarkus Security]
+* xref:security.adoc[Quarkus Security]

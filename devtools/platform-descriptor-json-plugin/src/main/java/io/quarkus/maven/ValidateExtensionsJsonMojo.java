@@ -3,7 +3,6 @@ package io.quarkus.maven;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -31,9 +30,9 @@ import org.eclipse.aether.repository.RemoteRepository;
 import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.resolver.maven.BootstrapMavenException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+import io.quarkus.fs.util.ZipUtils;
 import io.quarkus.registry.catalog.Extension;
-import io.quarkus.registry.catalog.json.JsonCatalogMapperHelper;
-import io.quarkus.registry.catalog.json.JsonExtensionCatalog;
+import io.quarkus.registry.catalog.ExtensionCatalog;
 
 /**
  * This goal validates a given JSON descriptor.
@@ -109,9 +108,9 @@ public class ValidateExtensionsJsonMojo extends AbstractMojo {
             throw new MojoExecutionException("Failed to resolve platform descriptor " + artifact, e);
         }
 
-        JsonExtensionCatalog catalog;
+        ExtensionCatalog catalog;
         try {
-            catalog = JsonCatalogMapperHelper.deserialize(jsonPath, JsonExtensionCatalog.class);
+            catalog = ExtensionCatalog.fromFile(jsonPath);
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to deserialize extension catalog " + jsonPath, e);
         }
@@ -207,7 +206,7 @@ public class ValidateExtensionsJsonMojo extends AbstractMojo {
             processExtensionDescriptor(artifact, file.toPath().resolve(BootstrapConstants.META_INF)
                     .resolve(descriptorName), extensions);
         } else {
-            try (FileSystem fs = FileSystems.newFileSystem(file.toPath(), null)) {
+            try (FileSystem fs = ZipUtils.newFileSystem(file.toPath())) {
                 processExtensionDescriptor(artifact,
                         fs.getPath("/", BootstrapConstants.META_INF, descriptorName),
                         extensions);

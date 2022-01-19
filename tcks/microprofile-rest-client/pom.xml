@@ -13,6 +13,10 @@
     <artifactId>quarkus-tck-microprofile-rest-client</artifactId>
     <name>Quarkus - TCK - MicroProfile REST Client</name>
 
+    <properties>
+        <microprofile-rest-client-tck.version>2.0</microprofile-rest-client-tck.version>
+    </properties>
+
     <build>
         <plugins>
             <plugin>
@@ -23,6 +27,8 @@
                         <!-- Disable quarkus optimization -->
                         <quarkus.arc.remove-unused-beans>false</quarkus.arc.remove-unused-beans>
                         <io.quarkus.arquillian.copy-fields>true</io.quarkus.arquillian.copy-fields>
+
+                        <org.eclipse.microprofile.rest.client.tck.timeoutCushion>30</org.eclipse.microprofile.rest.client.tck.timeoutCushion>
                     </systemPropertyVariables>
                     <!-- This workaround allows us to run a single test using
                         the "test" system property -->
@@ -31,23 +37,9 @@
                         <dependency>org.eclipse.microprofile.rest.client:microprofile-rest-client-tck</dependency>
                     </dependenciesToScan>
                     <reuseForks>false</reuseForks>
-                    <includes>
-                        <include>**/*Test.java</include>
-                    </includes>
-                    <excludes>
-                        <!-- Not actually tests that should be run -->
-                        <exclude>org.eclipse.microprofile.rest.client.tck.WiremockArquillianTest</exclude>
-                        <exclude>org.eclipse.microprofile.rest.client.tck.ssl.AbstractSslTest</exclude>
-
+                    <excludes combine.children="append">
                         <!-- ConversationScope not supported in Quarkus -->
                         <exclude>org.eclipse.microprofile.rest.client.tck.cditests.HasConversationScopeTest</exclude>
-
-                        <!-- We have our own version of these tests which set up a config environment -->
-                        <exclude>org.eclipse.microprofile.rest.client.tck.InvokeWithJsonBProviderTest</exclude>
-                        <exclude>org.eclipse.microprofile.rest.client.tck.InvokeWithJsonPProviderTest</exclude>
-
-                        <!-- The connection timeout is too small -->
-                        <exclude>org/eclipse/microprofile/rest/client/tck/timeout/*.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>
@@ -102,7 +94,7 @@
         <dependency>
             <groupId>org.eclipse.microprofile.rest.client</groupId>
             <artifactId>microprofile-rest-client-tck</artifactId>
-            <version>${microprofile-rest-client-api.version}</version>
+            <version>${microprofile-rest-client-tck.version}</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.eclipse.jetty</groupId>
@@ -124,7 +116,16 @@
                     <groupId>com.google.code.findbugs</groupId>
                     <artifactId>jsr305</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>junit</groupId>
+                    <artifactId>junit</artifactId>
+                </exclusion>
             </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit4.version}</version>
         </dependency>
         <dependency>
             <groupId>jakarta.servlet</groupId>
@@ -185,4 +186,82 @@
             </exclusions>
         </dependency>
     </dependencies>
+
+    <profiles>
+        <profile>
+            <id>jdk16-workarounds</id>
+            <activation>
+                <jdk>[16,)</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>default-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <excludes>
+                                        <!-- the following tests are run in a separate surefire execution
+                                        by setting certain JDK system properties during launch -->
+                                        <exclude>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutBuilderIndependentOfMPConfigTest</exclude>
+                                        <exclude>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutTest</exclude>
+                                        <exclude>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutViaMPConfigTest</exclude>
+                                        <exclude>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutViaMPConfigWithConfigKeyTest</exclude>
+                                    </excludes>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>jdk16-plain-socket-workaround</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <systemPropertyVariables>
+                                        <!-- Temporary workaround to prevent org.eclipse.microprofile.rest.client.tck.timeout.Timeout* tests
+                                        from failing because of a different exception type being thrown in Java 13+
+                                        during socket connections -->
+                                        <jdk.net.usePlainSocketImpl>true</jdk.net.usePlainSocketImpl>
+                                    </systemPropertyVariables>
+                                    <includes>
+                                        <include>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutBuilderIndependentOfMPConfigTest</include>
+                                        <include>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutTest</include>
+                                        <include>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutViaMPConfigTest</include>
+                                        <include>org.eclipse.microprofile.rest.client.tck.timeout.TimeoutViaMPConfigWithConfigKeyTest</include>
+                                    </includes>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>jdk18-workarounds</id>
+            <activation>
+                <jdk>[18,)</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <executions>
+                            <!-- "unbind" the JDK16-17 workaround which is based on jdk.net.usePlainSocketImpl
+                                  because that property has been removed in Java 18: https://bugs.openjdk.java.net/browse/JDK-8253119
+                                  see also: https://github.com/quarkusio/quarkus/pull/19559#issuecomment-932987301 -->
+                            <execution>
+                                <id>jdk16-plain-socket-workaround</id>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

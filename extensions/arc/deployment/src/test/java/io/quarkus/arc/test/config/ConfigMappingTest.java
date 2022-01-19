@@ -5,6 +5,7 @@ import static java.util.stream.StreamSupport.stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -13,13 +14,12 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Stream;
 
+import javax.enterprise.context.Dependent;
 import javax.inject.Inject;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.Converter;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -35,8 +35,9 @@ import io.smallrye.config.WithParentName;
 public class ConfigMappingTest {
     @RegisterExtension
     static final QuarkusUnitTest TEST = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addAsResource(new StringAsset("config.my.prop=1234\n" +
+                            "config.override.my.prop=5678\n" +
                             "group.host=localhost\n" +
                             "group.port=8080\n" +
                             "types.int=9\n" +
@@ -56,11 +57,18 @@ public class ConfigMappingTest {
                             "maps.server.port=8080\n" +
                             "maps.group.server.host=localhost\n" +
                             "maps.group.server.port=8080\n" +
+                            "maps.base.server.host=localhost\n" +
+                            "maps.base.server.port=8080\n" +
+                            "maps.base.group.server.host=localhost\n" +
+                            "maps.base.group.server.port=8080\n" +
                             "converters.foo=notbar\n" +
                             "override.server.host=localhost\n" +
                             "override.server.port=8080\n" +
                             "cloud.server.host=cloud\n" +
-                            "cloud.server.port=9000\n"), "application.properties"));
+                            "cloud.server.port=9000\n" +
+                            "cloud.server.port=9000\n" +
+                            "hierarchy.foo=bar"),
+                            "application.properties"));
     @Inject
     Config config;
 
@@ -248,6 +256,36 @@ public class ConfigMappingTest {
         assertEquals(8080, maps.group().get("server").port());
     }
 
+    public interface ServerBase {
+        Map<String, String> server();
+    }
+
+    @ConfigMapping(prefix = "maps.base")
+    public interface MapsWithBase extends ServerBase {
+        @Override
+        Map<String, String> server();
+
+        Map<String, Server> group();
+
+        interface Server {
+            String host();
+
+            int port();
+        }
+    }
+
+    @Inject
+    MapsWithBase mapsWithBase;
+
+    @Test
+    void mapsWithBase() {
+        assertEquals("localhost", mapsWithBase.server().get("host"));
+        assertEquals(8080, Integer.valueOf(mapsWithBase.server().get("port")));
+
+        assertEquals("localhost", mapsWithBase.group().get("server").host());
+        assertEquals(8080, mapsWithBase.group().get("server").port());
+    }
+
     @ConfigMapping(prefix = "defaults")
     public interface Defaults {
         @WithDefault("foo")
@@ -289,5 +327,56 @@ public class ConfigMappingTest {
     @Test
     void converters() {
         assertEquals("bar", converters.foo());
+    }
+
+    public interface Base {
+
+        String foo();
+    }
+
+    @ConfigMapping(prefix = "hierarchy")
+    public interface ExtendsBase extends Base {
+    }
+
+    @Inject
+    Base base;
+
+    @Inject
+    ExtendsBase extendsBase;
+
+    @Test
+    void hierarchy() {
+        assertSame(base, extendsBase);
+        assertEquals("bar", extendsBase.foo());
+    }
+
+    @Dependent
+    public static class ConstructorInjection {
+        private String myProp;
+        private String overrideProp;
+
+        @Inject
+        public ConstructorInjection(@ConfigMapping(prefix = "config") MyConfigMapping myConfigMapping,
+                @ConfigMapping(prefix = "config.override") MyConfigMapping override) {
+            this.myProp = myConfigMapping.myProp();
+            this.overrideProp = override.myProp();
+        }
+
+        public String getMyProp() {
+            return myProp;
+        }
+
+        public String getOverrideProp() {
+            return overrideProp;
+        }
+    }
+
+    @Inject
+    ConstructorInjection constructorInjection;
+
+    @Test
+    void constructorInjection() {
+        assertEquals("1234", constructorInjection.getMyProp());
+        assertEquals("5678", constructorInjection.getOverrideProp());
     }
 }

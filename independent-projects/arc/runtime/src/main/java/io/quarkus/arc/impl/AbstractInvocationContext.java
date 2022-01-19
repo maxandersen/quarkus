@@ -4,8 +4,8 @@ import io.quarkus.arc.ArcInvocationContext;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +14,8 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 abstract class AbstractInvocationContext implements ArcInvocationContext, Supplier<Map<String, Object>> {
+
+    private static final Object[] EMPTY_PARAMS = new Object[0];
 
     protected final Method method;
     protected final Constructor<?> constructor;
@@ -31,7 +33,7 @@ abstract class AbstractInvocationContext implements ArcInvocationContext, Suppli
         this.target = target;
         this.method = method;
         this.constructor = constructor;
-        this.parameters = parameters;
+        this.parameters = parameters != null ? parameters : EMPTY_PARAMS;
         this.contextData = contextData != null ? contextData : new LazyValue<>(this);
         this.interceptorBindings = interceptorBindings;
         this.chain = chain;
@@ -44,7 +46,30 @@ abstract class AbstractInvocationContext implements ArcInvocationContext, Suppli
 
     @Override
     public Set<Annotation> getInterceptorBindings() {
-        return Collections.unmodifiableSet(interceptorBindings);
+        return interceptorBindings;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Annotation> T findIterceptorBinding(Class<T> annotationType) {
+        for (Annotation annotation : interceptorBindings) {
+            if (annotation.annotationType().equals(annotationType)) {
+                return (T) annotation;
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends Annotation> List<T> findIterceptorBindings(Class<T> annotationType) {
+        List<T> found = new ArrayList<>();
+        for (Annotation annotation : (Set<Annotation>) interceptorBindings) {
+            if (annotation.annotationType().equals(annotationType)) {
+                found.add((T) annotation);
+            }
+        }
+        return found;
     }
 
     @Override
@@ -77,9 +102,9 @@ abstract class AbstractInvocationContext implements ArcInvocationContext, Suppli
                         + ", type: " + parameterTypes[i] + "]");
             }
             if (params[i] != null) {
-                if (!params[i].getClass().equals(parameterTypes[i])) {
+                if (!Types.boxedClass(parameterTypes[i]).isAssignableFrom(Types.boxedClass(params[i].getClass()))) {
                     throw new IllegalArgumentException("The parameter type [" + params[i].getClass()
-                            + "] does not match the type for the target method [" + parameterTypes[i] + "]");
+                            + "] can not be assigned to the type for the target method [" + parameterTypes[i] + "]");
                 }
             }
         }

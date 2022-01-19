@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Using SSL With Native Executables
+= Using SSL With Native Executables
 
 include::./attributes.adoc[]
 
@@ -35,9 +35,16 @@ If you open the application's configuration file (`src/main/resources/applicatio
 
 [source,properties]
 ----
-org.acme.restclient.CountriesService/mp-rest/url=https://restcountries.eu/rest
+quarkus.rest-client."org.acme.rest.client.ExtensionsService".url=https://stage.code.quarkus.io/api
 ----
 which configures our REST client to connect to an SSL REST service.
+
+For the purposes of this guide, we also need to remove the configuration that starts the embedded WireMock server that stubs REST client responses so the tests actually propagate calls to the https://stage.code.quarkus.io/api. Update the test file `src/test/java/org/acme/rest/client/ExtensionsResourceTest.java` and remove the line:
+[source,java]
+----
+@QuarkusTestResource(WireMockExtensions.class)
+----
+from the `ExtensionsResourceTest` class.
 
 Now let's build the application as a native executable and run the tests:
 
@@ -61,40 +68,58 @@ It's not. The magic happens when building the native executable:
 
 [source]
 ----
-[INFO] [io.quarkus.creator.phase.nativeimage.NativeImagePhase] /opt/graalvm/bin/native-image -J-Djava.util.logging.manager=org.jboss.logmanager.LogManager -J-Dcom.sun.xml.internal.bind.v2.bytecode.ClassTailor.noOptimize=true -H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime -jar rest-client-1.0.0-SNAPSHOT-runner.jar -J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1 -H:+PrintAnalysisCallTree -H:EnableURLProtocols=http,https --enable-all-security-services -H:-SpawnIsolates -H:+JNI --no-server -H:-UseServiceLoaderFeature -H:+StackTrace
+[INFO] [io.quarkus.creator.phase.nativeimage.NativeImagePhase] /opt/graalvm/bin/native-image -J-Djava.util.logging.manager=org.jboss.logmanager.LogManager -J-Dcom.sun.xml.internal.bind.v2.bytecode.ClassTailor.noOptimize=true -H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime -jar rest-client-1.0.0-SNAPSHOT-runner.jar -J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1 -H:+PrintAnalysisCallTree -H:EnableURLProtocols=http,https -H:-SpawnIsolates -H:+JNI --no-server -H:-UseServiceLoaderFeature -H:+StackTrace
 ----
 
-The important elements are these 3 options:
+The important elements are these 2 options that were automatically added by Quarkus:
 
 [source,bash]
 ----
--H:EnableURLProtocols=http,https --enable-all-security-services -H:+JNI
+-H:EnableURLProtocols=http,https -H:+JNI
 ----
 
 They enable the native SSL support for your native executable.
+But you should not set them manually, we have a nice configuration property for this purpose as described below.
 
 As SSL is de facto the standard nowadays, we decided to enable its support automatically for some of our extensions:
 
  * the Agroal connection pooling extension (`quarkus-agroal`),
- * the Amazon DynamoDB extension (`quarkus-amazon-dynamodb`),
- * the Hibernate Search Elasticsearch extension (`quarkus-hibernate-search-orm-elasticsearch`),
+ * the Amazon Services extension (`quarkus-amazon-*`),
+ * the Consul Config extension (`quarkus-consul-config`),
+ * the Elasticsearch client extensions (`quarkus-elasticsearch-rest-client` and `quarkus-elasticsearch-rest-high-level-client`) and thus the Hibernate Search Elasticsearch extension (`quarkus-hibernate-search-orm-elasticsearch`),
+ * the Elytron Security OAuth2 extension (`quarkus-elytron-security-oauth2`),
+ * the gRPC extension (`quarkus-grpc`),
  * the Infinispan Client extension (`quarkus-infinispan-client`).
  * the Jaeger extension (`quarkus-jaeger`),
  * the JGit extension (`quarkus-jgit`),
- * the Keycloak extension (`quarkus-keycloak`),
+ * the JSch extension (`quarkus-jsch`),
+ * the Kafka Client extension (`quarkus-kafka-client`), if Apicurio Registry 2.x Avro library is used
+ * the Keycloak Authorization extension (`quarkus-keycloak-authorization`),
  * the Kubernetes client extension (`quarkus-kubernetes-client`),
+ * the Logging Sentry extension (`quarkus-logging-sentry`),
  * the Mailer extension (`quarkus-mailer`),
- * the Redis client extension (`quarkus-redis-client`),
- * the MongoDB extension (`quarkus-mongodb-client`),
+ * the MongoDB client extension (`quarkus-mongodb-client`),
  * the Neo4j extension (`quarkus-neo4j`),
- * the OAuth2 extension (`quarkus-elytron-security-oauth2`),
- * the REST client extension (`quarkus-rest-client`),
+ * the OIDC and OIDC client extensions (`quarkus-oidc` and `quarkus-oidc-client`),
+ * the Reactive client for IBM DB2 extension (`quarkus-reactive-db2-client`),
  * the Reactive client for PostgreSQL extension (`quarkus-reactive-pg-client`),
  * the Reactive client for MySQL extension (`quarkus-reactive-mysql-client`),
- * the Reactive client for DB2 extension (`quarkus-reactive-db2-client`).
+ * the Reactive client for Microsoft SQL Server extension (`quarkus-reactive-mssql-client`),
+ * the Redis client extension (`quarkus-redis-client`),
+ * the REST Client extension (`quarkus-rest-client`),
+ * the REST Client Reactive extension (`quarkus-rest-client-reactive`),
+ * the Spring Cloud Config client extension (`quarkus-spring-cloud-config-client`),
+ * the Vault extension (`quarkus-vault`),
  * the Cassandra client extensions (`cassandra-quarkus-client`)
 
-As long as you have one of those extensions in your project, the SSL support will be enabled by default.
+As long as you have one of these extensions in your project, the SSL support will be enabled by default.
+
+If you are not using any of them and you want to enable SSL support anyway, please add the following to your configuration:
+
+[source,properties]
+----
+quarkus.ssl.native=true
+----
 
 Now, let's just check the size of our native executable as it will be useful later:
 
@@ -130,7 +155,7 @@ The native executable tests will fail with the following error:
 
 [source]
 ----
-Exception handling request to /country/name/greece: com.oracle.svm.core.jdk.UnsupportedFeatureError: Accessing an URL protocol that was not enabled. The URL protocol https is supported but not enabled by default. It must be enabled by adding the --enable-url-protocols=https option to the native-image command.
+Caused by: java.net.MalformedURLException: Accessing an URL protocol that was not enabled. The URL protocol https is supported but not enabled by default. It must be enabled by adding the --enable-url-protocols=https option to the native-image command..
 ----
 
 This error is the one you obtain when trying to use SSL while it was not explicitly enabled in your native executable.
@@ -139,14 +164,15 @@ Now, let's change the REST service URL to **not** use SSL in `src/main/resources
 
 [source,properties]
 ----
-org.acme.restclient.CountriesService/mp-rest/url=http://restcountries.eu/rest
+quarkus.rest-client."org.acme.rest.client.ExtensionsService".url=http://stage.code.quarkus.io/api
 ----
+and since http://stage.code.quarkus.io/api responds with 302 status code we need to also skip the tests with `-DskipTests`.
 
-And build again:
+Now we can build again:
 
 [source,bash]
 ----
-./mvnw clean install -Pnative
+./mvnw clean install -Pnative -DskipTests
 ----
 
 If you check carefully the native executable build options, you can see that the SSL related options are gone:
@@ -199,16 +225,28 @@ And let's build the native executable again:
 
 [WARNING]
 ====
-This behavior is new to GraalVM 19.3+.
+This behavior is new to GraalVM 21.3+.
 ====
 
-When creating a native binary, GraalVM embraces the principle of "immutable security" for the root certificates.
-This essentially means that the root certificates are fixed at image build time, based on the certificate configuration used at that build time
-(which for Quarkus means when you perform a build having `quarkus.package.type=native` set).
-This avoids shipping a `cacerts` file or requiring a system property be set in order to set up root
-certificates that are provided by the OS where the binary runs.
+GraalVM supports both build time and runtime certificate configuration.
 
-As a consequence, system properties such as `javax.net.ssl.trustStore` do not have an effect at
+=== Build time configuration
+
+The build time approach favors the principle of "immutable security" where the appropriate certificates are added at build time, and can never be changed afterward.
+This guarantees that the list of valid certificates cannot be tampered with when the application gets deployed in production.
+
+However, this comes with a few drawbacks:
+
+ * If you use the same executable in all environments, and a certificate expires, the application needs to be rebuilt, and redeployed into production with the new certificate, which is an inconvenience.
+ * Even worse, if a certificate gets revoked because of a security breach, all applications that embed this certificate need to be rebuilt and redeployed in a timely manner.
+ * This requires also to add into the application all certificates for all environments (e.g. DEV, TEST, PROD), which means that a certificate that is required for DEV but should not be used elsewhere, will make its way anyway in production.
+ * Providing all certificates at build time complicates the CI, specifically in dynamic environments such as Kubernetes where valid certificates are provided by the platform in the `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt` PEM file.
+ * Lastly, this does not play well with third party software that do not provide a dedicated build for each customer environment.
+
+Creating a native executable using build time certificates essentially means that the root certificates are fixed at image build time, based on the certificate configuration used at build time (which for Quarkus means when you perform a build having `quarkus.package.type=native` set).
+This avoids shipping a `cacerts` file or requiring a system property be set in order to set up root certificates that are provided by the OS where the binary runs.
+
+In this situation, system properties such as `javax.net.ssl.trustStore` do not have an effect at
 run time, so when the defaults need to be changed, these system properties must be provided at image build time.
 The easiest way to do so is by setting `quarkus.native.additional-build-args`. For example:
 
@@ -218,11 +256,11 @@ quarkus.native.additional-build-args=-J-Djavax.net.ssl.trustStore=/tmp/mycerts,-
 ----
 
 will ensure that the certificates of `/tmp/mycerts` are baked into the native binary and used *in addition* to the default cacerts.
+The file containing the custom TrustStore does *not* (and probably should not) have to be present at runtime as its content has been baked into the native binary.
 
-[IMPORTANT]
-====
-The file containing the custom TrustStore does *not* have to be present at runtime as its content has been baked into the native binary.
-====
+=== Run time configuration
+
+Using the runtime certificate configuration, supported by GraalVM since 21.3 does not require any special or additional configuration compared to regular java programs or Quarkus in jvm mode. See the https://www.graalvm.org/reference-manual/native-image/CertificateManagement/#run-time-options[GraalVM documentation] for more information.
 
 [#working-with-containers]
 === Working with containers
@@ -232,7 +270,4 @@ as described in the previous section, it will work properly in container as well
 
 == Conclusion
 
-We make building native executable easy and, even if the SSL support in GraalVM is still requiring some serious thinking,
-it should be mostly transparent when using Quarkus.
-
-We track GraalVM progress on a regular basis so we will promptly integrate in Quarkus any improvement with respect to SSL support.
+We make building native executable using SSL easy, and provide several options to cope well with different types of security requirements.

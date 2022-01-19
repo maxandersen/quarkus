@@ -183,6 +183,9 @@ public class SimpleQuarkusRestTestCase {
 
         RestAssured.get("/simple/writer/vertx-buffer")
                 .then().body(Matchers.equalTo("VERTX-BUFFER"));
+
+        RestAssured.get("/simple/writer/mutiny-buffer")
+                .then().body(Matchers.equalTo("MUTINY-BUFFER"));
     }
 
     @DisabledOnOs(OS.WINDOWS)
@@ -191,6 +194,11 @@ public class SimpleQuarkusRestTestCase {
         RestAssured.get("/simple/async/cs/ok")
                 .then().body(Matchers.equalTo("CS-OK"));
         RestAssured.get("/simple/async/cs/fail")
+                .then().body(Matchers.equalTo("OK"))
+                .statusCode(666);
+        RestAssured.get("/simple/async/cf/ok")
+                .then().body(Matchers.equalTo("CF-OK"));
+        RestAssured.get("/simple/async/cf/fail")
                 .then().body(Matchers.equalTo("OK"))
                 .statusCode(666);
         RestAssured.get("/simple/async/uni/ok")

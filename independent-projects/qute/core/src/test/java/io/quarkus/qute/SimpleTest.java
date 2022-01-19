@@ -3,15 +3,16 @@ package io.quarkus.qute;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import io.quarkus.qute.Results.Result;
+import io.quarkus.qute.Results.NotFound;
 import io.quarkus.qute.TemplateNode.Origin;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.Optional;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.LongAdder;
 import org.junit.jupiter.api.Test;
 
 public class SimpleTest {
@@ -46,7 +47,7 @@ public class SimpleTest {
             public CompletionStage<Object> resolve(EvalContext context) {
                 List<?> list = (List<?>) context.getBase();
                 return context.evaluate(context.getParams().get(0)).thenCompose(index -> {
-                    return CompletableFuture.completedFuture(list.get((Integer) index));
+                    return CompletedStage.of(list.get((Integer) index));
                 });
             }
 
@@ -78,17 +79,22 @@ public class SimpleTest {
         Map<String, Object> data = new HashMap<>();
         data.put("surname", "Bug");
         data.put("foo", null);
+        data.put("emptyOptional", Optional.empty());
+        data.put("nameOptional", Optional.of("BUG"));
         assertEquals("John Bug", engine.parse("{name.or('John')} {surname.or('John')}").render(data));
         assertEquals("John Bug", engine.parse("{name ?: 'John'} {surname or 'John'}").render(data));
+        assertEquals("John Bug", engine.parse("{name ?:  'John'} {surname  or   'John'}").render(data));
         assertEquals("John Bug", engine.parse("{name ?: \"John Bug\"}").render(data));
         assertEquals("Is null", engine.parse("{foo ?: 'Is null'}").render(data));
         assertEquals("10", engine.parse("{foo.age.limit ?: 10}").render(data));
+        assertEquals("Is empty", engine.parse("{emptyOptional ?: 'Is empty'}").render(data));
+        assertEquals("BUG", engine.parse("{nameOptional ?: 'Is empty'}").render(data));
     }
 
     @Test
     public void testTernaryOperator() {
         Engine engine = Engine.builder()
-                .addValueResolvers(ValueResolvers.mapResolver(), ValueResolvers.trueResolver(),
+                .addValueResolvers(ValueResolvers.mapperResolver(), ValueResolvers.trueResolver(),
                         ValueResolvers.orResolver())
                 .build();
 
@@ -145,8 +151,8 @@ public class SimpleTest {
 
     @Test
     public void testNotFound() {
-        assertEquals("foo.bar Collection size: 0",
-                Engine.builder().addDefaultValueResolvers()
+        assertEquals("Entry \"foo\" not found in the data map in foo.bar Collection size: 0",
+                Engine.builder().strictRendering(false).addDefaultValueResolvers()
                         .addResultMapper(new ResultMapper() {
 
                             public int getPriority() {
@@ -154,17 +160,20 @@ public class SimpleTest {
                             }
 
                             public boolean appliesTo(Origin origin, Object val) {
-                                return val.equals(Result.NOT_FOUND);
+                                return Results.isNotFound(val);
                             }
 
                             @Override
                             public String map(Object result, Expression expression) {
+                                if (result instanceof NotFound) {
+                                    return ((NotFound) result).asMessage() + " in " + expression.toOriginalString();
+                                }
                                 return expression.toOriginalString();
                             }
                         }).addResultMapper(new ResultMapper() {
 
                             public boolean appliesTo(Origin origin, Object val) {
-                                return val.equals(Result.NOT_FOUND);
+                                return Results.isNotFound(val);
                             }
 
                             @Override
@@ -183,18 +192,19 @@ public class SimpleTest {
                                 return "Collection size: " + collection.size();
                             }
                         }).build()
-                        .parse("{foo.bar} {this}")
-                        .render(Collections.emptyList()));
+                        .parse("{foo.bar} {collection}")
+                        .data("collection", Collections.emptyList())
+                        .render());
     }
 
     @Test
     public void testNotFoundThrowException() {
         try {
-            Engine.builder().addDefaults()
+            Engine.builder().strictRendering(false).addDefaults()
                     .addResultMapper(new ResultMapper() {
 
                         public boolean appliesTo(Origin origin, Object val) {
-                            return val.equals(Result.NOT_FOUND);
+                            return Results.isNotFound(val);
                         }
 
                         @Override
@@ -226,5 +236,54 @@ public class SimpleTest {
         assertEquals("STARTEND::STARTJackEND",
                 engine.parse("START{#for pet in pets.orEmpty}...{/for}END::START{#for dog in dogs.orEmpty}{dog}{/for}END")
                         .data("pets", null, "dogs", Collections.singleton("Jack")).render());
+    }
+
+    @Test
+    public void testOptional() {
+        Engine engine = Engine.builder().addDefaults().addValueResolver(new ReflectionValueResolver()).build();
+        assertEquals("foos::baz",
+                engine.parse("{foo}:{bar}:{baz.get()}")
+                        .data("foo", Optional.of("foos"), "bar", Optional.empty(), "baz", Optional.of("baz")).render());
+    }
+
+    @Test
+    public void testSectionHelpFactoryConfigCaching() {
+        LongAdder invocations = new LongAdder();
+        IfSectionHelper.Factory customIfFactory = new IfSectionHelper.Factory() {
+            @Override
+            public ParametersInfo getParameters() {
+                invocations.increment();
+                return super.getParameters();
+            }
+        };
+        Engine engine = Engine.builder().addSectionHelper(customIfFactory).addValueResolver(ValueResolvers.mapperResolver())
+                .build();
+        assertEquals(":1:1",
+                engine.parse("{#if foo}:1{/if}{#if bar}:0{/if}{#if foo}:1{/if}")
+                        .data("foo", true, "bar", false).render());
+        assertEquals(1, invocations.longValue());
+    }
+
+    @Test
+    public void testSectionHelpFactoryConfigCachingDisabled() {
+        LongAdder invocations = new LongAdder();
+        IfSectionHelper.Factory customIfFactory = new IfSectionHelper.Factory() {
+            @Override
+            public ParametersInfo getParameters() {
+                invocations.increment();
+                return super.getParameters();
+            }
+
+            @Override
+            public boolean cacheFactoryConfig() {
+                return false;
+            }
+        };
+        Engine engine = Engine.builder().addSectionHelper(customIfFactory).addValueResolver(ValueResolvers.mapperResolver())
+                .build();
+        assertEquals(":1:1",
+                engine.parse("{#if foo}:1{/if}{#if bar}:0{/if}{#if foo}:1{/if}")
+                        .data("foo", true, "bar", false).render());
+        assertEquals(3, invocations.longValue());
     }
 }

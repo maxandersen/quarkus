@@ -3,7 +3,7 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Command Mode with Picocli
+= Command Mode with Picocli
 :extension-status: experimental
 
 include::./attributes.adoc[]
@@ -14,7 +14,7 @@ Quarkus provides support for using Picocli. This guide contains examples of `pic
 
 include::./status-include.adoc[]
 
-IMPORTANT: If you are not familiar with the Quarkus Command Mode, consider reading the link:command-mode-reference[Command Mode reference guide] first.
+IMPORTANT: If you are not familiar with the Quarkus Command Mode, consider reading the xref:command-mode-reference.adoc[Command Mode reference guide] first.
 
 == Configuration
 
@@ -239,7 +239,7 @@ class DatasourceConfiguration {
 
 == Providing own QuarkusMain
 
-You can also provide your own application entry point annotated with `QuarkusMain` (as described in link:command-mode-reference[Command Mode reference guide]).
+You can also provide your own application entry point annotated with `QuarkusMain` (as described in xref:command-mode-reference.adoc[Command Mode reference guide]).
 
 [source,java]
 ----
@@ -289,6 +289,10 @@ For Gradle, you need to add the following in `dependencies` section of the `buil
 annotationProcessor enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}")
 annotationProcessor 'info.picocli:picocli-codegen'
 ----
+
+== Development Mode
+
+In the development mode, i.e. when running `mvn quarkus:dev`, the application is executed and restarted every time the `Space bar` key is pressed. You can also pass arguments to your command line app via the `quarkus.args` system property, e.g. `mvn quarkus:dev -Dquarkus.args='--help'` and `mvn quarkus:dev -Dquarkus.args='-c -w --val 1'`.
 
 == Configuration Reference
 

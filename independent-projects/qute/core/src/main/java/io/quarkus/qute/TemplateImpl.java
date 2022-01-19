@@ -27,7 +27,13 @@ class TemplateImpl implements Template {
 
     @Override
     public TemplateInstance instance() {
-        return new TemplateInstanceImpl();
+        TemplateInstance instance = new TemplateInstanceImpl();
+        if (!engine.initializers.isEmpty()) {
+            for (TemplateInstance.Initializer initializer : engine.initializers) {
+                initializer.accept(instance);
+            }
+        }
+        return instance;
     }
 
     @Override
@@ -86,7 +92,7 @@ class TemplateImpl implements Template {
 
         @Override
         public CompletionStage<String> renderAsync() {
-            StringBuilder builder = new StringBuilder();
+            StringBuilder builder = new StringBuilder(1028);
             return renderData(data(), builder::append).thenApply(v -> builder.toString());
         }
 
@@ -97,12 +103,9 @@ class TemplateImpl implements Template {
 
         private CompletionStage<Void> renderData(Object data, Consumer<String> consumer) {
             CompletableFuture<Void> result = new CompletableFuture<>();
-            DataNamespaceResolver dataResolver = new DataNamespaceResolver();
-            List<NamespaceResolver> namespaceResolvers = ImmutableList.<NamespaceResolver> builder()
-                    .addAll(engine.getNamespaceResolvers()).add(dataResolver).build();
-            ResolutionContext rootContext = new ResolutionContextImpl(data, namespaceResolvers,
-                    engine.getEvaluator(), null, this);
-            dataResolver.rootContext = rootContext;
+            ResolutionContext rootContext = new ResolutionContextImpl(data,
+                    engine.getEvaluator(), null, this::getAttribute);
+            setAttribute(DataNamespaceResolver.ROOT_CONTEXT, rootContext);
             // Async resolution
             root.resolve(rootContext).whenComplete((r, t) -> {
                 if (t != null) {
@@ -124,11 +127,15 @@ class TemplateImpl implements Template {
 
     static class DataNamespaceResolver implements NamespaceResolver {
 
-        ResolutionContext rootContext;
+        static final String ROOT_CONTEXT = "qute$rootContext";
 
         @Override
         public CompletionStage<Object> resolve(EvalContext context) {
-            return rootContext.evaluate(context.getName());
+            Object rootContext = context.getAttribute(ROOT_CONTEXT);
+            if (rootContext != null && rootContext instanceof ResolutionContext) {
+                return ((ResolutionContext) rootContext).evaluate(context.getName());
+            }
+            return Results.notFound(context);
         }
 
         @Override

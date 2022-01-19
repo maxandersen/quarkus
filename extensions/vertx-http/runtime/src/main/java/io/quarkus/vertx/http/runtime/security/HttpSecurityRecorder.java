@@ -15,6 +15,7 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.BeanContainerListener;
+import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.security.AuthenticationCompletionException;
 import io.quarkus.security.AuthenticationFailedException;
@@ -44,8 +45,16 @@ public class HttpSecurityRecorder {
         }
     };
 
+    final RuntimeValue<HttpConfiguration> httpConfiguration;
+    final HttpBuildTimeConfig buildTimeConfig;
+
     //the temp encryption key, persistent across dev mode restarts
     static volatile String encryptionKey;
+
+    public HttpSecurityRecorder(RuntimeValue<HttpConfiguration> httpConfiguration, HttpBuildTimeConfig buildTimeConfig) {
+        this.httpConfiguration = httpConfiguration;
+        this.buildTimeConfig = buildTimeConfig;
+    }
 
     public Handler<RoutingContext> authenticationMechanismHandler(boolean proactiveAuthentication) {
         return new Handler<RoutingContext>() {
@@ -230,14 +239,13 @@ public class HttpSecurityRecorder {
         };
     }
 
-    public Supplier<FormAuthenticationMechanism> setupFormAuth(HttpConfiguration httpConfiguration,
-            HttpBuildTimeConfig buildTimeConfig) {
+    public Supplier<FormAuthenticationMechanism> setupFormAuth() {
 
         return new Supplier<FormAuthenticationMechanism>() {
             @Override
             public FormAuthenticationMechanism get() {
                 String key;
-                if (!httpConfiguration.encryptionKey.isPresent()) {
+                if (!httpConfiguration.getValue().encryptionKey.isPresent()) {
                     if (encryptionKey != null) {
                         //persist across dev mode restarts
                         key = encryptionKey;
@@ -248,7 +256,7 @@ public class HttpSecurityRecorder {
                         log.warn("Encryption key was not specified for persistent FORM auth, using temporary key " + key);
                     }
                 } else {
-                    key = httpConfiguration.encryptionKey.get();
+                    key = httpConfiguration.getValue().encryptionKey.get();
                 }
                 FormAuthConfig form = buildTimeConfig.auth.form;
                 PersistentLoginManager loginManager = new PersistentLoginManager(key, form.cookieName, form.timeout.toMillis(),
@@ -271,7 +279,7 @@ public class HttpSecurityRecorder {
         return new Supplier<BasicAuthenticationMechanism>() {
             @Override
             public BasicAuthenticationMechanism get() {
-                return new BasicAuthenticationMechanism(buildTimeConfig.auth.realm, "BASIC", buildTimeConfig.auth.form.enabled);
+                return new BasicAuthenticationMechanism(buildTimeConfig.auth.realm, buildTimeConfig.auth.form.enabled);
             }
         };
     }
@@ -281,6 +289,35 @@ public class HttpSecurityRecorder {
             @Override
             public MtlsAuthenticationMechanism get() {
                 return new MtlsAuthenticationMechanism();
+            }
+        };
+    }
+
+    /**
+     * This handler resolves the identity, and will be mapped to the post location. Otherwise
+     * for lazy auth the post will not be evaluated if there is no security rule for the post location.
+     */
+    public Handler<RoutingContext> formAuthPostHandler() {
+        return new Handler<RoutingContext>() {
+            @Override
+            public void handle(RoutingContext event) {
+                Uni<SecurityIdentity> user = event.get(QuarkusHttpUser.DEFERRED_IDENTITY_KEY);
+                user.subscribe().withSubscriber(new UniSubscriber<SecurityIdentity>() {
+                    @Override
+                    public void onSubscribe(UniSubscription uniSubscription) {
+
+                    }
+
+                    @Override
+                    public void onItem(SecurityIdentity securityIdentity) {
+                        event.next();
+                    }
+
+                    @Override
+                    public void onFailure(Throwable throwable) {
+                        event.fail(throwable);
+                    }
+                });
             }
         };
     }

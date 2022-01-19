@@ -5,7 +5,6 @@ import static org.awaitility.Awaitility.await;
 
 import java.util.List;
 
-import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -16,14 +15,23 @@ import io.restassured.common.mapper.TypeRef;
 @QuarkusTest
 @QuarkusTestResource(KafkaTestResource.class)
 public class KafkaConnectorTest {
-    private static final Logger log = Logger.getLogger(KafkaTestResource.class);
 
     protected static final TypeRef<List<Person>> TYPE_REF = new TypeRef<List<Person>>() {
     };
 
     @Test
-    public void test() {
+    public void testPeople() {
         await().untilAsserted(() -> Assertions.assertEquals(get("/kafka/people").as(TYPE_REF).size(), 6));
+    }
+
+    @Test
+    public void testPets() {
+        await().untilAsserted(() -> Assertions.assertEquals(get("/kafka/pets").as(TYPE_REF).size(), 3));
+    }
+
+    @Test
+    public void testFruits() {
+        await().untilAsserted(() -> Assertions.assertEquals(get("/kafka/fruits").as(TYPE_REF).size(), 4));
     }
 
 }

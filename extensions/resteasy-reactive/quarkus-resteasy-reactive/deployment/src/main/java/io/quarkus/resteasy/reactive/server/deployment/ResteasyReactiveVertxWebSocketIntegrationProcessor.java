@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
@@ -15,6 +16,7 @@ import org.jboss.resteasy.reactive.server.processor.scanning.MethodScanner;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.resteasy.reactive.server.runtime.websocket.VertxWebSocketParamExtractor;
 import io.quarkus.resteasy.reactive.server.runtime.websocket.VertxWebSocketRestHandler;
+import io.quarkus.resteasy.reactive.server.spi.MethodScannerBuildItem;
 import io.vertx.core.http.ServerWebSocket;
 
 public class ResteasyReactiveVertxWebSocketIntegrationProcessor {
@@ -26,7 +28,8 @@ public class ResteasyReactiveVertxWebSocketIntegrationProcessor {
     MethodScannerBuildItem scanner() {
         return new MethodScannerBuildItem(new MethodScanner() {
             @Override
-            public List<HandlerChainCustomizer> scan(MethodInfo method, Map<String, Object> methodContext) {
+            public List<HandlerChainCustomizer> scan(MethodInfo method, ClassInfo actualEndpointClass,
+                    Map<String, Object> methodContext) {
                 if (methodContext.containsKey(NAME)) {
                     return Collections.singletonList(new VertxWebSocketRestHandler());
                 }
@@ -41,6 +44,16 @@ public class ResteasyReactiveVertxWebSocketIntegrationProcessor {
                     return new VertxWebSocketParamExtractor();
                 }
                 return null;
+            }
+
+            @Override
+            public boolean isMethodSignatureAsync(MethodInfo info) {
+                for (var param : info.parameters()) {
+                    if (param.name().equals(SERVER_WEB_SOCKET)) {
+                        return true;
+                    }
+                }
+                return false;
             }
         });
     }

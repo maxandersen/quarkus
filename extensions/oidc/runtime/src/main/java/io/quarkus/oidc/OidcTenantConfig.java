@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 import io.quarkus.oidc.common.runtime.OidcCommonConfig;
+import io.quarkus.oidc.common.runtime.OidcConstants;
+import io.quarkus.oidc.runtime.OidcConfig;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 
@@ -30,11 +32,11 @@ public class OidcTenantConfig extends OidcCommonConfig {
     /**
      * The application type, which can be one of the following values from enum {@link ApplicationType}.
      */
-    @ConfigItem(defaultValue = "service")
-    public ApplicationType applicationType = ApplicationType.SERVICE;
+    @ConfigItem(defaultValueDocumentation = "service")
+    public Optional<ApplicationType> applicationType = Optional.empty();
 
     /**
-     * Relative path of the OIDC authorization endpoint which authenticates the users.
+     * Relative path or absolute URL of the OIDC authorization endpoint which authenticates the users.
      * This property must be set for the 'web-app' applications if OIDC discovery is disabled.
      * This property will be ignored if the discovery is enabled.
      */
@@ -42,7 +44,7 @@ public class OidcTenantConfig extends OidcCommonConfig {
     public Optional<String> authorizationPath = Optional.empty();
 
     /**
-     * Relative path of the OIDC userinfo endpoint.
+     * Relative path or absolute URL of the OIDC userinfo endpoint.
      * This property must only be set for the 'web-app' applications if OIDC discovery is disabled
      * and 'authentication.user-info-required' property is enabled.
      * This property will be ignored if the discovery is enabled.
@@ -51,7 +53,7 @@ public class OidcTenantConfig extends OidcCommonConfig {
     public Optional<String> userInfoPath = Optional.empty();
 
     /**
-     * Relative path of the OIDC RFC7662 introspection endpoint which can introspect both opaque and JWT tokens.
+     * Relative path or absolute URL of the OIDC RFC7662 introspection endpoint which can introspect both opaque and JWT tokens.
      * This property must be set if OIDC discovery is disabled and 1) the opaque bearer access tokens have to be verified
      * or 2) JWT tokens have to be verified while the cached JWK verification set with no matching JWK is being refreshed.
      * This property will be ignored if the discovery is enabled.
@@ -60,7 +62,7 @@ public class OidcTenantConfig extends OidcCommonConfig {
     public Optional<String> introspectionPath = Optional.empty();
 
     /**
-     * Relative path of the OIDC JWKS endpoint which returns a JSON Web Key Verification Set.
+     * Relative path or absolute URL of the OIDC JWKS endpoint which returns a JSON Web Key Verification Set.
      * This property should be set if OIDC discovery is disabled and the local JWT verification is required.
      * This property will be ignored if the discovery is enabled.
      */
@@ -68,7 +70,7 @@ public class OidcTenantConfig extends OidcCommonConfig {
     public Optional<String> jwksPath = Optional.empty();
 
     /**
-     * Relative path of the OIDC end_session_endpoint.
+     * Relative path or absolute URL of the OIDC end_session_endpoint.
      * This property must be set if OIDC discovery is disabled and RP Initiated Logout support for the 'web-app' applications is
      * required.
      * This property will be ignored if the discovery is enabled.
@@ -112,6 +114,24 @@ public class OidcTenantConfig extends OidcCommonConfig {
     @ConfigItem
     public TokenStateManager tokenStateManager = new TokenStateManager();
 
+    /**
+     * Allow caching the token introspection data.
+     * Note enabling this property does not enable the cache itself but only permits to cache the token introspection
+     * for a given tenant. If the default token cache can be used then please see {@link OidcConfig.TokenCache} how to enable
+     * it.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean allowTokenIntrospectionCache = true;
+
+    /**
+     * Allow caching the user info data.
+     * Note enabling this property does not enable the cache itself but only permits to cache the user info data
+     * for a given tenant. If the default token cache can be used then please see {@link OidcConfig.TokenCache} how to enable
+     * it.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean allowUserInfoCache = true;
+
     @ConfigGroup
     public static class Logout {
 
@@ -130,6 +150,18 @@ public class OidcTenantConfig extends OidcCommonConfig {
         @ConfigItem
         public Optional<String> postLogoutPath = Optional.empty();
 
+        /**
+         * Name of the post logout URI parameter which will be added as a query parameter to the logout redirect URI.
+         */
+        @ConfigItem(defaultValue = OidcConstants.POST_LOGOUT_REDIRECT_URI)
+        public String postLogoutUriParam;
+
+        /**
+         * Additional properties which will be added as the query parameters to the logout redirect URI.
+         */
+        @ConfigItem
+        public Map<String, String> extraParams;
+
         public void setPath(Optional<String> path) {
             this.path = path;
         }
@@ -144,6 +176,22 @@ public class OidcTenantConfig extends OidcCommonConfig {
 
         public Optional<String> getPostLogoutPath() {
             return postLogoutPath;
+        }
+
+        public Map<String, String> getExtraParams() {
+            return extraParams;
+        }
+
+        public void setExtraParams(Map<String, String> extraParams) {
+            this.extraParams = extraParams;
+        }
+
+        public String getPostLogoutUriParam() {
+            return postLogoutUriParam;
+        }
+
+        public void setPostLogoutUriParam(String postLogoutUriParam) {
+            this.postLogoutUriParam = postLogoutUriParam;
         }
     }
 
@@ -457,6 +505,14 @@ public class OidcTenantConfig extends OidcCommonConfig {
         public boolean cookieForceSecure;
 
         /**
+         * Cookie name suffix.
+         * For example, a session cookie name for the default OIDC tenant is 'q_session' but can be changed to 'q_session_test'
+         * if this property is set to 'test'.
+         */
+        @ConfigItem
+        public Optional<String> cookieSuffix = Optional.empty();
+
+        /**
          * Cookie path parameter value which, if set, will be used to set a path parameter for the session, state and post
          * logout cookies.
          * The `cookie-path-header` property, if set, will be checked first.
@@ -479,10 +535,10 @@ public class OidcTenantConfig extends OidcCommonConfig {
         public Optional<String> cookieDomain = Optional.empty();
 
         /**
-         * If this property is set to 'true' then an OIDC UserInfo endpoint will be called
+         * If this property is set to 'true' then an OIDC UserInfo endpoint will be called.
          */
-        @ConfigItem(defaultValue = "false")
-        public boolean userInfoRequired;
+        @ConfigItem(defaultValueDocumentation = "false")
+        public Optional<Boolean> userInfoRequired = Optional.empty();
 
         /**
          * Session age extension in minutes.
@@ -507,6 +563,14 @@ public class OidcTenantConfig extends OidcCommonConfig {
         @ConfigItem(defaultValue = "true")
         public boolean javaScriptAutoRedirect = true;
 
+        /**
+         * Requires that ID token is available when the authorization code flow completes.
+         * Disable this property only when you need to use the authorization code flow with OAuth2 providers which do not return
+         * ID token.
+         */
+        @ConfigItem(defaultValueDocumentation = "true")
+        public Optional<Boolean> idTokenRequired = Optional.empty();
+
         public boolean isJavaScriptAutoRedirect() {
             return javaScriptAutoRedirect;
         }
@@ -527,8 +591,8 @@ public class OidcTenantConfig extends OidcCommonConfig {
             return scopes;
         }
 
-        public void setScopes(Optional<List<String>> scopes) {
-            this.scopes = scopes;
+        public void setScopes(List<String> scopes) {
+            this.scopes = Optional.of(scopes);
         }
 
         public Map<String, String> getExtraParams() {
@@ -579,12 +643,12 @@ public class OidcTenantConfig extends OidcCommonConfig {
             this.cookieDomain = Optional.of(cookieDomain);
         }
 
-        public boolean isUserInfoRequired() {
+        public Optional<Boolean> isUserInfoRequired() {
             return userInfoRequired;
         }
 
         public void setUserInfoRequired(boolean userInfoRequired) {
-            this.userInfoRequired = userInfoRequired;
+            this.userInfoRequired = Optional.of(userInfoRequired);
         }
 
         public boolean isRemoveRedirectParameters() {
@@ -619,6 +683,22 @@ public class OidcTenantConfig extends OidcCommonConfig {
             this.cookiePathHeader = Optional.of(cookiePathHeader);
         }
 
+        public Optional<Boolean> isIdTokenRequired() {
+            return idTokenRequired;
+        }
+
+        public void setIdTokenRequired(boolean idTokenRequired) {
+            this.idTokenRequired = Optional.of(idTokenRequired);
+        }
+
+        public Optional<String> getCookieSuffix() {
+            return cookieSuffix;
+        }
+
+        public void setCookieSuffix(String cookieSuffix) {
+            this.cookieSuffix = Optional.of(cookieSuffix);
+        }
+
     }
 
     @ConfigGroup
@@ -640,6 +720,12 @@ public class OidcTenantConfig extends OidcCommonConfig {
 
         /**
          * Expected issuer 'iss' claim value.
+         * Note this property overrides the `issuer` property which may be set in OpenId Connect provider's well-known
+         * configuration.
+         * If the `iss` claim value varies depending on the host/IP address or tenant id of the provider then you may skip the
+         * issuer verification by setting this property to 'any' but it should be done only when other options (such as
+         * configuring
+         * the provider to use the fixed `iss` claim value) are not possible.
          */
         @ConfigItem
         public Optional<String> issuer = Optional.empty();
@@ -689,20 +775,6 @@ public class OidcTenantConfig extends OidcCommonConfig {
         public boolean refreshExpired;
 
         /**
-         * Token auto-refresh interval in seconds during the user re-authentication.
-         * If this option is set then the valid ID token will be refreshed if it will expire in less than a number of seconds
-         * set by this option. The user will still be authenticated if the ID token can no longer be refreshed but is still
-         * valid.
-         * This option will be ignored if the 'refresh-expired' property is not enabled.
-         *
-         * Note this property is deprecated and will be removed in one of the next releases.
-         * Please use 'quarkus.oidc.token.refresh-token-time-skew'
-         */
-        @ConfigItem
-        @Deprecated
-        public Optional<Duration> autoRefreshInterval = Optional.empty();
-
-        /**
          * Refresh token time skew in seconds.
          * If this property is enabled then the configured number of seconds is added to the current time
          * when checking whether the access token should be refreshed. If the sum is greater than this access token's
@@ -737,6 +809,14 @@ public class OidcTenantConfig extends OidcCommonConfig {
          */
         @ConfigItem(defaultValue = "true")
         public boolean allowJwtIntrospection = true;
+
+        /**
+         * Allow the remote introspection of the opaque tokens.
+         *
+         * Set this property to 'false' if only JWT tokens are expected.
+         */
+        @ConfigItem(defaultValue = "true")
+        public boolean allowOpaqueTokenIntrospection = true;
 
         public Optional<String> getIssuer() {
             return issuer;
@@ -817,6 +897,14 @@ public class OidcTenantConfig extends OidcCommonConfig {
         public void setAllowJwtIntrospection(boolean allowJwtIntrospection) {
             this.allowJwtIntrospection = allowJwtIntrospection;
         }
+
+        public boolean isAllowOpaqueTokenIntrospection() {
+            return allowOpaqueTokenIntrospection;
+        }
+
+        public void setAllowOpaqueTokenIntrospection(boolean allowOpaqueTokenIntrospection) {
+            this.allowOpaqueTokenIntrospection = allowOpaqueTokenIntrospection;
+        }
     }
 
     public static enum ApplicationType {
@@ -841,11 +929,49 @@ public class OidcTenantConfig extends OidcCommonConfig {
         HYBRID
     }
 
-    public ApplicationType getApplicationType() {
+    /**
+     * Well known OpenId Connect provider identifier
+     */
+    @ConfigItem
+    public Optional<Provider> provider = Optional.empty();
+
+    public static enum Provider {
+        APPLE,
+        FACEBOOK,
+        GITHUB,
+        GOOGLE,
+        MICROSOFT
+    }
+
+    public Optional<Provider> getProvider() {
+        return provider;
+    }
+
+    public void setProvider(Provider provider) {
+        this.provider = Optional.of(provider);
+    }
+
+    public Optional<ApplicationType> getApplicationType() {
         return applicationType;
     }
 
     public void setApplicationType(ApplicationType type) {
-        this.applicationType = type;
+        this.applicationType = Optional.of(type);
+    }
+
+    public boolean isAllowTokenIntrospectionCache() {
+        return allowTokenIntrospectionCache;
+    }
+
+    public void setAllowTokenIntrospectionCache(boolean allowTokenIntrospectionCache) {
+        this.allowTokenIntrospectionCache = allowTokenIntrospectionCache;
+    }
+
+    public boolean isAllowUserInfoCache() {
+        return allowUserInfoCache;
+    }
+
+    public void setAllowUserInfoCache(boolean allowUserInfoCache) {
+        this.allowUserInfoCache = allowUserInfoCache;
     }
 }

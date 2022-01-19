@@ -5,9 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import javax.enterprise.context.control.ActivateRequestContext;
 import javax.inject.Inject;
 
+import org.hibernate.SessionFactory;
 import org.hibernate.reactive.mutiny.Mutiny;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -17,25 +16,24 @@ public class SinglePersistenceUnitCdiMutinySessionTest {
 
     @RegisterExtension
     static QuarkusUnitTest runner = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClass(DefaultEntity.class)
                     .addAsResource("application.properties"));
 
     @Inject
-    Mutiny.Session session;
+    Mutiny.SessionFactory sessionFactory;
 
     @Test
     @ActivateRequestContext
     public void test() {
         DefaultEntity entity = new DefaultEntity("default");
 
-        DefaultEntity retrievedEntity = session.withTransaction(tx -> session.persist(entity))
-                .chain(() -> session.withTransaction(tx -> session.clear().find(DefaultEntity.class, entity.getId())))
+        DefaultEntity retrievedEntity = sessionFactory.withTransaction((session, tx) -> session.persist(entity))
+                .chain(() -> sessionFactory.withSession(session -> session.find(DefaultEntity.class, entity.getId())))
                 .await().indefinitely();
 
         assertThat(retrievedEntity)
                 .isNotSameAs(entity)
                 .returns(entity.getName(), DefaultEntity::getName);
     }
-
 }

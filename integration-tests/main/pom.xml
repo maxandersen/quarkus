@@ -18,6 +18,9 @@
         <datasource.url>jdbc:h2:tcp://localhost/mem:test</datasource.url>
         <datasource.username></datasource.username>
         <datasource.password></datasource.password>
+
+        <!-- do not update this dependency, it is only used for testing -->
+        <webjar.jquery-ui.version>1.13.0</webjar.jquery-ui.version>
     </properties>
 
     <dependencies>
@@ -43,10 +46,6 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-smallrye-opentracing</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-arc</artifactId>
         </dependency>
         <dependency>
@@ -64,6 +63,10 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-narayana-jta</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-narayana-lra</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -89,7 +92,7 @@
         <!-- JAX-RS -->
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-resteasy</artifactId>
+            <artifactId>quarkus-resteasy-jackson</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -102,6 +105,12 @@
         <dependency>
             <groupId>org.jboss.resteasy</groupId>
             <artifactId>resteasy-rxjava2</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>jakarta.activation</groupId>
+                    <artifactId>jakarta.activation-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -133,12 +142,6 @@
             <artifactId>quarkus-smallrye-context-propagation</artifactId>
         </dependency>
 
-        <!-- Tika -->
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-tika</artifactId>
-        </dependency>
-
         <!-- test dependencies -->
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -162,8 +165,8 @@
         </dependency>
         <dependency>
             <groupId>org.webjars</groupId>
-            <artifactId>bootstrap</artifactId>
-            <version>3.1.0</version>
+            <artifactId>jquery-ui</artifactId>
+            <version>${webjar.jquery-ui.version}</version>
         </dependency>
         <!-- Issue 2707: used to test if web-fragments.xml is being read properly -->
         <dependency>
@@ -286,6 +289,19 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-narayana-lra-deployment</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-rest-client-deployment</artifactId>
             <version>${project.version}</version>
             <type>pom</type>
@@ -299,7 +315,7 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-resteasy-deployment</artifactId>
+            <artifactId>quarkus-resteasy-jackson-deployment</artifactId>
             <version>${project.version}</version>
             <type>pom</type>
             <scope>test</scope>
@@ -429,19 +445,6 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-smallrye-opentracing-deployment</artifactId>
-            <version>${project.version}</version>
-            <type>pom</type>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-swagger-ui-deployment</artifactId>
             <version>${project.version}</version>
             <type>pom</type>
@@ -469,19 +472,6 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-websockets-deployment</artifactId>
-            <version>${project.version}</version>
-            <type>pom</type>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>io.quarkus</groupId>
-            <artifactId>quarkus-tika-deployment</artifactId>
             <version>${project.version}</version>
             <type>pom</type>
             <scope>test</scope>
@@ -605,7 +595,7 @@
                         <configuration>
                             <images>
                                 <image>
-                                    <name>postgres:13.1</name>
+                                    <name>postgres:14.1</name>
                                     <alias>postgresql</alias>
                                     <run>
                                         <env>

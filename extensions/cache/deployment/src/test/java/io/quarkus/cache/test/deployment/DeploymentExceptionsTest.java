@@ -11,8 +11,6 @@ import javax.enterprise.inject.spi.DeploymentException;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -23,7 +21,6 @@ import io.quarkus.cache.CacheName;
 import io.quarkus.cache.CacheResult;
 import io.quarkus.cache.deployment.exception.ClassTargetException;
 import io.quarkus.cache.deployment.exception.PrivateMethodTargetException;
-import io.quarkus.cache.deployment.exception.UnknownCacheNameException;
 import io.quarkus.cache.deployment.exception.VoidReturnTypeTargetException;
 import io.quarkus.test.QuarkusUnitTest;
 
@@ -38,18 +35,15 @@ public class DeploymentExceptionsTest {
 
     @RegisterExtension
     static final QuarkusUnitTest TEST = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(TestResource.class, TestBean.class))
+            .withApplicationRoot((jar) -> jar.addClasses(TestResource.class, TestBean.class))
             .assertException(t -> {
                 assertEquals(DeploymentException.class, t.getClass());
-                assertEquals(10, t.getSuppressed().length);
+                assertEquals(7, t.getSuppressed().length);
                 assertPrivateMethodTargetException(t, "shouldThrowPrivateMethodTargetException", 1);
                 assertPrivateMethodTargetException(t, "shouldAlsoThrowPrivateMethodTargetException", 2);
                 assertVoidReturnTypeTargetException(t, "showThrowVoidReturnTypeTargetException");
                 assertClassTargetException(t, TestResource.class, 1);
                 assertClassTargetException(t, TestBean.class, 2);
-                assertUnknownCacheNameException(t, UNKNOWN_CACHE_1);
-                assertUnknownCacheNameException(t, UNKNOWN_CACHE_2);
-                assertUnknownCacheNameException(t, UNKNOWN_CACHE_3);
             });
 
     private static void assertPrivateMethodTargetException(Throwable t, String expectedMethodName, long expectedCount) {
@@ -65,11 +59,6 @@ public class DeploymentExceptionsTest {
     private static void assertClassTargetException(Throwable t, Class<?> expectedClassName, long expectedCount) {
         assertEquals(expectedCount, filterSuppressed(t, ClassTargetException.class)
                 .filter(s -> expectedClassName.getName().equals(s.getClassName().toString())).count());
-    }
-
-    private static void assertUnknownCacheNameException(Throwable t, String expectedCacheName) {
-        assertEquals(1, filterSuppressed(t, UnknownCacheNameException.class)
-                .filter(s -> expectedCacheName.equals(s.getCacheName())).count());
     }
 
     private static <T extends RuntimeException> Stream<T> filterSuppressed(Throwable t, Class<T> filterClass) {

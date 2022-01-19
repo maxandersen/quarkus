@@ -6,7 +6,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
 
-public interface ServerHttpResponse {
+public interface ServerHttpResponse extends StreamingResponse<ServerHttpResponse> {
 
     ServerHttpResponse setStatusCode(int code);
 
@@ -26,6 +26,8 @@ public interface ServerHttpResponse {
 
     Iterable<Map.Entry<String, String>> getAllResponseHeaders();
 
+    String getResponseHeader(String name);
+
     boolean closed();
 
     ServerHttpResponse setChunked(boolean chunked);
@@ -34,9 +36,15 @@ public interface ServerHttpResponse {
 
     CompletionStage<Void> write(byte[] data);
 
+    ServerHttpResponse sendFile(String path, long offset, long length);
+
     OutputStream createResponseOutputStream();
 
     void setPreCommitListener(Consumer<ResteasyReactiveRequestContext> task);
 
     ServerHttpResponse addCloseHandler(Runnable onClose);
+
+    boolean isWriteQueueFull();
+
+    ServerHttpResponse addDrainHandler(Runnable onDrain);
 }

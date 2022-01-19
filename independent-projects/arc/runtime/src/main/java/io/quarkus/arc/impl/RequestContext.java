@@ -138,6 +138,14 @@ class RequestContext implements ManagedContext {
         return new RequestContextState(ctx);
     }
 
+    public ContextState getStateIfActive() {
+        ConcurrentMap<Contextual<?>, ContextInstanceHandle<?>> ctx = currentContext.get();
+        if (ctx == null) {
+            return null;
+        }
+        return new RequestContextState(ctx);
+    }
+
     @Override
     public void deactivate() {
         currentContext.remove();
@@ -197,19 +205,19 @@ class RequestContext implements ManagedContext {
     private static Notifier<Object> createInitializedNotifier() {
         return EventImpl.createNotifier(Object.class, Object.class,
                 new HashSet<>(Arrays.asList(Initialized.Literal.REQUEST, Any.Literal.INSTANCE)),
-                ArcContainerImpl.instance());
+                ArcContainerImpl.instance(), false);
     }
 
     private static Notifier<Object> createBeforeDestroyedNotifier() {
         return EventImpl.createNotifier(Object.class, Object.class,
                 new HashSet<>(Arrays.asList(BeforeDestroyed.Literal.REQUEST, Any.Literal.INSTANCE)),
-                ArcContainerImpl.instance());
+                ArcContainerImpl.instance(), false);
     }
 
     private static Notifier<Object> createDestroyedNotifier() {
         return EventImpl.createNotifier(Object.class, Object.class,
                 new HashSet<>(Arrays.asList(Destroyed.Literal.REQUEST, Any.Literal.INSTANCE)),
-                ArcContainerImpl.instance());
+                ArcContainerImpl.instance(), false);
     }
 
     static class RequestContextState implements ContextState {
@@ -223,7 +231,7 @@ class RequestContext implements ManagedContext {
         @Override
         public Map<InjectableBean<?>, Object> getContextualInstances() {
             return value.values().stream()
-                    .collect(Collectors.toMap(ContextInstanceHandle::getBean, ContextInstanceHandle::get));
+                    .collect(Collectors.toUnmodifiableMap(ContextInstanceHandle::getBean, ContextInstanceHandle::get));
         }
 
     }

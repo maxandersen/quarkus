@@ -8,8 +8,6 @@ import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -22,7 +20,7 @@ public class SmallRyeBlockingPublisherTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(BeanReturningPayloadsUsingSmallRyeBlocking.class,
                             BeanReturningMessagesUsingSmallRyeBlocking.class, InfiniteSubscriber.class));
 
@@ -39,7 +37,7 @@ public class SmallRyeBlockingPublisherTest {
         List<String> threadNames = beanReturningPayloads.threads().stream().distinct().collect(Collectors.toList());
         assertThat(threadNames.contains(Thread.currentThread().getName())).isFalse();
         for (String name : threadNames) {
-            assertThat(name.startsWith("vert.x-worker-thread-")).isTrue();
+            assertThat(name.startsWith("executor-thread-")).isTrue();
         }
     }
 
@@ -49,7 +47,7 @@ public class SmallRyeBlockingPublisherTest {
         List<String> threadNames = beanReturningMessages.threads().stream().distinct().collect(Collectors.toList());
         assertThat(threadNames.contains(Thread.currentThread().getName())).isFalse();
         for (String name : threadNames) {
-            assertThat(name.startsWith("vert.x-worker-thread-")).isTrue();
+            assertThat(name.startsWith("executor-thread-")).isTrue();
         }
     }
 }

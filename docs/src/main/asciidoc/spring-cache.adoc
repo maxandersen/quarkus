@@ -3,16 +3,13 @@ This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Quarkus Extension for Spring Cache API
+= Quarkus Extension for Spring Cache API
 
 include::./attributes.adoc[]
-:extension-status: preview
 
-While users are encouraged to use link:cache[Quarkus annotations for caching], Quarkus nevertheless provides a compatibility layer for Spring Cache annotations in the form of the `spring-cache` extension.
+While users are encouraged to use xref:cache.adoc[Quarkus annotations for caching], Quarkus nevertheless provides a compatibility layer for Spring Cache annotations in the form of the `spring-cache` extension.
 
 This guide explains how a Quarkus application can leverage the well known Spring Cache annotations to enable application data caching for their Spring beans.
-
-include::./status-include.adoc[]
 
 == Prerequisites
 
@@ -20,7 +17,7 @@ To complete this guide, you need:
 
 * less than 15 minutes
 * an IDE
-* JDK 1.8+ installed with `JAVA_HOME` configured appropriately
+* JDK 11+ installed with `JAVA_HOME` configured appropriately
 * Apache Maven {maven-version}
 * Some familiarity with the Spring DI extension
 
@@ -31,7 +28,7 @@ First, we need a new project. Create a new project with the following command:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:{quarkus-version}:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:{quarkus-version}:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=spring-cache-quickstart \
     -DclassName="org.acme.spring.cache.GreeterResource" \
@@ -269,11 +266,11 @@ However, additional features are planned for future releases.
 
 Quarkus has more Spring compatibility features. See the following guides for more details:
 
-* link:spring-di[Quarkus - Extension for Spring DI]
-* link:spring-web[Quarkus - Extension for Spring Web]
-* link:spring-security[Quarkus - Extension for Spring Security]
-* link:spring-data-jpa[Quarkus - Extension for Spring Data JPA]
-* link:spring-data-rest[Quarkus - Extension for Spring Data REST]
-* link:spring-cloud-config-client[Quarkus - Reading properties from Spring Cloud Config Server]
-* link:spring-boot-properties[Quarkus - Extension for Spring Boot properties]
-* link:spring-scheduled[Quarkus - Extension for Spring Scheduled]
+* xref:spring-di.adoc[Quarkus - Extension for Spring DI]
+* xref:spring-web.adoc[Quarkus - Extension for Spring Web]
+* xref:spring-security.adoc[Quarkus - Extension for Spring Security]
+* xref:spring-data-jpa.adoc[Quarkus - Extension for Spring Data JPA]
+* xref:spring-data-rest.adoc[Quarkus - Extension for Spring Data REST]
+* xref:spring-cloud-config-client.adoc[Quarkus - Reading properties from Spring Cloud Config Server]
+* xref:spring-boot-properties.adoc[Quarkus - Extension for Spring Boot properties]
+* xref:spring-scheduled.adoc[Quarkus - Extension for Spring Scheduled]

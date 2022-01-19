@@ -32,7 +32,8 @@ public final class RunnerClassLoader extends ClassLoader {
     private final Set<String> nonExistentResources;
     // the following two fields go hand in hand - they need to both be populated from the same data
     // in order for the resource loading to work properly
-    private final Set<String> fullyIndexedDirectories;
+    // normally this field would be a set, but it only contains 2 elements, so making it a list is actually better
+    private final List<String> fullyIndexedDirectories;
     private final Map<String, ClassLoadingResource[]> directlyIndexedResourcesIndexMap;
 
     //Mutations protected by synchronization on the field value itself:
@@ -40,13 +41,9 @@ public final class RunnerClassLoader extends ClassLoader {
     //Protected by synchronization on the above field, as they are related.
     private boolean postBootPhase = false;
 
-    static {
-        registerAsParallelCapable();
-    }
-
     RunnerClassLoader(ClassLoader parent, Map<String, ClassLoadingResource[]> resourceDirectoryMap,
             Set<String> parentFirstPackages, Set<String> nonExistentResources,
-            Set<String> fullyIndexedDirectories, Map<String, ClassLoadingResource[]> directlyIndexedResourcesIndexMap) {
+            List<String> fullyIndexedDirectories, Map<String, ClassLoadingResource[]> directlyIndexedResourcesIndexMap) {
         super(parent);
         this.resourceDirectoryMap = resourceDirectoryMap;
         this.parentFirstPackages = parentFirstPackages;
@@ -76,28 +73,34 @@ public final class RunnerClassLoader extends ClassLoader {
                 //fall through
             }
         }
-        synchronized (getClassLoadingLock(name)) {
-            Class<?> loaded = findLoadedClass(name);
-            if (loaded != null) {
-                return loaded;
-            }
-            final ClassLoadingResource[] resources;
-            if (packageName == null) {
-                resources = resourceDirectoryMap.get("");
-            } else {
-                String dirName = packageName.replace('.', '/');
-                resources = resourceDirectoryMap.get(dirName);
-            }
-            if (resources != null) {
-                String classResource = name.replace('.', '/') + ".class";
-                for (ClassLoadingResource resource : resources) {
-                    accessingResource(resource);
-                    byte[] data = resource.getResourceData(classResource);
-                    if (data == null) {
-                        continue;
-                    }
-                    definePackage(packageName, resources);
+        Class<?> loaded = findLoadedClass(name);
+        if (loaded != null) {
+            return loaded;
+        }
+        final ClassLoadingResource[] resources;
+        if (packageName == null) {
+            resources = resourceDirectoryMap.get("");
+        } else {
+            String dirName = packageName.replace('.', '/');
+            resources = resourceDirectoryMap.get(dirName);
+        }
+        if (resources != null) {
+            String classResource = name.replace('.', '/') + ".class";
+            for (ClassLoadingResource resource : resources) {
+                accessingResource(resource);
+                byte[] data = resource.getResourceData(classResource);
+                if (data == null) {
+                    continue;
+                }
+                definePackage(packageName, resources);
+                try {
                     return defineClass(name, data, 0, data.length, resource.getProtectionDomain());
+                } catch (LinkageError e) {
+                    loaded = findLoadedClass(name);
+                    if (loaded != null) {
+                        return loaded;
+                    }
+                    throw e;
                 }
             }
         }

@@ -14,8 +14,9 @@
     <description>Module that contains JPA related tests running with the Oracle database</description>
 
     <properties>
-        <oracledb.url>jdbc:oracle:thin:@localhost:1521:ORCLCDB</oracledb.url>
-        <oracle.image>store/oracle/database-enterprise:12.2.0.1-slim</oracle.image>
+        <oracledb.url>jdbc:oracle:thin:@localhost:1521/XE</oracledb.url>
+        <!-- See https://hub.docker.com/r/gvenzl/oracle-xe -->
+        <oracle.image>gvenzl/oracle-xe:21.3.0-slim</oracle.image>
     </properties>
 
     <dependencies>
@@ -29,6 +30,14 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jdbc-oracle</artifactId>
         </dependency>
+        <!-- Include the PostgreSQL driver as well: not actually used, but
+            we need to validate native-image compilation with multiple JDBC drivers, in particular to
+            test all weird native-image metadata being included in the Oracle JDBC driver -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql</artifactId>
+        </dependency>
+
         <!-- .. and some web endpoints -->
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -44,6 +53,11 @@
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -64,6 +78,19 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-jdbc-oracle-deployment</artifactId>
+            <version>${project.version}</version>
+            <type>pom</type>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-jdbc-postgresql-deployment</artifactId>
             <version>${project.version}</version>
             <type>pom</type>
             <scope>test</scope>
@@ -128,7 +155,7 @@
             <id>test-oracle</id>
             <activation>
                 <property>
-                    <name>test-oracle</name>
+                    <name>test-containers</name>
                 </property>
             </activation>
             <build>
@@ -153,11 +180,11 @@
             <id>docker-oracle</id>
             <activation>
                 <property>
-                    <name>start-oracle-containers</name>
+                    <name>start-containers</name>
                 </property>
             </activation>
             <properties>
-                <oracledb.url>jdbc:oracle:thin:@localhost:1521:ORCLCDB</oracledb.url>
+                <oracledb.url>jdbc:oracle:thin:@localhost:1521/XE</oracledb.url>
             </properties>
             <build>
                 <plugins>
@@ -168,12 +195,13 @@
                             <images>
                                 <image>
                                     <name>${oracle.image}</name>
-                                    <!-- Be warned: tricky to change! -->
-                                    <alias>ORCLCDB</alias>
                                     <run>
                                         <ports>
                                             <port>1521:1521</port>
                                         </ports>
+                                        <env>
+                                            <ORACLE_PASSWORD>hibernate_orm_test</ORACLE_PASSWORD>
+                                        </env>
                                         <log>
                                             <prefix>Oracle Database: </prefix>
                                             <date>default</date>
@@ -182,10 +210,8 @@
                                         <wait>
                                             <!-- good docs found at: http://dmp.fabric8.io/#build-healthcheck -->
                                             <!-- Unfortunately booting this is slow, needs to set a generous timeout: -->
-                                            <time>600000</time>
-                                            <!-- Oracle documentation suggests to wait for "healthy status" but in practice this is often
-                                            too early. We're forced to wait for the first log related to interval partitioning: -->
-                                            <log>ADDED INTERVAL PARTITION SYS_P1427</log>
+                                            <time>60000</time>
+                                            <log>DATABASE IS READY TO USE!</log>
                                         </wait>
                                     </run>
                                 </image>

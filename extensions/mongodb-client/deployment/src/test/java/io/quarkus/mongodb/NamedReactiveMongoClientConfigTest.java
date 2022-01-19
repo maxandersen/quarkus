@@ -11,8 +11,6 @@ import javax.enterprise.inject.Default;
 import javax.inject.Inject;
 
 import org.eclipse.microprofile.health.HealthCheckResponse;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -34,7 +32,7 @@ public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBas
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class).addClasses(MongoTestBase.class))
+            .withApplicationRoot((jar) -> jar.addClasses(MongoTestBase.class))
             .withConfigurationResource("application-named-mongoclient.properties");
 
     @Inject
@@ -66,8 +64,8 @@ public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBas
         assertProperConnection(client, 27018);
         assertProperConnection(client2, 27019);
 
-        assertThat(client.listDatabases().collectItems().first().await().indefinitely()).isNotEmpty();
-        assertThat(client2.listDatabases().collectItems().first().await().indefinitely()).isNotEmpty();
+        assertThat(client.listDatabases().collect().first().await().indefinitely()).isNotEmpty();
+        assertThat(client2.listDatabases().collect().first().await().indefinitely()).isNotEmpty();
 
         assertNoDefaultClient();
 
@@ -76,7 +74,7 @@ public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBas
 
     public void checkHealth() {
         org.eclipse.microprofile.health.HealthCheckResponse response = health.call();
-        assertThat(response.getState()).isEqualTo(HealthCheckResponse.State.UP);
+        assertThat(response.getStatus()).isEqualTo(HealthCheckResponse.Status.UP);
         assertThat(response.getData()).isNotEmpty();
         assertThat(response.getData().get()).hasSize(2).contains(entry("cluster1", "OK"), entry("cluster2", "OK"));
     }

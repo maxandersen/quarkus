@@ -13,15 +13,22 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 public class JibConfig {
 
     /**
-     * The base image to be used when a container image is being produced for the jar build
+     * The base image to be used when a container image is being produced for the jar build.
+     *
+     * When the application is built against Java 17 or higher, {@code registry.access.redhat.com/ubi8/openjdk-17-runtime:1.10}
+     * is used as the default.
+     * Otherwise {@code registry.access.redhat.com/ubi8/openjdk-11-runtime:1.10} is used as the default.
      */
-    @ConfigItem(defaultValue = "fabric8/java-alpine-openjdk11-jre")
-    public String baseJvmImage;
+    @ConfigItem
+    public Optional<String> baseJvmImage;
 
     /**
-     * The base image to be used when a container image is being produced for the native binary build
+     * The base image to be used when a container image is being produced for the native binary build.
+     * The default is "quay.io/quarkus/quarkus-micro-image". You can also use
+     * "registry.access.redhat.com/ubi8/ubi-minimal" which is a bigger base image, but provide more built-in utilities
+     * such as the microdnf package manager.
      */
-    @ConfigItem(defaultValue = "registry.access.redhat.com/ubi8/ubi-minimal")
+    @ConfigItem(defaultValue = "quay.io/quarkus/quarkus-micro-image:1.0")
     public String baseNativeImage;
 
     /**
@@ -85,8 +92,11 @@ public class JibConfig {
 
     /**
      * Custom labels to add to the generated image
+     * 
+     * @deprecated Use 'quarkus.container-image.labels' instead
      */
     @ConfigItem
+    @Deprecated
     public Map<String, String> labels;
 
     /**
@@ -127,16 +137,43 @@ public class JibConfig {
     /**
      * List of target platforms. Each platform is defined using the pattern: \<os\>|\<arch\>[/variant]|\<os\>/\<arch\>[/variant]
      * ex: linux/amd64,linux/arm64/v8. If not specified, OS default is linux and architecture default is amd64
-     * 
+     *
      * If more than one platform is configured, it is important to note that the base image has to be a Docker manifest or an
      * OCI image index containing a version of each chosen platform
-     * 
+     *
      * It doesn't work with native images, as cross-compilation is not supported
-     * 
+     *
      * Target Platform is a incubating feature of Jib. See <a href=
      * "https://github.com/GoogleContainerTools/jib/blob/master/docs/faq.md#how-do-i-specify-a-platform-in-the-manifest-list-or-oci-index-of-a-base-image">Jib
      * FAQ</a> for more information
      */
     @ConfigItem
     public Optional<Set<String>> platforms;
+
+    /**
+     * The path of a file that will be written containing the digest of the generated image.
+     * If the path is relative, is writen to the output directory of the build tool
+     */
+    @ConfigItem(defaultValue = "jib-image.digest")
+    public String imageDigestFile;
+
+    /**
+     * The path of a file that will be written containing the id of the generated image.
+     * If the path is relative, is writen to the output directory of the build tool
+     */
+    @ConfigItem(defaultValue = "jib-image.id")
+    public String imageIdFile;
+
+    /**
+     * Whether or not to operate offline.
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean offlineMode;
+
+    /**
+     * Name of binary used to execute the docker commands. This is only used by Jib
+     * when the container image is being built locally.
+     */
+    @ConfigItem
+    public Optional<String> dockerExecutableName;
 }

@@ -1,9 +1,11 @@
 package io.quarkus.resteasy.reactive.server.test.stream;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -15,8 +17,6 @@ import javax.ws.rs.sse.SseEventSource;
 
 import org.hamcrest.Matchers;
 import org.jboss.resteasy.reactive.client.impl.MultiInvoker;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
@@ -28,6 +28,12 @@ import io.quarkus.test.common.http.TestHTTPResource;
 import io.restassured.RestAssured;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.subscription.Cancellable;
+import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpClient;
+import io.vertx.core.http.HttpClientOptions;
+import io.vertx.core.http.HttpClientRequest;
+import io.vertx.core.http.HttpMethod;
 
 @DisabledOnOs(OS.WINDOWS)
 public class StreamTestCase {
@@ -37,8 +43,58 @@ public class StreamTestCase {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(StreamResource.class));
+
+    @Test
+    public void testStreamingDoesNotCloseConnection() throws Exception {
+        Vertx v = Vertx.vertx();
+        try {
+            final CompletableFuture<Object> latch = new CompletableFuture<>();
+            HttpClient client = v
+                    .createHttpClient(
+                            new HttpClientOptions().setKeepAlive(true).setIdleTimeout(10).setIdleTimeoutUnit(TimeUnit.SECONDS));
+            sendRequest(latch, client, () -> sendRequest(latch, client, () -> latch.complete(null)));
+
+            //should not have been closed
+            latch.get();
+
+        } finally {
+            v.close().toCompletionStage().toCompletableFuture().get();
+        }
+    }
+
+    private void sendRequest(CompletableFuture<Object> latch, HttpClient client, Runnable runnable) {
+        Handler<Throwable> failure = latch::completeExceptionally;
+        client.request(HttpMethod.GET, RestAssured.port, "localhost", "/stream/text/stream")
+                .onFailure(failure)
+                .onSuccess(new Handler<HttpClientRequest>() {
+                    @Override
+                    public void handle(HttpClientRequest event) {
+                        event.end();
+                        event.connect().onFailure(failure)
+                                .onSuccess(response -> {
+                                    response.request().connection().closeHandler(new Handler<Void>() {
+                                        @Override
+                                        public void handle(Void event) {
+                                            latch.completeExceptionally(new Throwable("Connection was closed"));
+                                        }
+                                    });
+                                    response.body().onFailure(failure)
+                                            .onSuccess(buffer -> {
+                                                try {
+                                                    Assertions.assertEquals("foobar",
+                                                            buffer.toString(StandardCharsets.US_ASCII));
+                                                } catch (Throwable t) {
+                                                    latch.completeExceptionally(t);
+                                                }
+                                                runnable.run();
+                                            });
+                                });
+
+                    }
+                });
+    }
 
     @Test
     public void testStreaming() throws Exception {
@@ -92,7 +148,7 @@ public class StreamTestCase {
         Client client = ClientBuilder.newBuilder().build();
         WebTarget target = client.target(uri.toString() + "stream/text/stream");
         Multi<String> multi = target.request().rx(MultiInvoker.class).get(String.class);
-        List<String> list = multi.collectItems().asList().await().atMost(Duration.ofSeconds(5));
+        List<String> list = multi.collect().asList().await().atMost(Duration.ofSeconds(5));
         Assertions.assertEquals(2, list.size());
         Assertions.assertEquals("foo", list.get(0));
         Assertions.assertEquals("bar", list.get(1));

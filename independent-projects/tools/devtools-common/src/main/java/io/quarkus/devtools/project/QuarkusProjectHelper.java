@@ -1,93 +1,97 @@
 package io.quarkus.devtools.project;
 
-import static io.quarkus.platform.catalog.processor.CatalogProcessor.getCodestartArtifacts;
-import static io.quarkus.platform.descriptor.loader.json.ResourceLoaders.resolveFileResourceLoader;
-import static java.util.Objects.requireNonNull;
+import static io.quarkus.devtools.project.CodestartResourceLoadersBuilder.getCodestartResourceLoaders;
 
 import io.quarkus.bootstrap.resolver.maven.BootstrapMavenException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
-import io.quarkus.bootstrap.util.DependencyNodeUtils;
 import io.quarkus.devtools.messagewriter.MessageWriter;
+import io.quarkus.devtools.project.buildfile.MavenProjectBuildFile;
 import io.quarkus.devtools.project.extensions.ExtensionManager;
-import io.quarkus.platform.catalog.processor.ExtensionProcessor;
-import io.quarkus.platform.descriptor.loader.json.ResourceLoader;
 import io.quarkus.platform.tools.ToolsUtils;
 import io.quarkus.registry.ExtensionCatalogResolver;
 import io.quarkus.registry.RegistryResolutionException;
-import io.quarkus.registry.catalog.Extension;
 import io.quarkus.registry.catalog.ExtensionCatalog;
-import io.quarkus.registry.config.PropertiesUtil;
 import io.quarkus.registry.config.RegistriesConfig;
-import io.quarkus.registry.config.RegistriesConfigLocator;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import org.eclipse.aether.artifact.Artifact;
 
 public class QuarkusProjectHelper {
-
-    private static final String BASE_CODESTARTS_ARTIFACT_PROPERTY = "quarkus-base-codestart-artifact";
-    private static final String BASE_CODESTARTS_ARTIFACT_PROPERTIES_NAME = "/quarkus-devtools-base-codestarts.properties";
 
     private static RegistriesConfig toolsConfig;
     private static MessageWriter log;
     private static MavenArtifactResolver artifactResolver;
     private static ExtensionCatalogResolver catalogResolver;
-    private static final String BASE_CODESTARTS_ARTIFACT_COORDS = retrieveBaseCodestartsArtifactCoords();
 
-    private static String retrieveBaseCodestartsArtifactCoords() {
-        final String artifact = PropertiesUtil.getProperty(BASE_CODESTARTS_ARTIFACT_PROPERTY);
-        if (artifact != null) {
-            return artifact;
+    private static boolean registryClientEnabled;
+    static {
+        initRegistryClientEnabled();
+    }
+
+    private static void initRegistryClientEnabled() {
+        String value = System.getProperty("quarkusRegistryClient");
+        if (value == null) {
+            value = System.getenv("QUARKUS_REGISTRY_CLIENT");
         }
-        try (final InputStream resource = QuarkusProjectHelper.class
-                .getResourceAsStream(BASE_CODESTARTS_ARTIFACT_PROPERTIES_NAME)) {
-            final Properties properties = new Properties();
-            requireNonNull(resource,
-                    BASE_CODESTARTS_ARTIFACT_PROPERTIES_NAME + " resource not found.");
-            properties.load(resource);
-            return requireNonNull(properties.getProperty("artifact"),
-                    "base codestarts 'artifact' property not found");
-        } catch (IOException e) {
-            throw new IllegalStateException("Couldn't load the base codestarts artifact properties", e);
-        }
+        registryClientEnabled = value == null || value.isBlank() || Boolean.parseBoolean(value);
+    }
+
+    public static boolean isRegistryClientEnabled() {
+        return registryClientEnabled;
+    }
+
+    public static BuildTool detectExistingBuildTool(Path projectDirPath) {
+        return BuildTool.fromProject(projectDirPath);
     }
 
     public static QuarkusProject getProject(Path projectDir) {
-        BuildTool buildTool = QuarkusProject.resolveExistingProjectBuildTool(projectDir);
+        BuildTool buildTool = detectExistingBuildTool(projectDir);
         if (buildTool == null) {
             buildTool = BuildTool.MAVEN;
         }
         return getProject(projectDir, buildTool);
     }
 
+    @Deprecated
     public static QuarkusProject getProject(Path projectDir, String quarkusVersion) {
         // TODO remove this method once the default registry becomes available
-        BuildTool buildTool = QuarkusProject.resolveExistingProjectBuildTool(projectDir);
+        BuildTool buildTool = detectExistingBuildTool(projectDir);
         if (buildTool == null) {
             buildTool = BuildTool.MAVEN;
         }
         return getProject(projectDir, buildTool, quarkusVersion);
     }
 
+    @Deprecated
     public static QuarkusProject getProject(Path projectDir, BuildTool buildTool, String quarkusVersion) {
         // TODO remove this method once the default registry becomes available
-        final ExtensionCatalogResolver catalogResolver = getCatalogResolver();
-        if (catalogResolver.hasRegistries()) {
-            return getProject(projectDir, buildTool);
-        }
         return QuarkusProjectHelper.getProject(projectDir,
-                ToolsUtils.resolvePlatformDescriptorDirectly(null, null, quarkusVersion, artifactResolver(), messageWriter()),
+                getExtensionCatalog(quarkusVersion),
                 buildTool);
     }
 
+    @Deprecated
+    public static ExtensionCatalog getExtensionCatalog(String quarkusVersion) {
+        // TODO remove this method once the default registry becomes available
+        try {
+            if (registryClientEnabled && getCatalogResolver().hasRegistries()) {
+                return quarkusVersion == null ? catalogResolver.resolveExtensionCatalog()
+                        : catalogResolver.resolveExtensionCatalog(quarkusVersion);
+            } else {
+                return ToolsUtils.resolvePlatformDescriptorDirectly(null, null, quarkusVersion, artifactResolver(),
+                        messageWriter());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to resolve the Quarkus extension catalog", e);
+        }
+    }
+
     public static QuarkusProject getProject(Path projectDir, BuildTool buildTool) {
+        if (BuildTool.MAVEN.equals(buildTool)) {
+            try {
+                return MavenProjectBuildFile.getProject(projectDir, messageWriter(), null);
+            } catch (RegistryResolutionException e) {
+                throw new RuntimeException("Failed to initialize the Quarkus Maven extension manager", e);
+            }
+        }
         final ExtensionCatalog catalog;
         try {
             catalog = resolveExtensionCatalog();
@@ -122,68 +126,29 @@ public class QuarkusProjectHelper {
                 log, extManager);
     }
 
-    public static List<ResourceLoader> getCodestartResourceLoaders(ExtensionCatalog catalog) {
-        return getCodestartResourceLoaders(catalog, artifactResolver());
-    }
-
-    public static List<ResourceLoader> getBaseCodestartResourceLoaders() {
-        return getCodestartResourceLoaders(null, artifactResolver());
-    }
-
-    public static List<ResourceLoader> getCodestartResourceLoaders(ExtensionCatalog catalog,
-            MavenArtifactResolver mvn) {
-        return getCodestartResourceLoaders(BASE_CODESTARTS_ARTIFACT_COORDS, catalog, mvn);
-    }
-
-    public static List<ResourceLoader> getCodestartResourceLoaders(String baseCodestartsArtifactCoords,
-            ExtensionCatalog catalog,
-            MavenArtifactResolver mvn) {
-        final Map<String, Artifact> codestartsArtifacts = new LinkedHashMap<>();
-        if (catalog != null) {
-            // Load codestarts from each extensions codestart artifacts
-            for (Extension e : catalog.getExtensions()) {
-                final String artifactCoords = ExtensionProcessor.of(e).getCodestartArtifact();
-                if (artifactCoords == null || codestartsArtifacts.containsKey(artifactCoords)) {
-                    continue;
-                }
-                codestartsArtifacts.put(artifactCoords, DependencyNodeUtils.toArtifact(artifactCoords));
-            }
-
-            // Load codestarts from catalog codestart artifacts
-            final List<String> catalogCodestartArtifacts = getCodestartArtifacts(catalog);
-            for (String artifactCoords : catalogCodestartArtifacts) {
-                if (codestartsArtifacts.containsKey(artifactCoords)) {
-                    continue;
-                }
-                codestartsArtifacts.put(artifactCoords, DependencyNodeUtils.toArtifact(artifactCoords));
-            }
-        }
-        // Load codestarts from the base artifact
-        codestartsArtifacts.put(baseCodestartsArtifactCoords, DependencyNodeUtils.toArtifact(baseCodestartsArtifactCoords));
-
-        final List<ResourceLoader> codestartResourceLoaders = new ArrayList<>(codestartsArtifacts.size());
-        for (Artifact a : codestartsArtifacts.values()) {
-            try {
-                final File artifactFile = mvn.resolve(a).getArtifact().getFile();
-                codestartResourceLoaders.add(resolveFileResourceLoader(artifactFile));
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to resolve codestart artifact " + a, e);
-            }
-        }
-        return codestartResourceLoaders;
-    }
-
-    public static ExtensionCatalogResolver getCatalogResolver() {
-        return catalogResolver == null ? catalogResolver = getCatalogResolver(artifactResolver(), messageWriter())
+    public static ExtensionCatalogResolver getCatalogResolver() throws RegistryResolutionException {
+        return catalogResolver == null ? catalogResolver = getCatalogResolver(true, messageWriter())
                 : catalogResolver;
     }
 
-    public static ExtensionCatalogResolver getCatalogResolver(MessageWriter log) {
-        return catalogResolver == null ? catalogResolver = getCatalogResolver(artifactResolver(), log)
-                : catalogResolver;
+    public static ExtensionCatalogResolver getCatalogResolver(MessageWriter log) throws RegistryResolutionException {
+        return getCatalogResolver(true, log);
     }
 
-    public static ExtensionCatalogResolver getCatalogResolver(MavenArtifactResolver resolver, MessageWriter log) {
+    public static ExtensionCatalogResolver getCatalogResolver(boolean enableRegistryClient, MessageWriter log)
+            throws RegistryResolutionException {
+        if (catalogResolver == null) {
+            if (enableRegistryClient) {
+                catalogResolver = getCatalogResolver(artifactResolver(), log);
+            } else {
+                catalogResolver = ExtensionCatalogResolver.empty();
+            }
+        }
+        return catalogResolver;
+    }
+
+    public static ExtensionCatalogResolver getCatalogResolver(MavenArtifactResolver resolver, MessageWriter log)
+            throws RegistryResolutionException {
         return ExtensionCatalogResolver.builder()
                 .artifactResolver(resolver)
                 .config(toolsConfig())
@@ -191,12 +156,38 @@ public class QuarkusProjectHelper {
                 .build();
     }
 
-    private static RegistriesConfig toolsConfig() {
-        return toolsConfig == null ? toolsConfig = RegistriesConfigLocator.resolveConfig() : toolsConfig;
+    public static RegistriesConfig toolsConfig() {
+        return toolsConfig == null
+                ? toolsConfig = RegistriesConfig.resolveConfig()
+                : toolsConfig;
+    }
+
+    public static void setToolsConfig(RegistriesConfig config) {
+        toolsConfig = config;
+    }
+
+    public static void reset() {
+        initRegistryClientEnabled();
+        toolsConfig = null;
+        artifactResolver = null;
+        catalogResolver = null;
+        log = null;
+    }
+
+    public static void setMessageWriter(MessageWriter newLog) {
+        if (log == null) {
+            log = newLog;
+        }
     }
 
     public static MessageWriter messageWriter() {
         return log == null ? log = toolsConfig().isDebug() ? MessageWriter.debug() : MessageWriter.info() : log;
+    }
+
+    public static void setArtifactResolver(MavenArtifactResolver resolver) {
+        if (artifactResolver == null) {
+            artifactResolver = resolver;
+        }
     }
 
     public static MavenArtifactResolver artifactResolver() {

@@ -3,6 +3,7 @@ package io.quarkus.deployment.mutability;
 import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.BUILD_SYSTEM_PROPERTIES;
 import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.DEPLOYMENT_LIB;
 import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.LIB;
+import static io.quarkus.deployment.pkg.steps.JarResultBuildStep.QUARKUS;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -14,7 +15,6 @@ import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -23,18 +23,18 @@ import java.util.zip.ZipInputStream;
 
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.model.AppDependency;
-import io.quarkus.bootstrap.model.AppModel;
-import io.quarkus.bootstrap.model.PersistentAppModel;
+import io.quarkus.bootstrap.model.ApplicationModel;
+import io.quarkus.bootstrap.model.MutableJarApplicationModel;
 import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.IsolatedDevModeMain;
 import io.quarkus.deployment.pkg.steps.JarResultBuildStep;
 import io.quarkus.dev.spi.DevModeType;
+import io.quarkus.maven.dependency.ArtifactKey;
+import io.quarkus.maven.dependency.ResolvedArtifactDependency;
+import io.quarkus.maven.dependency.ResolvedDependency;
+import io.quarkus.paths.PathList;
 
-@SuppressWarnings("Unused")
 public class DevModeTask {
 
     public static Closeable main(Path appRoot) throws Exception {
@@ -43,13 +43,13 @@ public class DevModeTask {
                 Files.newInputStream(appRoot.resolve(LIB).resolve(DEPLOYMENT_LIB).resolve(JarResultBuildStep.APPMODEL_DAT)))) {
             Properties buildSystemProperties = new Properties();
             try (InputStream buildIn = Files
-                    .newInputStream(appRoot.resolve(LIB).resolve(DEPLOYMENT_LIB).resolve(BUILD_SYSTEM_PROPERTIES))) {
+                    .newInputStream(appRoot.resolve(QUARKUS).resolve(BUILD_SYSTEM_PROPERTIES))) {
                 buildSystemProperties.load(buildIn);
             }
 
-            PersistentAppModel appModel = (PersistentAppModel) in.readObject();
+            final MutableJarApplicationModel appModel = (MutableJarApplicationModel) in.readObject();
 
-            AppModel existingModel = appModel.getAppModel(appRoot);
+            ApplicationModel existingModel = appModel.getAppModel(appRoot);
             DevModeContext context = createDevModeContext(appRoot, existingModel);
 
             CuratedApplication bootstrap = QuarkusBootstrap.builder()
@@ -59,7 +59,7 @@ public class DevModeTask {
                     .setMode(QuarkusBootstrap.Mode.REMOTE_DEV_SERVER)
                     .setBuildSystemProperties(buildSystemProperties)
                     .setBaseName(appModel.getBaseName())
-                    .setApplicationRoot(existingModel.getAppArtifact().getPath())
+                    .setApplicationRoot(existingModel.getAppArtifact().getResolvedPaths().getSinglePath())
                     .setTargetDirectory(appRoot.getParent())
                     .setBaseClassLoader(DevModeTask.class.getClassLoader())
                     .build().bootstrap();
@@ -73,19 +73,18 @@ public class DevModeTask {
         }
     }
 
-    private static DevModeContext createDevModeContext(Path appRoot, AppModel appModel) throws IOException {
+    private static DevModeContext createDevModeContext(Path appRoot, ApplicationModel appModel) throws IOException {
         DevModeContext context = new DevModeContext();
         extractDevModeClasses(appRoot, appModel, new PostExtractAction() {
             @Override
-            public void run(AppArtifact dep, Path moduleClasses, boolean appArtifact) {
+            public void run(ResolvedDependency dep, Path moduleClasses, boolean appArtifact) {
 
-                dep.setPath(moduleClasses);
-
-                DevModeContext.ModuleInfo module = new DevModeContext.ModuleInfo(dep.getKey(), dep.getArtifactId(), null,
-                        Collections.emptySet(),
-                        moduleClasses.toAbsolutePath().toString(), null, moduleClasses.toAbsolutePath().toString(),
-                        // the last three params are for code generation, in remote dev it happens on the "dev" side
-                        null, null, null);
+                ((ResolvedArtifactDependency) dep).setResolvedPaths(PathList.of(moduleClasses));
+                DevModeContext.ModuleInfo module = new DevModeContext.ModuleInfo.Builder()
+                        .setArtifactKey(dep.getKey())
+                        .setClassesPath(moduleClasses.toAbsolutePath().toString())
+                        .setResourcesOutputPath(moduleClasses.toAbsolutePath().toString())
+                        .build();
 
                 if (appArtifact) {
                     context.setApplicationRoot(module);
@@ -97,26 +96,26 @@ public class DevModeTask {
         context.setAbortOnFailedStart(false);
         context.setLocalProjectDiscovery(false);
         return context;
-
     }
 
-    public static void extractDevModeClasses(Path appRoot, AppModel appModel, PostExtractAction postExtractAction)
+    public static void extractDevModeClasses(Path appRoot, ApplicationModel appModel, PostExtractAction postExtractAction)
             throws IOException {
         Path extracted = appRoot.resolve("dev");
         Files.createDirectories(extracted);
-        Map<AppArtifactKey, AppArtifact> userDependencies = new HashMap<>();
-        for (AppDependency i : appModel.getUserDependencies()) {
-            userDependencies.put(i.getArtifact().getKey(), i.getArtifact());
+        final Map<ArtifactKey, ResolvedDependency> rtDependencies = new HashMap<>();
+        for (ResolvedDependency i : appModel.getRuntimeDependencies()) {
+            rtDependencies.put(i.getKey(), i);
         }
 
         //setup the classes that can be hot reloaded
         //this code needs to be kept in sync with the code in IsolatedRemoteDevModeMain
         //todo: look at a better way of doing this
-        for (AppArtifactKey i : appModel.getLocalProjectArtifacts()) {
-            boolean appArtifact = i.equals(appModel.getAppArtifact().getKey());
-            AppArtifact dep = userDependencies.get(i);
+        for (ArtifactKey i : appModel.getReloadableWorkspaceDependencies()) {
+            boolean appArtifact = false;
+            ResolvedDependency dep = rtDependencies.get(i);
             Path moduleClasses = null;
             if (dep == null) {
+                appArtifact = appModel.getAppArtifact().getKey().equals(i);
                 //check if this is the application itself
                 if (appArtifact) {
                     dep = appModel.getAppArtifact();
@@ -130,7 +129,7 @@ public class DevModeTask {
                 continue;
             }
             IoUtils.createOrEmptyDir(moduleClasses);
-            for (Path p : dep.getPaths()) {
+            for (Path p : dep.getResolvedPaths()) {
                 if (Files.isDirectory(p)) {
                     Path moduleTarget = moduleClasses;
                     Files.walkFileTree(p, new FileVisitor<Path>() {
@@ -162,11 +161,19 @@ public class DevModeTask {
                     try (ZipInputStream fs = new ZipInputStream(Files.newInputStream(p))) {
                         ZipEntry entry = fs.getNextEntry();
                         while (entry != null) {
-                            Path target = moduleClasses.resolve(entry.getName());
+                            Path target = moduleClasses.resolve(entry.getName()).normalize();
+                            if (!target.startsWith(moduleClasses)) {
+                                throw new IOException("Bad ZIP entry: " + target);
+                            }
                             if (entry.getName().endsWith("/")) {
                                 Files.createDirectories(target);
                             } else {
                                 if (!Files.exists(target)) {
+                                    // make sure the parent directories are created first
+                                    // META-INF/MANIFEST.MF is often written first,
+                                    // even before META-INF is written probably due to
+                                    // https://bugs.openjdk.java.net/browse/JDK-8031748
+                                    Files.createDirectories(target.getParent());
                                     try (OutputStream out = Files.newOutputStream(target)) {
                                         IoUtils.copy(out, fs);
                                     }
@@ -185,6 +192,6 @@ public class DevModeTask {
     }
 
     interface PostExtractAction {
-        void run(AppArtifact dep, Path moduleClasses, boolean appArtifact);
+        void run(ResolvedDependency dep, Path moduleClasses, boolean appArtifact);
     }
 }

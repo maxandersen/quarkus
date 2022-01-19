@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -30,14 +31,12 @@ import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DataSourceUtil;
-import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
@@ -47,6 +46,7 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBundleBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.RuntimeReinitializedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
 import io.quarkus.deployment.pkg.steps.NativeOrNativeSourcesBuild;
 import io.quarkus.deployment.util.ServiceUtil;
@@ -78,11 +78,6 @@ class LiquibaseProcessor {
     private static final DotName DATABASE_CHANGE_PROPERTY = DotName.createSimple(DatabaseChangeProperty.class.getName());
 
     @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.LIQUIBASE);
-    }
-
-    @BuildStep
     FeatureBuildItem feature() {
         return new FeatureBuildItem(Feature.LIQUIBASE);
     }
@@ -111,6 +106,7 @@ class LiquibaseProcessor {
             BuildProducer<NativeImageResourceBuildItem> resource,
             BuildProducer<ServiceProviderBuildItem> services,
             BuildProducer<RuntimeInitializedClassBuildItem> runtimeInitialized,
+            BuildProducer<RuntimeReinitializedClassBuildItem> runtimeReInitialized,
             BuildProducer<NativeImageResourceBundleBuildItem> resourceBundle) {
 
         runtimeInitialized.produce(new RuntimeInitializedClassBuildItem(liquibase.diff.compare.CompareControl.class.getName()));
@@ -118,6 +114,9 @@ class LiquibaseProcessor {
         reflective.produce(new ReflectiveClassBuildItem(false, true, false,
                 liquibase.change.AbstractSQLChange.class.getName(),
                 liquibase.database.jvm.JdbcConnection.class.getName()));
+
+        reflective.produce(new ReflectiveClassBuildItem(true, false, false, "liquibase.command.LiquibaseCommandFactory",
+                liquibase.command.CommandFactory.class.getName()));
 
         reflective.produce(new ReflectiveClassBuildItem(true, true, true,
                 liquibase.parser.ChangeLogParserCofiguration.class.getName(),
@@ -185,10 +184,26 @@ class LiquibaseProcessor {
                 liquibase.sqlgenerator.SqlGenerator.class,
                 liquibase.structure.DatabaseObject.class,
                 liquibase.hub.HubService.class)
-                .forEach(t -> addService(services, reflective, t, false));
+                .forEach(t -> consumeService(t, (serviceClass, implementations) -> {
+                    services.produce(
+                            new ServiceProviderBuildItem(serviceClass.getName(), implementations.toArray(new String[0])));
+                    reflective.produce(new ReflectiveClassBuildItem(true, true, false, implementations.toArray(new String[0])));
+                }));
 
         // Register Precondition services, and the implementation class for reflection while also registering fields for reflection
-        addService(services, reflective, liquibase.precondition.Precondition.class, true);
+        consumeService(liquibase.precondition.Precondition.class, (serviceClass, implementations) -> {
+            services.produce(new ServiceProviderBuildItem(serviceClass.getName(), implementations.toArray(new String[0])));
+            reflective.produce(new ReflectiveClassBuildItem(true, true, true, implementations.toArray(new String[0])));
+        });
+
+        // CommandStep implementations are needed
+        consumeService(liquibase.command.CommandStep.class, (serviceClass, implementations) -> {
+            services.produce(new ServiceProviderBuildItem(serviceClass.getName(), implementations.toArray(new String[0])));
+            reflective.produce(new ReflectiveClassBuildItem(true, false, false, implementations.toArray(new String[0])));
+            for (String implementation : implementations) {
+                runtimeInitialized.produce(new RuntimeInitializedClassBuildItem(implementation));
+            }
+        });
 
         // liquibase XSD
         resource.produce(new NativeImageResourceBuildItem(
@@ -212,17 +227,12 @@ class LiquibaseProcessor {
         resourceBundle.produce(new NativeImageResourceBundleBuildItem("liquibase/i18n/liquibase-core"));
     }
 
-    private void addService(BuildProducer<ServiceProviderBuildItem> services,
-            BuildProducer<ReflectiveClassBuildItem> reflective, Class<?> serviceClass,
-            boolean shouldRegisterFieldForReflection) {
+    private void consumeService(Class<?> serviceClass, BiConsumer<Class<?>, Collection<String>> consumer) {
         try {
             String service = "META-INF/services/" + serviceClass.getName();
             Set<String> implementations = ServiceUtil.classNamesNamedIn(Thread.currentThread().getContextClassLoader(),
                     service);
-            services.produce(new ServiceProviderBuildItem(serviceClass.getName(), implementations.toArray(new String[0])));
-
-            reflective.produce(new ReflectiveClassBuildItem(true, true, shouldRegisterFieldForReflection,
-                    implementations.toArray(new String[0])));
+            consumer.accept(serviceClass, implementations);
         } catch (IOException ex) {
             throw new IllegalStateException(ex);
         }

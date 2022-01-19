@@ -3,6 +3,7 @@ package io.quarkus.vertx.http.runtime;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.microprofile.config.spi.ConfigSource;
 
@@ -31,6 +32,11 @@ public class HttpHostConfigSource implements ConfigSource, Serializable {
     }
 
     @Override
+    public Set<String> getPropertyNames() {
+        return Collections.singleton(QUARKUS_HTTP_HOST);
+    }
+
+    @Override
     public int getOrdinal() {
         return priority;
     }
@@ -42,9 +48,20 @@ public class HttpHostConfigSource implements ConfigSource, Serializable {
                 // in remote-dev mode we need to listen on all interfaces
                 return ALL_INTERFACES;
             }
-            return LaunchMode.current().isDevOrTest() ? "localhost" : ALL_INTERFACES;
+            // In dev-mode we want to only listen on localhost so others on the network cannot connect to the application.
+            // However, in WSL this would result in the application not being accessible,
+            // so in that case, we launch it on all interfaces.
+            return (LaunchMode.current().isDevOrTest() && !isWSL()) ? "localhost" : ALL_INTERFACES;
         }
         return null;
+    }
+
+    /**
+     * @return {@code true} if the application is running in a WSL (Windows Subsystem for Linux) environment
+     */
+    private boolean isWSL() {
+        var sysEnv = System.getenv();
+        return sysEnv.containsKey("IS_WSL") || sysEnv.containsKey("WSL_DISTRO_NAME");
     }
 
     @Override

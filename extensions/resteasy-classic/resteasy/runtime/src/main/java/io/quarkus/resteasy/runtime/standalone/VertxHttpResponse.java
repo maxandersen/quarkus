@@ -3,19 +3,19 @@ package io.quarkus.resteasy.runtime.standalone;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import javax.ws.rs.core.MultivaluedHashMap;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.NewCookie;
 import javax.ws.rs.ext.RuntimeDelegate;
 
-import org.jboss.resteasy.specimpl.MultivaluedMapImpl;
 import org.jboss.resteasy.spi.HttpResponse;
 import org.jboss.resteasy.spi.ResteasyProviderFactory;
 
 import io.netty.buffer.ByteBuf;
+import io.vertx.core.MultiMap;
 import io.vertx.core.http.HttpHeaders;
 import io.vertx.core.http.HttpMethod;
 import io.vertx.core.http.HttpServerRequest;
@@ -38,7 +38,7 @@ public class VertxHttpResponse implements HttpResponse {
     public VertxHttpResponse(HttpServerRequest request, ResteasyProviderFactory providerFactory,
             final HttpMethod method, BufferAllocator allocator, VertxOutput output, RoutingContext routingContext) {
         this.routingContext = routingContext;
-        outputHeaders = new MultivaluedMapImpl<String, Object>();
+        outputHeaders = new MultivaluedHashMap<String, Object>();
         this.method = method;
         os = (method == null || !method.equals(HttpMethod.HEAD)) ? new VertxOutputStream(this, allocator)
                 : null;
@@ -116,17 +116,21 @@ public class VertxHttpResponse implements HttpResponse {
         outputHeaders.clear();
     }
 
-    @SuppressWarnings({ "rawtypes", "unchecked" })
-    public static void transformHeaders(VertxHttpResponse vertxResponse, HttpServerResponse response,
-            ResteasyProviderFactory factory) {
-        for (Map.Entry<String, List<Object>> entry : vertxResponse.getOutputHeaders().entrySet()) {
-            String key = entry.getKey();
-            for (Object value : entry.getValue()) {
-                RuntimeDelegate.HeaderDelegate delegate = factory.getHeaderDelegate(value.getClass());
+    private void transformHeaders() {
+        getOutputHeaders().forEach(this::transformHeadersList);
+    }
+
+    private void transformHeadersList(final String key, final List<Object> valueList) {
+        final MultiMap headers = response.headers();
+        for (Object value : valueList) {
+            if (value == null) {
+                headers.add(key, "");
+            } else {
+                RuntimeDelegate.HeaderDelegate delegate = providerFactory.getHeaderDelegate(value.getClass());
                 if (delegate != null) {
-                    response.headers().add(key, delegate.toString(value));
+                    headers.add(key, delegate.toString(value));
                 } else {
-                    response.headers().add(key, value.toString());
+                    headers.add(key, value.toString());
                 }
             }
         }
@@ -134,7 +138,7 @@ public class VertxHttpResponse implements HttpResponse {
 
     public void finish() throws IOException {
         checkException();
-        if (finished || response.ended())
+        if (finished || response.ended() || response.closed())
             return;
         try {
             if (os != null) {
@@ -142,7 +146,7 @@ public class VertxHttpResponse implements HttpResponse {
             } else {
                 committed = true;
                 response.setStatusCode(getStatus());
-                transformHeaders(this, response, providerFactory);
+                transformHeaders();
                 routingContext.addHeadersEndHandler(h -> {
                     response.headers().remove(HttpHeaders.CONTENT_LENGTH);
                     response.headers().set(HttpHeaders.CONNECTION, HttpHeaders.KEEP_ALIVE);
@@ -183,17 +187,19 @@ public class VertxHttpResponse implements HttpResponse {
         if (!isCommitted()) {
             committed = true;
             response.setStatusCode(getStatus());
+            transformHeaders();
             if (finished) {
-                if (buffer == null) {
-                    getOutputHeaders().putSingle(javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH, "0");
-                } else {
-                    getOutputHeaders().putSingle(javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH, "" + buffer.readableBytes());
+                boolean explicitChunked = "chunked".equalsIgnoreCase(response.headers().get("transfer-encoding"));
+                if (!explicitChunked) {
+                    if (buffer == null) {
+                        getOutputHeaders().putSingle(javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH, "0");
+                    } else {
+                        getOutputHeaders().putSingle(javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH, "" + buffer.readableBytes());
+                    }
                 }
-
-            } else {
+            } else if (!response.headers().contains(javax.ws.rs.core.HttpHeaders.CONTENT_LENGTH)) {
                 response.setChunked(true);
             }
-            transformHeaders(this, response, providerFactory);
         }
         if (finished)
             this.finished = true;

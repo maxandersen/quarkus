@@ -65,7 +65,8 @@ public class IncludeTest {
         Engine engine = Engine.builder().addDefaults().build();
         engine.putTemplate("foo", engine.parse("{#insert snippet}empty{/insert}"));
         assertEquals("1.2.3.4.5.",
-                engine.parse("{#for i in 5}{#include foo}{#snippet}{count}.{/snippet} this should be ingored {/include}{/for}")
+                engine.parse(
+                        "{#for i in 5}{#include foo}{#snippet}{i_count}.{/snippet} this should be ingored {/include}{/for}")
                         .render());
     }
 
@@ -114,7 +115,10 @@ public class IncludeTest {
     public void testInsertParam() {
         Engine engine = Engine.builder().addDefaults().build();
         engine.putTemplate("super", engine.parse("{#insert header}default header{/insert} and {#insert footer}{that}{/}"));
-        assertEquals("1 and 1", engine.parse("{#include 'super' that=foo}{#header}{that}{/}{/}").data("foo", 1).render());
+        Template foo = engine.parse("{#include 'super' that=foo}{#header}{that}{/}{/}");
+        // foo, that
+        assertEquals(2, foo.getExpressions().size());
+        assertEquals("1 and 1", foo.data("foo", 1).render());
     }
 
     @Test
@@ -150,6 +154,13 @@ public class IncludeTest {
         } catch (TemplateException expected) {
             assertTrue(expected.getMessage().contains("Multiple blocks"));
         }
+    }
+
+    @Test
+    public void testInsertInLoop() {
+        Engine engine = Engine.builder().addDefaults().build();
+        engine.putTemplate("super", engine.parse("{#for i in 5}{#insert row}No row{/}{/for}"));
+        assertEquals("1:2:3:4:5:", engine.parse("{#include super}{#row}{i}:{/row}{/}").render());
     }
 
 }

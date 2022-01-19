@@ -1,10 +1,13 @@
 package io.quarkus.maven;
 
 import java.io.File;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugin.logging.Log;
@@ -17,10 +20,8 @@ import org.eclipse.aether.impl.RemoteRepositoryManager;
 import org.eclipse.aether.repository.RemoteRepository;
 
 import io.quarkus.bootstrap.app.CuratedApplication;
-import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.model.AppArtifactKey;
-import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+import io.quarkus.maven.dependency.ArtifactKey;
+import io.quarkus.runtime.LaunchMode;
 
 public abstract class QuarkusBootstrapMojo extends AbstractMojo {
 
@@ -100,7 +101,19 @@ public abstract class QuarkusBootstrapMojo extends AbstractMojo {
     @Parameter(required = false, property = "appArtifact")
     private String appArtifact;
 
-    private AppArtifactKey projectId;
+    /**
+     * The properties of the plugin.
+     */
+    @Parameter(property = "properties", required = false)
+    private Map<String, String> properties = new HashMap<>();
+
+    /**
+     * The context of the execution of the plugin.
+     */
+    @Parameter(defaultValue = "${mojoExecution}", readonly = true, required = true)
+    private MojoExecution mojoExecution;
+
+    private ArtifactKey projectId;
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -177,25 +190,23 @@ public abstract class QuarkusBootstrapMojo extends AbstractMojo {
         return ignoredEntries;
     }
 
-    protected AppArtifactKey projectId() {
-        return projectId == null ? projectId = new AppArtifactKey(project.getGroupId(), project.getArtifactId()) : projectId;
+    protected Map<String, String> properties() {
+        return properties;
     }
 
-    // @deprecated in 1.14.0.Final
-    @Deprecated
-    protected AppArtifact projectArtifact() throws MojoExecutionException {
-        return bootstrapProvider.projectArtifact(this);
+    protected String executionId() {
+        return mojoExecution.getExecutionId();
     }
 
-    protected MavenArtifactResolver artifactResolver() throws MojoExecutionException {
-        return bootstrapProvider.artifactResolver(this);
-    }
-
-    protected QuarkusBootstrap bootstrapQuarkus() throws MojoExecutionException {
-        return bootstrapProvider.bootstrapQuarkus(this);
+    protected ArtifactKey projectId() {
+        return projectId == null ? projectId = QuarkusBootstrapProvider.getProjectId(project) : projectId;
     }
 
     protected CuratedApplication bootstrapApplication() throws MojoExecutionException {
-        return bootstrapProvider.bootstrapApplication(this);
+        return bootstrapApplication(LaunchMode.NORMAL);
+    }
+
+    protected CuratedApplication bootstrapApplication(LaunchMode mode) throws MojoExecutionException {
+        return bootstrapProvider.bootstrapApplication(this, mode);
     }
 }

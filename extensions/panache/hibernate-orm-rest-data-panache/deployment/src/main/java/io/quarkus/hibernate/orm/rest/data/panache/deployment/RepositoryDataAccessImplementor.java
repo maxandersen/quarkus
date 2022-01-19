@@ -39,6 +39,17 @@ final class RepositoryDataAccessImplementor implements DataAccessImplementor {
     }
 
     /**
+     * Implements <code>repository.findAll().page(page).list()</code>
+     */
+    @Override
+    public ResultHandle findAll(BytecodeCreator creator, ResultHandle page) {
+        ResultHandle query = creator.invokeInterfaceMethod(
+                ofMethod(PanacheRepositoryBase.class, "findAll", PanacheQuery.class), getRepositoryInstance(creator));
+        creator.invokeInterfaceMethod(ofMethod(PanacheQuery.class, "page", PanacheQuery.class, Page.class), query, page);
+        return creator.invokeInterfaceMethod(ofMethod(PanacheQuery.class, "list", List.class), query);
+    }
+
+    /**
      * Implements <code>repository.findAll(sort).page(page).list()</code>
      */
     @Override
@@ -66,9 +77,8 @@ final class RepositoryDataAccessImplementor implements DataAccessImplementor {
     @Override
     public ResultHandle update(BytecodeCreator creator, ResultHandle entity) {
         MethodDescriptor getEntityManager = ofMethod(PanacheRepositoryBase.class, "getEntityManager",
-                EntityManager.class, Class.class);
-        ResultHandle entityManager = creator.invokeInterfaceMethod(getEntityManager, getRepositoryInstance(creator),
-                creator.invokeVirtualMethod(ofMethod(Object.class, "getClass", Class.class), entity));
+                EntityManager.class);
+        ResultHandle entityManager = creator.invokeInterfaceMethod(getEntityManager, getRepositoryInstance(creator));
         return creator.invokeInterfaceMethod(
                 ofMethod(EntityManager.class, "merge", Object.class, Object.class), entityManager, entity);
     }

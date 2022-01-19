@@ -3,6 +3,8 @@ package io.quarkus.resteasy.reactive.server.runtime;
 import static io.quarkus.resteasy.reactive.server.runtime.NotFoundExceptionMapper.classMappers;
 
 import java.io.Closeable;
+import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -20,12 +22,13 @@ import org.jboss.resteasy.reactive.server.core.DeploymentInfo;
 import org.jboss.resteasy.reactive.server.core.ExceptionMapping;
 import org.jboss.resteasy.reactive.server.core.RequestContextFactory;
 import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
-import org.jboss.resteasy.reactive.server.core.startup.CustomServerRestHandlers;
+import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
 import org.jboss.resteasy.reactive.server.core.startup.RuntimeDeploymentManager;
 import org.jboss.resteasy.reactive.server.handlers.RestInitialHandler;
 import org.jboss.resteasy.reactive.server.jaxrs.ProvidersImpl;
 import org.jboss.resteasy.reactive.server.model.ContextResolvers;
 import org.jboss.resteasy.reactive.server.spi.EndpointInvoker;
+import org.jboss.resteasy.reactive.server.spi.EndpointInvokerFactory;
 import org.jboss.resteasy.reactive.server.spi.ServerRestHandler;
 import org.jboss.resteasy.reactive.server.util.RuntimeResourceVisitor;
 import org.jboss.resteasy.reactive.server.util.ScoreSystem;
@@ -51,7 +54,7 @@ import io.vertx.core.Handler;
 import io.vertx.ext.web.RoutingContext;
 
 @Recorder
-public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
+public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder implements EndpointInvokerFactory {
 
     public static final Supplier<Executor> EXECUTOR_SUPPLIER = new Supplier<Executor>() {
         @Override
@@ -70,7 +73,12 @@ public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
             BeanContainer beanContainer,
             ShutdownContext shutdownContext, HttpBuildTimeConfig vertxConfig,
             RequestContextFactory contextFactory,
-            BeanFactory<ResteasyReactiveInitialiser> initClassFactory) {
+            BeanFactory<ResteasyReactiveInitialiser> initClassFactory,
+            LaunchMode launchMode, boolean servletPresent, List<String> vertxContextPropsToCopy) {
+
+        if (servletPresent) {
+            info.setResumeOn404(true);
+        }
 
         CurrentRequestManager
                 .setCurrentRequestInstance(new QuarkusCurrentRequest(beanContainer.instance(CurrentVertxRequest.class)));
@@ -90,6 +98,7 @@ public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
         };
         CurrentIdentityAssociation currentIdentityAssociation = Arc.container().instance(CurrentIdentityAssociation.class)
                 .get();
+        ClassLoader tccl = Thread.currentThread().getContextClassLoader();
         if (contextFactory == null) {
             contextFactory = new RequestContextFactory() {
                 @Override
@@ -99,14 +108,14 @@ public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
                     return new QuarkusResteasyReactiveRequestContext(deployment, providers, (RoutingContext) context,
                             requestContext,
                             handlerChain,
-                            abortHandlerChain, currentIdentityAssociation);
+                            abortHandlerChain, launchMode == LaunchMode.DEVELOPMENT ? tccl : null, currentIdentityAssociation,
+                            vertxContextPropsToCopy);
                 }
 
             };
         }
 
         RuntimeDeploymentManager runtimeDeploymentManager = new RuntimeDeploymentManager(info, EXECUTOR_SUPPLIER,
-                new CustomServerRestHandlers(new BlockingInputHandlerSupplier(), new MultipartHandlerSupplier()),
                 closeTaskHandler, contextFactory, new ArcThreadSetupAction(beanContainer.requestContext()),
                 vertxConfig.rootPath);
         Deployment deployment = runtimeDeploymentManager.deploy();
@@ -172,7 +181,7 @@ public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
     @SuppressWarnings("unchecked")
     public void registerExceptionMapper(ExceptionMapping exceptionMapping, String string,
             ResourceExceptionMapper<Throwable> mapper) {
-        exceptionMapping.addExceptionMapper(loadClass(string), mapper);
+        exceptionMapping.addExceptionMapper(string, mapper);
     }
 
     public void registerContextResolver(ContextResolvers contextResolvers, String string,
@@ -180,13 +189,15 @@ public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
         contextResolvers.addContextResolver(loadClass(string), resolver);
     }
 
+    @Override
     public Supplier<EndpointInvoker> invoker(String baseName) {
         return new Supplier<EndpointInvoker>() {
             @Override
             public EndpointInvoker get() {
                 try {
-                    return (EndpointInvoker) loadClass(baseName).newInstance();
-                } catch (IllegalAccessException | InstantiationException e) {
+                    return (EndpointInvoker) loadClass(baseName).getDeclaredConstructor().newInstance();
+                } catch (IllegalAccessException | InstantiationException | NoSuchMethodException
+                        | InvocationTargetException e) {
                     throw new RuntimeException("Unable to generate endpoint invoker", e);
                 }
 
@@ -203,20 +214,8 @@ public class ResteasyReactiveRecorder extends ResteasyReactiveCommonRecorder {
         };
     }
 
-    private static class BlockingInputHandlerSupplier implements Supplier<ServerRestHandler> {
-
-        @Override
-        public ServerRestHandler get() {
-            return new BlockingInputHandler();
-        }
-    }
-
-    private static class MultipartHandlerSupplier implements Supplier<ServerRestHandler> {
-
-        @Override
-        public ServerRestHandler get() {
-            return new MultipartFormHandler();
-        }
+    public ServerSerialisers createServerSerialisers() {
+        return new ServerSerialisers();
     }
 
 }

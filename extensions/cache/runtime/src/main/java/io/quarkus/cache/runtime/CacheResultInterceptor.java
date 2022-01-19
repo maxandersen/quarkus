@@ -1,10 +1,8 @@
 package io.quarkus.cache.runtime;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.time.Duration;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import javax.annotation.Priority;
 import javax.interceptor.AroundInvoke;
@@ -13,7 +11,11 @@ import javax.interceptor.InvocationContext;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.cache.CacheException;
 import io.quarkus.cache.CacheResult;
+import io.smallrye.mutiny.Multi;
+import io.smallrye.mutiny.TimeoutException;
+import io.smallrye.mutiny.Uni;
 
 @CacheResult(cacheName = "") // The `cacheName` attribute is @Nonbinding.
 @Interceptor
@@ -25,6 +27,14 @@ public class CacheResultInterceptor extends CacheInterceptor {
 
     @AroundInvoke
     public Object intercept(InvocationContext invocationContext) throws Throwable {
+        /*
+         * io.smallrye.mutiny.Multi values are never cached.
+         * There's already a WARN log entry at build time so we don't need to log anything at run time.
+         */
+        if (Multi.class.isAssignableFrom(invocationContext.getMethod().getReturnType())) {
+            return invocationContext.proceed();
+        }
+
         CacheInterceptionContext<CacheResult> interceptionContext = getInterceptionContext(invocationContext,
                 CacheResult.class, true);
 
@@ -37,58 +47,92 @@ public class CacheResultInterceptor extends CacheInterceptor {
         CacheResult binding = interceptionContext.getInterceptorBindings().get(0);
         AbstractCache cache = (AbstractCache) cacheManager.getCache(binding.cacheName()).get();
         Object key = getCacheKey(cache, interceptionContext.getCacheKeyParameterPositions(), invocationContext.getParameters());
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debugf("Loading entry with key [%s] from cache [%s]", key, binding.cacheName());
-        }
+        LOGGER.debugf("Loading entry with key [%s] from cache [%s]", key, binding.cacheName());
 
         try {
+            if (isUniReturnType(invocationContext)) {
+                Uni<Object> cacheValue = cache.get(key, new Function<Object, Object>() {
+                    @Override
+                    public Object apply(Object k) {
+                        LOGGER.debugf("Adding %s entry with key [%s] into cache [%s]",
+                                UnresolvedUniValue.class.getSimpleName(), key, binding.cacheName());
+                        return UnresolvedUniValue.INSTANCE;
+                    }
+                }).onItem().transformToUni(new Function<Object, Uni<?>>() {
+                    @Override
+                    public Uni<?> apply(Object value) {
+                        if (value == UnresolvedUniValue.INSTANCE) {
+                            try {
+                                return ((Uni<Object>) invocationContext.proceed())
+                                        .call(new Function<Object, Uni<?>>() {
+                                            @Override
+                                            public Uni<?> apply(Object emittedValue) {
+                                                return cache.replaceUniValue(key, emittedValue);
+                                            }
+                                        });
+                            } catch (CacheException e) {
+                                throw e;
+                            } catch (Exception e) {
+                                throw new CacheException(e);
+                            }
+                        } else {
+                            return Uni.createFrom().item(value);
+                        }
+                    }
+                });
+                if (binding.lockTimeout() <= 0) {
+                    return cacheValue;
+                }
+                return cacheValue.ifNoItem().after(Duration.ofMillis(binding.lockTimeout()))
+                        .recoverWithUni(new Supplier<Uni<?>>() {
+                            @Override
+                            public Uni<?> get() {
+                                try {
+                                    return (Uni<?>) invocationContext.proceed();
+                                } catch (CacheException e) {
+                                    throw e;
+                                } catch (Exception e) {
+                                    throw new CacheException(e);
+                                }
+                            }
+                        });
 
-            CompletableFuture<Object> cacheValue = cache.get(key, new Function<Object, Object>() {
-                @Override
-                public Object apply(Object k) {
+            } else {
+                Uni<Object> cacheValue = cache.get(key, new Function<Object, Object>() {
+                    @Override
+                    public Object apply(Object k) {
+                        try {
+                            return invocationContext.proceed();
+                        } catch (CacheException e) {
+                            throw e;
+                        } catch (Throwable e) {
+                            throw new CacheException(e);
+                        }
+                    }
+                });
+                Object value;
+                if (binding.lockTimeout() <= 0) {
+                    value = cacheValue.await().indefinitely();
+                } else {
                     try {
+                        /*
+                         * If the current thread started the cache value computation, then the computation is already finished
+                         * since
+                         * it was done synchronously and the following call will never time out.
+                         */
+                        value = cacheValue.await().atMost(Duration.ofMillis(binding.lockTimeout()));
+                    } catch (TimeoutException e) {
+                        // TODO: Add statistics here to monitor the timeout.
                         return invocationContext.proceed();
-                    } catch (Exception e) {
-                        throw new CacheException(e);
                     }
                 }
-            });
-
-            if (binding.lockTimeout() <= 0) {
-                return cacheValue.get();
-            } else {
-                try {
-                    /*
-                     * If the current thread started the cache value computation, then the computation is already finished since
-                     * it was done synchronously and the following call will never time out.
-                     */
-                    return cacheValue.get(binding.lockTimeout(), TimeUnit.MILLISECONDS);
-                } catch (TimeoutException e) {
-                    // TODO: Add statistics here to monitor the timeout.
-                    return invocationContext.proceed();
-                }
+                return value;
             }
 
-        } catch (ExecutionException e) {
-            /*
-             * Any exception raised during a cache computation will be encapsulated into an ExecutionException because it is
-             * thrown during a CompletionStage execution.
-             */
-            if (e.getCause() instanceof CacheException) {
-                /*
-                 * The ExecutionException was caused by a CacheException (most likely case).
-                 * Let's throw the CacheException cause if possible or the CacheException itself otherwise.
-                 */
-                if (e.getCause().getCause() != null) {
-                    throw e.getCause().getCause();
-                } else {
-                    throw e.getCause();
-                }
-            } else if (e.getCause() != null) {
-                // The ExecutionException was caused by another type of Throwable (unlikely case).
+        } catch (CacheException e) {
+            if (e.getCause() != null) {
                 throw e.getCause();
             } else {
-                // The ExecutionException does not have a cause (very unlikely case).
                 throw e;
             }
         }

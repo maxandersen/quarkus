@@ -14,13 +14,16 @@ import io.quarkus.rest.data.panache.RestDataResource;
 import io.quarkus.rest.data.panache.deployment.ResourceMetadata;
 import io.quarkus.rest.data.panache.deployment.properties.ResourceProperties;
 import io.quarkus.rest.data.panache.deployment.utils.ResponseImplementor;
-import io.quarkus.rest.data.panache.runtime.hal.HalEntityWrapper;
 
 public final class GetHalMethodImplementor extends HalMethodImplementor {
 
     private static final String METHOD_NAME = "getHal";
 
     private static final String RESOURCE_METHOD_NAME = "get";
+
+    public GetHalMethodImplementor(boolean isResteasyClassic) {
+        super(isResteasyClassic);
+    }
 
     /**
      * Expose {@link RestDataResource#get(Object)} via HAL JAX-RS method.

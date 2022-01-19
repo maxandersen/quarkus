@@ -1,5 +1,6 @@
 package io.quarkus.oidc;
 
+import io.smallrye.mutiny.Uni;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -16,8 +17,9 @@ public interface TenantConfigResolver {
     /**
      * Returns a {@link OidcTenantConfig} given a {@code RoutingContext}.
      *
-     * @param context the routing context
-     * @return the tenant configuration. If {@code null}, indicates that the default configuration/tenant should be chosen
+     * @param requestContext the routing context
+     * @return the tenant configuration. If the uni resolves to {@code null}, indicates that the default configuration/tenant
+     *         should be chosen
      */
-    OidcTenantConfig resolve(RoutingContext context);
+    Uni<OidcTenantConfig> resolve(RoutingContext routingContext, OidcRequestContext<OidcTenantConfig> requestContext);
 }

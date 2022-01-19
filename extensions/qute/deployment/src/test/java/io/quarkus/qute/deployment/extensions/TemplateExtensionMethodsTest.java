@@ -5,15 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.inject.Inject;
 
-import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.StringAsset;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -27,9 +24,10 @@ public class TemplateExtensionMethodsTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+            .withApplicationRoot((jar) -> jar
                     .addClasses(Foo.class, Extensions.class, PrioritizedExtensions.class)
-                    .addAsResource(new StringAsset("{foo.name.toLower} {foo.name.ignored} {foo.callMe(1)} {foo.baz}"),
+                    .addAsResource(
+                            new StringAsset("{foo.name.toLower} {foo.name.ignored ?: 'NOT_FOUND'} {foo.callMe(1)} {foo.baz}"),
                             "templates/foo.txt")
                     .addAsResource(new StringAsset("{baz.setScale(baz.defaultScale,roundingMode)}"),
                             "templates/baz.txt")
@@ -81,7 +79,7 @@ public class TemplateExtensionMethodsTest {
         map.put("charlie", "3");
         assertEquals("3:1:NOT_FOUND:1:false:true",
                 engine.parse(
-                        "{myMap.size}:{myMap.alpha}:{myMap.missing}:{myMap.get(key)}:{myMap.empty}:{myMap.containsKey('charlie')}")
+                        "{myMap.size}:{myMap.alpha}:{myMap.missing ?: 'NOT_FOUND'}:{myMap.get(key)}:{myMap.empty}:{myMap.containsKey('charlie')}")
                         .data("myMap", map).data("key", "alpha").render());
 
     }
@@ -89,12 +87,6 @@ public class TemplateExtensionMethodsTest {
     @Test
     public void testPriority() {
         assertEquals("bravo::baz", engine.getTemplate("priority").data("foo", new Foo("baz", 10l)).render());
-    }
-
-    @Test
-    public void testListGetByIndex() {
-        assertEquals("true=true=NOT_FOUND",
-                engine.parse("{list.0}={list[0]}={list[100]}").data("list", Collections.singletonList(true)).render());
     }
 
     @Test

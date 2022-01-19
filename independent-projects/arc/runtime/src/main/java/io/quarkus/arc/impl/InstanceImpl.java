@@ -16,14 +16,18 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 import javax.enterprise.context.ContextNotActiveException;
+import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.AmbiguousResolutionException;
 import javax.enterprise.inject.UnsatisfiedResolutionException;
 import javax.enterprise.inject.spi.InjectionPoint;
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.Provider;
+import javax.inject.Singleton;
 
 /**
  *
@@ -37,10 +41,8 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
                 Collections.emptySet(), null, -1);
     }
 
-    private static final Annotation[] EMPTY_ANNOTATION_ARRAY = new Annotation[] {};
-
     private final CreationalContextImpl<?> creationalContext;
-    private final Set<InjectableBean<?>> resolvedBeans;
+    private final List<InjectableBean<?>> resolvedBeans;
 
     private final Type requiredType;
     private final Set<Annotation> requiredQualifiers;
@@ -135,8 +137,12 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
             }
             context.destroy(proxy.arc_bean());
         } else {
-            // Try to destroy a dependent instance
-            creationalContext.destroyDependentInstance(instance);
+            // First try to destroy a dependent instance
+            if (!creationalContext.destroyDependentInstance(instance)) {
+                // If not successful then try the singleton context
+                SingletonContext singletonContext = (SingletonContext) Arc.container().getActiveContext(Singleton.class);
+                singletonContext.destroyInstance(instance);
+            }
         }
     }
 
@@ -155,22 +161,29 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
         };
     }
 
-    @SuppressWarnings("unchecked")
     private <H> InstanceHandle<H> getHandle(InjectableBean<H> bean) {
-        InjectionPoint prev = InjectionPointProvider
-                .set(new InjectionPointImpl(injectionPointType, requiredType, requiredQualifiers, targetBean, annotations,
-                        javaMember, position));
-        try {
-            return ArcContainerImpl.beanInstanceHandle(bean, (CreationalContextImpl<H>) creationalContext, false,
-                    this::destroy);
-        } finally {
-            InjectionPointProvider.set(prev);
-        }
+        CreationalContextImpl<H> context = this.creationalContext.child(bean);
+        return new LazyInstanceHandle<>(bean, context, this.creationalContext, new Supplier<H>() {
+
+            @Override
+            public H get() {
+                InjectionPoint prev = InjectionPointProvider
+                        .set(new InjectionPointImpl(injectionPointType, requiredType, requiredQualifiers, targetBean,
+                                annotations, javaMember, position));
+                try {
+                    return bean.get(context);
+                } finally {
+                    InjectionPointProvider.set(prev);
+                }
+            }
+        },
+                // If @Dependent we need to remove the instance from the CC of this InjectableInstance
+                Dependent.class.equals(bean.getScope()) ? this::destroy : null);
     }
 
     @SuppressWarnings("unchecked")
     private InjectableBean<T> bean() {
-        Set<InjectableBean<?>> beans = beans();
+        List<InjectableBean<?>> beans = beans();
         if (beans.isEmpty()) {
             throw new UnsatisfiedResolutionException(
                     "No bean found for required type [" + requiredType + "] and qualifiers [" + requiredQualifiers + "]");
@@ -214,12 +227,12 @@ public class InstanceImpl<T> implements InjectableInstance<T> {
         return instance;
     }
 
-    private Set<InjectableBean<?>> beans() {
+    private List<InjectableBean<?>> beans() {
         return resolvedBeans != null ? resolvedBeans : resolve();
     }
 
-    private Set<InjectableBean<?>> resolve() {
-        return ArcContainerImpl.instance().getResolvedBeans(requiredType, requiredQualifiers.toArray(EMPTY_ANNOTATION_ARRAY));
+    private List<InjectableBean<?>> resolve() {
+        return Instances.resolveBeans(requiredType, requiredQualifiers);
     }
 
     class InstanceIterator implements Iterator<T> {

@@ -2,6 +2,7 @@ package io.quarkus.hibernate.orm.deployment;
 
 import java.nio.charset.Charset;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -13,6 +14,8 @@ import org.hibernate.engine.query.spi.QueryPlanCache;
 import io.quarkus.runtime.annotations.ConfigDocSection;
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
+import io.quarkus.runtime.annotations.ConvertWith;
+import io.quarkus.runtime.configuration.TrimmedStringConverter;
 
 @ConfigGroup
 public class HibernateOrmConfigPersistenceUnit {
@@ -22,11 +25,13 @@ public class HibernateOrmConfigPersistenceUnit {
      * <p>
      * If undefined, it will use the default datasource.
      */
+    @ConvertWith(TrimmedStringConverter.class)
     public Optional<String> datasource;
 
     /**
      * The packages in which the entities affected to this persistence unit are located.
      */
+    @ConvertWith(TrimmedStringConverter.class)
     public Optional<Set<String>> packages;
 
     /**
@@ -70,19 +75,20 @@ public class HibernateOrmConfigPersistenceUnit {
      */
     // @formatter:on
     @ConfigItem(defaultValueDocumentation = "import.sql in DEV, TEST ; no-file otherwise")
-    public Optional<String> sqlLoadScript;
+    @ConvertWith(TrimmedStringConverter.class)
+    public Optional<List<String>> sqlLoadScript;
 
     /**
      * The size of the batches used when loading entities and collections.
      *
-     * `-1` means batch loading is disabled. This is the default.
+     * `-1` means batch loading is disabled.
      *
      * @deprecated {@link #fetch} should be used to configure fetching properties.
      * @asciidoclet
      */
-    @ConfigItem(defaultValue = "-1")
+    @ConfigItem(defaultValueDocumentation = "16")
     @Deprecated
-    public int batchFetchSize;
+    public OptionalInt batchFetchSize;
 
     /**
      * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
@@ -102,6 +108,7 @@ public class HibernateOrmConfigPersistenceUnit {
      * Class name of the Hibernate PhysicalNamingStrategy implementation
      */
     @ConfigItem
+    @ConvertWith(TrimmedStringConverter.class)
     public Optional<String> physicalNamingStrategy;
 
     /**
@@ -110,7 +117,38 @@ public class HibernateOrmConfigPersistenceUnit {
      * Class name of the Hibernate ImplicitNamingStrategy implementation
      */
     @ConfigItem
+    @ConvertWith(TrimmedStringConverter.class)
     public Optional<String> implicitNamingStrategy;
+
+    /**
+     * Class name of a custom
+     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/boot/spi/MetadataBuilderContributor.html[`org.hibernate.boot.spi.MetadataBuilderContributor`]
+     * implementation.
+     *
+     * [NOTE]
+     * ====
+     * Not all customization options exposed by
+     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/boot/MetadataBuilder.html[`org.hibernate.boot.MetadataBuilder`]
+     * will work correctly. Stay clear of options related to classpath scanning in particular.
+     *
+     * This setting is exposed mainly to allow registration of types, converters and SQL functions.
+     * ====
+     *
+     * @asciidoclet
+     */
+    @ConfigItem
+    @ConvertWith(TrimmedStringConverter.class)
+    public Optional<String> metadataBuilderContributor;
+
+    /**
+     * XML files to configure the entity mapping, e.g. {@code META-INF/my-orm.xml}.
+     * <p>
+     * Defaults to `META-INF/orm.xml` if it exists.
+     * Pass `no-file` to force Hibernate ORM to ignore `META-INF/orm.xml`.
+     */
+    @ConfigItem(defaultValueDocumentation = "META-INF/orm.xml if it exists; no-file otherwise")
+    @ConvertWith(TrimmedStringConverter.class)
+    public Optional<Set<String>> mappingFiles;
 
     /**
      * Query related configuration.
@@ -147,6 +185,13 @@ public class HibernateOrmConfigPersistenceUnit {
     public Map<String, HibernateOrmConfigPersistenceUnitCache> cache;
 
     /**
+     * Discriminator related configuration.
+     */
+    @ConfigItem
+    @ConfigDocSection
+    public HibernateOrmConfigPersistenceUnitDiscriminator discriminator;
+
+    /**
      * The default in Quarkus is for 2nd level caching to be enabled,
      * and a good implementation is already integrated for you.
      * <p>
@@ -165,6 +210,7 @@ public class HibernateOrmConfigPersistenceUnit {
      * @asciidoclet
      */
     @ConfigItem
+    @ConvertWith(TrimmedStringConverter.class)
     public Optional<String> multitenant;
 
     /**
@@ -172,17 +218,27 @@ public class HibernateOrmConfigPersistenceUnit {
      * if not set.
      */
     @ConfigItem
+    @ConvertWith(TrimmedStringConverter.class)
     public Optional<String> multitenantSchemaDatasource;
+
+    /**
+     * If hibernate is not auto generating the schema, and Quarkus is running in development mode
+     * then Quarkus will attempt to validate the database after startup and print a log message if
+     * there are any problems.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean validateInDevMode;
 
     public boolean isAnyPropertySet() {
         return datasource.isPresent() ||
                 packages.isPresent() ||
                 dialect.isAnyPropertySet() ||
                 sqlLoadScript.isPresent() ||
-                batchFetchSize > 0 ||
+                batchFetchSize.isPresent() ||
                 maxFetchDepth.isPresent() ||
                 physicalNamingStrategy.isPresent() ||
                 implicitNamingStrategy.isPresent() ||
+                metadataBuilderContributor.isPresent() ||
                 query.isAnyPropertySet() ||
                 database.isAnyPropertySet() ||
                 jdbc.isAnyPropertySet() ||
@@ -190,7 +246,8 @@ public class HibernateOrmConfigPersistenceUnit {
                 !secondLevelCachingEnabled ||
                 multitenant.isPresent() ||
                 multitenantSchemaDatasource.isPresent() ||
-                fetch.isAnyPropertySet();
+                fetch.isAnyPropertySet() ||
+                discriminator.isAnyPropertySet();
     }
 
     @ConfigGroup
@@ -213,6 +270,7 @@ public class HibernateOrmConfigPersistenceUnit {
         // TODO should it be dialects
         //TODO should it be shortcuts like "postgresql" "h2" etc
         @ConfigItem(name = ConfigItem.PARENT)
+        @ConvertWith(TrimmedStringConverter.class)
         public Optional<String> dialect;
 
         /**
@@ -223,6 +281,7 @@ public class HibernateOrmConfigPersistenceUnit {
          * @asciidoclet
          */
         @ConfigItem
+        @ConvertWith(TrimmedStringConverter.class)
         public Optional<String> storageEngine;
 
         public boolean isAnyPropertySet() {
@@ -270,18 +329,6 @@ public class HibernateOrmConfigPersistenceUnit {
         private static final String DEFAULT_CHARSET = "UTF-8";
 
         /**
-         * The default catalog to use for the database objects.
-         */
-        @ConfigItem
-        public Optional<String> defaultCatalog;
-
-        /**
-         * The default schema to use for the database objects.
-         */
-        @ConfigItem
-        public Optional<String> defaultSchema;
-
-        /**
          * The charset of the database.
          * <p>
          * Used for DDL generation and also for the SQL import scripts.
@@ -296,9 +343,7 @@ public class HibernateOrmConfigPersistenceUnit {
         public boolean globallyQuotedIdentifiers;
 
         public boolean isAnyPropertySet() {
-            return defaultCatalog.isPresent()
-                    || defaultSchema.isPresent()
-                    || !DEFAULT_CHARSET.equals(charset.name())
+            return !DEFAULT_CHARSET.equals(charset.name())
                     || globallyQuotedIdentifiers;
         }
     }
@@ -310,6 +355,7 @@ public class HibernateOrmConfigPersistenceUnit {
          * The time zone pushed to the JDBC driver.
          */
         @ConfigItem
+        @ConvertWith(TrimmedStringConverter.class)
         public Optional<String> timezone;
 
         /**
@@ -326,34 +372,6 @@ public class HibernateOrmConfigPersistenceUnit {
 
         public boolean isAnyPropertySet() {
             return timezone.isPresent() || statementFetchSize.isPresent() || statementBatchSize.isPresent();
-        }
-    }
-
-    @ConfigGroup
-    public static class HibernateOrmConfigPersistenceUnitLog {
-
-        /**
-         * Show SQL logs and format them nicely.
-         * <p>
-         * Setting it to true is obviously not recommended in production.
-         */
-        @ConfigItem
-        public boolean sql;
-
-        /**
-         * Format the SQL logs if SQL log is enabled
-         */
-        @ConfigItem(defaultValue = "true")
-        public boolean formatSql;
-
-        /**
-         * Whether JDBC warnings should be collected and logged.
-         */
-        @ConfigItem(defaultValueDocumentation = "depends on dialect")
-        public Optional<Boolean> jdbcWarnings;
-
-        public boolean isAnyPropertySet() {
-            return sql || !formatSql || jdbcWarnings.isPresent();
         }
     }
 
@@ -395,12 +413,12 @@ public class HibernateOrmConfigPersistenceUnit {
         /**
          * The size of the batches used when loading entities and collections.
          *
-         * `-1` means batch loading is disabled. This is the default.
+         * `-1` means batch loading is disabled.
          *
          * @asciidoclet
          */
-        @ConfigItem(defaultValue = "-1")
-        public int batchSize;
+        @ConfigItem(defaultValueDocumentation = "16")
+        public OptionalInt batchSize;
 
         /**
          * The maximum depth of outer join fetch tree for single-ended associations (one-to-one, many-to-one).
@@ -413,8 +431,28 @@ public class HibernateOrmConfigPersistenceUnit {
         public OptionalInt maxDepth;
 
         public boolean isAnyPropertySet() {
-            return batchSize > 0 || maxDepth.isPresent();
+            return batchSize.isPresent() || maxDepth.isPresent();
         }
 
+    }
+
+    /**
+     * Discriminator configuration.
+     *
+     * Separated in a group configuration, in case it is necessary to add the another existing hibernate discriminator property.
+     */
+    @ConfigGroup
+    public static class HibernateOrmConfigPersistenceUnitDiscriminator {
+        /**
+         * Existing applications rely (implicitly or explicitly) on Hibernate ignoring any DiscriminatorColumn declarations on
+         * joined inheritance hierarchies. This setting allows these applications to maintain the legacy behavior of
+         * DiscriminatorColumn annotations being ignored when paired with joined inheritance.
+         */
+        @ConfigItem
+        public boolean ignoreExplicitForJoined;
+
+        public boolean isAnyPropertySet() {
+            return ignoreExplicitForJoined;
+        }
     }
 }

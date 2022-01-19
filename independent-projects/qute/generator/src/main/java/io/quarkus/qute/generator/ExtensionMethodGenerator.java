@@ -185,8 +185,8 @@ public class ExtensionMethodGenerator {
         valueResolver.close();
     }
 
-    public NamespaceResolverCreator createNamespaceResolver(ClassInfo declaringClass, String namespace) {
-        return new NamespaceResolverCreator(declaringClass, namespace);
+    public NamespaceResolverCreator createNamespaceResolver(ClassInfo declaringClass, String namespace, int priority) {
+        return new NamespaceResolverCreator(declaringClass, namespace, priority);
     }
 
     private void implementGetNamespace(ClassCreator namespaceResolver, String namespace) {
@@ -235,7 +235,7 @@ public class ExtensionMethodGenerator {
             if (returnsCompletionStage) {
                 ret = result;
             } else {
-                ret = resolve.invokeStaticMethod(Descriptors.COMPLETED_FUTURE, result);
+                ret = resolve.invokeStaticMethod(Descriptors.COMPLETED_STAGE, result);
             }
         } else {
             ret = resolve
@@ -263,11 +263,8 @@ public class ExtensionMethodGenerator {
             whenComplete.assign(whenRet, ret);
             AssignableResultHandle whenEvaluatedParams = whenComplete.createVariable(EvaluatedParams.class);
             whenComplete.assign(whenEvaluatedParams, evaluatedParamsHandle);
-            AssignableResultHandle whenEvalContext = null;
-            if (params.getFirst(ParamKind.ATTR) != null) {
-                whenEvalContext = whenComplete.createVariable(EvalContext.class);
-                whenComplete.assign(whenEvalContext, evalContext);
-            }
+            AssignableResultHandle whenEvalContext = whenComplete.createVariable(EvalContext.class);
+            whenComplete.assign(whenEvalContext, evalContext);
 
             BranchResult throwableIsNull = whenComplete.ifNull(whenComplete.getMethodParam(1));
             BytecodeCreator success = throwableIsNull.trueBranch();
@@ -286,7 +283,7 @@ public class ExtensionMethodGenerator {
                             whenEvaluatedParams, success.load(isVarArgs), paramTypesHandle))
                     .falseBranch();
             typeMatchFailed.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE, whenRet,
-                    typeMatchFailed.readStaticField(Descriptors.RESULT_NOT_FOUND));
+                    typeMatchFailed.invokeStaticMethod(Descriptors.NOT_FOUND_FROM_EC, whenEvalContext));
             typeMatchFailed.returnValue(null);
 
             // try
@@ -408,7 +405,7 @@ public class ExtensionMethodGenerator {
 
         private final ClassCreator namespaceResolver;
 
-        public NamespaceResolverCreator(ClassInfo declaringClass, String namespace) {
+        public NamespaceResolverCreator(ClassInfo declaringClass, String namespace, int priority) {
             String baseName;
             if (declaringClass.enclosingClass() != null) {
                 baseName = simpleName(declaringClass.enclosingClass()) + ValueResolverGenerator.NESTED_SEPARATOR
@@ -418,7 +415,7 @@ public class ExtensionMethodGenerator {
             }
             String targetPackage = packageName(declaringClass.name());
 
-            String suffix = NAMESPACE_SUFFIX + sha1(namespace);
+            String suffix = NAMESPACE_SUFFIX + "_" + sha1(namespace) + "_" + priority;
             String generatedName = generatedNameFromTarget(targetPackage, baseName, suffix);
             generatedTypes.add(generatedName.replace('/', '.'));
 
@@ -426,6 +423,7 @@ public class ExtensionMethodGenerator {
                     .interfaces(NamespaceResolver.class).build();
 
             implementGetNamespace(namespaceResolver, namespace);
+            implementGetPriority(namespaceResolver, priority);
         }
 
         public ResolveCreator implementResolve() {
@@ -486,7 +484,7 @@ public class ExtensionMethodGenerator {
                                     matchScope.load(param.name));
                         }
                     }
-                    matchScope.returnValue(matchScope.invokeStaticMethod(Descriptors.COMPLETED_FUTURE,
+                    matchScope.returnValue(matchScope.invokeStaticMethod(Descriptors.COMPLETED_STAGE,
                             matchScope.invokeStaticMethod(MethodDescriptor.of(method), args)));
                 } else {
                     ResultHandle ret = matchScope.newInstance(MethodDescriptor.ofConstructor(CompletableFuture.class));
@@ -512,11 +510,8 @@ public class ExtensionMethodGenerator {
                     whenComplete.assign(whenRet, ret);
                     AssignableResultHandle whenEvaluatedParams = whenComplete.createVariable(EvaluatedParams.class);
                     whenComplete.assign(whenEvaluatedParams, evaluatedParamsHandle);
-                    AssignableResultHandle whenEvalContext = null;
-                    if (params.getFirst(ParamKind.ATTR) != null) {
-                        whenEvalContext = whenComplete.createVariable(EvalContext.class);
-                        whenComplete.assign(whenEvalContext, evalContext);
-                    }
+                    AssignableResultHandle whenEvalContext = whenComplete.createVariable(EvalContext.class);
+                    whenComplete.assign(whenEvalContext, evalContext);
 
                     BranchResult throwableIsNull = whenComplete.ifNull(whenComplete.getMethodParam(1));
                     BytecodeCreator success = throwableIsNull.trueBranch();
@@ -535,7 +530,7 @@ public class ExtensionMethodGenerator {
                                     whenEvaluatedParams, success.load(isVarArgs), paramTypesHandle))
                             .falseBranch();
                     typeMatchFailed.invokeVirtualMethod(Descriptors.COMPLETABLE_FUTURE_COMPLETE, whenRet,
-                            typeMatchFailed.readStaticField(Descriptors.RESULT_NOT_FOUND));
+                            typeMatchFailed.invokeStaticMethod(Descriptors.NOT_FOUND_FROM_EC, whenEvalContext));
                     typeMatchFailed.returnValue(null);
 
                     // try
@@ -589,7 +584,7 @@ public class ExtensionMethodGenerator {
             @Override
             public void close() {
                 constructor.returnValue(null);
-                resolve.returnValue(resolve.readStaticField(Descriptors.RESULTS_NOT_FOUND));
+                resolve.returnValue(resolve.invokeStaticMethod(Descriptors.RESULTS_NOT_FOUND_EC, evalContext));
             }
 
         }
@@ -675,11 +670,11 @@ public class ExtensionMethodGenerator {
         }
     }
 
-    static class Parameters implements Iterable<Param> {
+    public static final class Parameters implements Iterable<Param> {
 
         final List<Param> params;
 
-        Parameters(MethodInfo method, boolean matchAnyOrRegex, boolean hasNamespace) {
+        public Parameters(MethodInfo method, boolean matchAnyOrRegex, boolean hasNamespace) {
             List<Type> parameters = method.parameters();
             Map<Integer, String> attributeParamNames = new HashMap<>();
             for (AnnotationInstance annotation : method.annotations()) {
@@ -726,20 +721,20 @@ public class ExtensionMethodGenerator {
             if (matchAnyOrRegex) {
                 Param nameParam = getFirst(ParamKind.NAME);
                 if (nameParam == null || !nameParam.type.name().equals(DotNames.STRING)) {
-                    throw new IllegalStateException(
+                    throw new TemplateException(
                             "Template extension method declared on " + method.declaringClass().name()
                                     + " must accept at least one string parameter to match the name: " + method);
                 }
             }
             if (!hasNamespace && getFirst(ParamKind.BASE) == null) {
-                throw new IllegalStateException(
+                throw new TemplateException(
                         "Template extension method declared on " + method.declaringClass().name()
                                 + " must accept at least one parameter to match the base object: " + method);
             }
 
             for (Param param : params) {
                 if (param.kind == ParamKind.ATTR && !param.type.name().equals(DotNames.OBJECT)) {
-                    throw new IllegalStateException(
+                    throw new TemplateException(
                             "Template extension method parameter annotated with @TemplateAttribute declared on "
                                     + method.declaringClass().name()
                                     + " must be of type java.lang.Object: " + method);
@@ -747,7 +742,7 @@ public class ExtensionMethodGenerator {
             }
         }
 
-        String[] parameterTypesAsStringArray() {
+        public String[] parameterTypesAsStringArray() {
             String[] types = new String[params.size()];
             for (int i = 0; i < params.size(); i++) {
                 types[i] = params.get(i).type.name().toString();
@@ -755,7 +750,7 @@ public class ExtensionMethodGenerator {
             return types;
         }
 
-        Param getFirst(ParamKind kind) {
+        public Param getFirst(ParamKind kind) {
             for (Param param : params) {
                 if (param.kind == kind) {
                     return param;
@@ -764,15 +759,15 @@ public class ExtensionMethodGenerator {
             return null;
         }
 
-        Param get(int index) {
+        public Param get(int index) {
             return params.get(index);
         }
 
-        int size() {
+        public int size() {
             return params.size();
         }
 
-        boolean needsEvaluation() {
+        public boolean needsEvaluation() {
             for (Param param : params) {
                 if (param.kind == ParamKind.EVAL) {
                     return true;
@@ -781,7 +776,7 @@ public class ExtensionMethodGenerator {
             return false;
         }
 
-        List<Param> evaluated() {
+        public List<Param> evaluated() {
             if (params.isEmpty()) {
                 return Collections.emptyList();
             }
@@ -801,12 +796,12 @@ public class ExtensionMethodGenerator {
 
     }
 
-    static class Param {
+    public static final class Param {
 
-        final String name;
-        final Type type;
-        final int position;
-        final ParamKind kind;
+        public final String name;
+        public final Type type;
+        public final int position;
+        public final ParamKind kind;
 
         public Param(String name, Type type, int position, ParamKind paramKind) {
             this.name = name;

@@ -2,10 +2,9 @@ package io.quarkus.qute;
 
 import io.quarkus.qute.SectionHelper.SectionResolutionContext;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
@@ -71,7 +70,7 @@ class SectionNode implements TemplateNode {
         SectionHelperFactory<?> factory;
         private EngineImpl engine;
 
-        public Builder(String helperName, Origin origin, Function<String, Expression> expressionFun,
+        Builder(String helperName, Origin origin, Function<String, Expression> expressionFun,
                 Function<String, TemplateException> errorFun) {
             this.helperName = helperName;
             this.origin = origin;
@@ -147,45 +146,25 @@ class SectionNode implements TemplateNode {
             }
             int size = block.nodes.size();
             if (size == 1) {
+                // Single node in the block
                 return block.nodes.get(0).resolve(context);
             }
-            CompletableFuture<ResultNode> result = new CompletableFuture<ResultNode>();
-            @SuppressWarnings("unchecked")
-            CompletableFuture<ResultNode>[] allResults = new CompletableFuture[size];
-            List<CompletableFuture<ResultNode>> asyncResults = new LinkedList<>();
-            int idx = 0;
+            List<CompletionStage<ResultNode>> results = new ArrayList<>(size);
             for (TemplateNode node : block.nodes) {
-                CompletableFuture<ResultNode> nodeResult = node.resolve(context).toCompletableFuture();
-                allResults[idx++] = nodeResult;
-                if (node.isConstant()) {
-                    continue;
-                }
-                asyncResults.add(nodeResult);
+                results.add(node.resolve(context));
             }
-            if (asyncResults.isEmpty()) {
-                result.complete(new MultiResultNode(allResults));
-            } else {
-                CompletionStage<?> cs;
-                if (asyncResults.size() == 1) {
-                    cs = asyncResults.get(0);
-                } else {
-                    cs = CompletableFuture
-                            .allOf(asyncResults.toArray(new CompletableFuture[0]));
-                }
-                cs.whenComplete((v, t) -> {
-                    if (t != null) {
-                        result.completeExceptionally(t);
-                    } else {
-                        result.complete(new MultiResultNode(allResults));
-                    }
-                });
-            }
-            return result;
+            return Results.process(results);
         }
 
         @Override
         public ResolutionContext resolutionContext() {
             return resolutionContext;
+        }
+
+        @Override
+        public ResolutionContext newResolutionContext(Object data, Map<String, SectionBlock> extendingBlocks) {
+            return new ResolutionContextImpl(data, resolutionContext.getEvaluator(), extendingBlocks,
+                    resolutionContext::getAttribute);
         }
 
     }

@@ -21,7 +21,7 @@ public class KafkaBindingConverter implements ServiceBindingConverter {
         Map<String, String> properties = new HashMap<>();
         ServiceBinding binding = matchingByType.get();
 
-        String bootstrapServers = binding.getProperties().get("bootstrapservers");
+        String bootstrapServers = binding.getProperties().get("bootstrapServers");
         if (bootstrapServers == null) {
             bootstrapServers = binding.getProperties().get("bootstrap-servers");
         }
@@ -29,22 +29,31 @@ public class KafkaBindingConverter implements ServiceBindingConverter {
             properties.put("kafka.bootstrap.servers", bootstrapServers);
         }
 
-        String securityProtocol = binding.getProperties().get("securityprotocol");
+        String securityProtocol = binding.getProperties().get("securityProtocol");
         if (securityProtocol != null) {
             properties.put("kafka.security.protocol", securityProtocol);
         }
 
-        String saslMechanism = binding.getProperties().get("saslmechanism");
+        String saslMechanism = binding.getProperties().get("saslMechanism");
         if (saslMechanism != null) {
             properties.put("kafka.sasl.mechanism", saslMechanism);
         }
         String user = binding.getProperties().get("user");
         String password = binding.getProperties().get("password");
-        if ("PLAIN".equals(saslMechanism) && (user != null) && (password != null)) {
-            properties.put("kafka.sasl.jaas.config",
-                    String.format(
-                            "org.apache.kafka.common.security.plain.PlainLoginModule required username='%s' password='%s';",
-                            user, password));
+        if ((user != null) && (password != null)) {
+            if ("PLAIN".equals(saslMechanism)) {
+                properties.put("kafka.sasl.jaas.config",
+                        String.format(
+                                "org.apache.kafka.common.security.plain.PlainLoginModule required username='%s' password='%s';",
+                                user, password));
+            }
+
+            if ("SCRAM-SHA-512".equals(saslMechanism) || "SCRAM-SHA-256".equals(saslMechanism)) {
+                properties.put("kafka.sasl.jaas.config",
+                        String.format(
+                                "org.apache.kafka.common.security.scram.ScramLoginModule required username='%s' password='%s';",
+                                user, password));
+            }
         }
 
         return Optional.of(new ServiceBindingConfigSource("kafka-k8s-service-binding-source", properties));

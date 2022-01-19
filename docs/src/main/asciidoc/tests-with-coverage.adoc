@@ -1,9 +1,10 @@
+
 ////
 This guide is maintained in the main Quarkus repository
 and pull requests should be submitted there:
 https://github.com/quarkusio/quarkus/tree/main/docs/src/main/asciidoc
 ////
-= Quarkus - Measuring the coverage of your tests
+= Measuring the coverage of your tests
 
 include::./attributes.adoc[]
 
@@ -33,9 +34,9 @@ To complete this guide, you need:
 
 * less than 15 minutes
 * an IDE
-* JDK 1.8+ installed with JAVA_HOME configured appropriately
+* JDK 11+ installed with JAVA_HOME configured appropriately
 * Apache Maven {maven-version}
-* Having completed the link:getting-started-testing[Testing your application guide]
+* Having completed the xref:getting-started-testing.adoc[Testing your application guide]
 
 == Architecture
 
@@ -51,11 +52,11 @@ The solution is located in the `tests-with-coverage-quickstart` {quickstarts-tre
 
 == Starting from a simple project and two tests
 
-Let's start from an empty application created with the Quarkus Maven plugin: 
+Let's start from an empty application created with the Quarkus Maven plugin:
 
 [source,bash,subs=attributes+]
 ----
-mvn io.quarkus:quarkus-maven-plugin:create \
+mvn io.quarkus.platform:quarkus-maven-plugin:create \
     -DprojectGroupId=org.acme \
     -DprojectArtifactId=tests-with-coverage-quickstart
 cd tests-with-coverage-quickstart
@@ -142,7 +143,7 @@ public class GreetingResourceTest {
         given()
           .when().get("/hello")
           .then()
-             .statusCode(200)  
+             .statusCode(200)
              .body(is("hello"));
     }
 
@@ -172,8 +173,18 @@ Now we need to add Jacoco to our project. To do this we need to add the followin
 </dependency>
 ----
 
+If you are using Gradle, add this to your `build.gradle`:
+
+[source,gradle]
+----
+testImplementation 'io.quarkus:quarkus-jacoco'
+----
+
 This Quarkus extension takes care of everything that would usually be done via the Jacoco maven plugin, so no additional
 config is required.
+
+WARNING: Using both the extension and the plugin requires special configuration, if you add both you will get lots of errors about classes
+already being instrumented. The configuration needed is detailed below.
 
 == Running the tests with coverage
 
@@ -189,86 +200,251 @@ include::{generated-dir}/config/quarkus-jacoco-jacoco-config.adoc[opts=optional,
 The Quarkus automatic Jacoco config will only work for tests that are annotated with `@QuarkusTest`. If you want to check
 the coverage of other tests as well then you will need to fall back to the Jacoco maven plugin.
 
-Because Quarkus uses class file transformation it is not possible to use online transformation with the Jacoco agent.
-Instead we need to use offline transformation.
-
-Instead of including the `quarkus-jacoco` extension in your pom you will need the following config:
+In addition to including the `quarkus-jacoco` extension in your pom you will need the following config:
 
 [source,xml,subs=attributes+]
 ----
 <project>
-    ...
-    <dependencies>
-    ...
-        <dependency>
-          <groupId>org.jacoco</groupId>
-          <artifactId>org.jacoco.agent</artifactId>
-          <classifier>runtime</classifier>
-          <scope>test</scope>
-          <version>${jacoco.version}</version>
-        </dependency>
-    ...
-    </dependencies>
     <build>
         <plugins>
             ...
-            <plugin>
-                <groupId>org.jacoco</groupId>
-                <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco.version}</version>
-                <executions>
-                    <execution>
-                        <id>instrument-ut</id>
-                        <goals>
-                            <goal>instrument</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>restore-ut</id>
-                        <goals>
-                            <goal>restore-instrumented-classes</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>report-ut</id>
-                        <goals>
-                            <goal>report</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.reporting.outputDirectory}/jacoco-reports</outputDirectory>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-        </plugins>
-    </build>
-</project>
-----
-
-It also requires a small change in the Surefire configuration. Note below that we specified `jacoco-agent.destfile` as a system property in the default case (unit tests) and for the integration tests.
-
-[source,xml,subs=attributes+]
-----
-<project>
-    ...
-    <build>
-        <plugins>
-            ...
-            <plugin>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>${surefire-plugin.version}</version>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>default-prepare-agent</id>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
                 <configuration>
-                    <systemPropertyVariables>
-                        <jacoco-agent.destfile>${project.build.directory}/jacoco.exec</jacoco-agent.destfile>
-                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
-                        <maven.home>${maven.home}</maven.home>
-                    </systemPropertyVariables>
+                  <exclClassLoaders>*QuarkusClassLoader</exclClassLoaders>  <1>
+                  <destFile>${project.build.directory}/jacoco-quarkus.exec</destFile>
+                  <append>true</append>
                 </configuration>
-            </plugin>
+              </execution>
+              <execution>
+                <id>default-prepare-agent-integration</id> <2>
+                <goals>
+                  <goal>prepare-agent-integration</goal>
+                </goals>
+                <configuration>
+                  <exclClassLoaders>*QuarkusClassLoader</exclClassLoaders>
+                  <destFile>${project.build.directory}/jacoco-quarkus.exec</destFile>
+                  <append>true</append>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
         </plugins>
     </build>
 </project>
 ----
+<1> This config tells it to ignore `@QuarkusTest` related classes, as they are loaded by `QuarkusClassLoader`
+<2> This is only needed if you are using Failsafe to run integration tests
+
+WARNING: This config will only work if at least one `@QuarkusTest` is being run. If you are not using `@QuarkusTest` then
+you can simply use the Jacoco plugin in the standard manner with no additional config.
+
+If you are using Gradle, add this to your `build.gradle`:
+
+[source,gradle,subs=attributes+]
+----
+plugins {
+    id 'jacoco' <1>
+}
+
+test {
+    finalizedBy jacocoTestReport
+    jacoco {
+        excludeClassLoaders = ["*QuarkusClassLoader"] <2>
+        destinationFile = layout.buildDirectory.file("jacoco-quarkus.exec").get().asFile <2>
+    }
+    jacocoTestReport.enabled = false <3>
+}
+----
+<1> Add the `jacoco` gradle plugin
+<2> This config tells it to ignore `@QuarkusTest` related classes, as they are loaded by `QuarkusClassLoader`
+<3> Set this config to `false` if you are also using the `quarkus-jacoco` extension and have at least one `@QuarkusTest`.  The default `jacocoTestReport` task can be skipped since `quarkus-jacoco` will generate the combined report of regular unit tests and `@QuarkusTest` classes since the execution data is recorded in the same file.
+
+=== Coverage for Integration Tests
+
+To get code coverage data from integration tests, the following need to be requirements need to be met:
+
+* The built artifact is a jar (and not a container or native binary).
+* Jacoco needs to be configured in your build tool.
+* The application must have been built with `quarkus.package.write-transformed-bytecode-to-build-output` set to `true`
+
+WARNING: Setting `quarkus.package.write-transformed-bytecode-to-build-output=true` should be done with a caution and only if subsequent builds are done in a clean environment - i.e. the build tool's output directory has been completely cleaned.
+
+In the `pom.xml`, you can add the following plugin configuration for Jacoco. This will append integration test data into the same destination file as unit tests,
+re-build the jacoco report after the integration tests are complete, and thus produce a comprehensive code-coverage report.
+[source, xml]
+----
+<build>
+    ...
+    <plugins>
+        ...
+        <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <executions>
+                <execution>
+                    <id>default-prepare-agent-integration</id>
+                    <goals>
+                        <goal>prepare-agent-integration</goal>
+                    </goals>
+                    <configuration>
+                        <destFile>${project.build.directory}/jacoco-quarkus.exec</destFile>
+                        <append>true</append>
+                    </configuration>
+                </execution>
+                <execution>
+                    <id>report-it</id>
+                    <phase>post-integration-test</phase>
+                    <goals>
+                        <goal>report</goal>
+                    </goals>
+                    <configuration>
+                        <dataFile>${project.build.directory}/jacoco-quarkus.exec</dataFile>
+                        <outputDirectory>${project.build.directory}/jacoco-report</outputDirectory>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        ...
+    </plugins>
+    ...
+</build>
+----
+
+In order to run the integration tests as a jar with the Jacoco agent, add the following to your `pom.xml`.
+[source, xml]
+----
+<build>
+    ...
+    <plugins>
+        ...
+        <plugin>
+            <artifactId>maven-failsafe-plugin</artifactId>
+            <version>${surefire-plugin.version}</version>
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>integration-test</goal>
+                        <goal>verify</goal>
+                    </goals>
+                    <configuration>
+                        <systemPropertyVariables>
+                            <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
+                            <maven.home>${maven.home}</maven.home>
+                            <quarkus.test.arg-line>${argLine}</quarkus.test.arg-line>
+                        </systemPropertyVariables>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        ...
+    </plugins>
+    ...
+</build>
+
+----
+
+WARNING: Sharing the same value for `quarkus.test.arg-line` might break integration test runs that test different types of Quarkus artifacts. In such cases, the use of maven profiles is advised.
+
+== Setting coverage thresholds for the Maven build
+
+You can set thresholds for code coverage using the Jacoco Maven plugin. Note the element `<dataFile>${project.build.directory}/jacoco-quarkus.exec</dataFile>`. You must set it matching your choice for `quarkus.jacoco.data-file`.
+
+[source, xml]
+----
+<build>
+    ...
+    <plugins>
+        ...
+        <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>${jacoco.version}</version>
+            <executions>
+                <execution>
+                    <id>jacoco-check</id>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                    <phase>test</phase>
+                    <configuration>
+                        <dataFile>${project.build.directory}/jacoco-quarkus.exec</dataFile>
+                        <rules>
+                            <rule>
+                                <element>BUNDLE</element>
+                                <limits>
+                                    <limit>
+                                        <counter>LINE</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>0.8</minimum>
+                                    </limit>
+                                    <limit>
+                                        <counter>BRANCH</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>0.72</minimum>
+                                    </limit>
+                                </limits>
+                            </rule>
+                        </rules>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        ...
+    </plugins>
+    ...
+</build>
+----
+
+If you are using Gradle, add this to your `build.gradle`:
+
+[source, gradle]
+----
+jacocoTestCoverageVerification {
+    executionData.setFrom("$project.buildDir/jacoco-quarkus.exec")
+    violationRules {
+        rule {
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.80
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.72
+            }
+        }
+    }
+}
+check.dependsOn jacocoTestCoverageVerification
+----
+
+Excluding classes from the verification task can be configured as following: 
+
+[source,gradle]
+----
+jacocoTestCoverageVerification {
+    afterEvaluate { <1>
+        classDirectories.setFrom(files(classDirectories.files.collect { <2>
+            fileTree(dir: it, exclude: [
+                    "org/example/package/**/*" <3>
+            ])
+        }))
+    }
+}
+----
+<1> `classDirectories` needs to be read after evaluation phase in Gradle
+<2> Currently, there is a bug in Gradle JaCoCo which requires the `excludes` to be specified in this manner - https://github.com/gradle/gradle/issues/14760.  Once this issue is fixed, excludes
+<3> Exclude all classes in `org/example/package` package
+
 
 == Conclusion
 

@@ -3,9 +3,7 @@ package io.quarkus.maven;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
+import java.util.Properties;
 import java.util.function.Consumer;
 
 import org.apache.maven.plugin.MojoExecutionException;
@@ -17,9 +15,15 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
 
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
-import io.quarkus.bootstrap.model.AppModel;
+import io.quarkus.bootstrap.model.ApplicationModel;
+import io.quarkus.paths.PathCollection;
+import io.quarkus.paths.PathList;
+import io.quarkus.runtime.LaunchMode;
 
-@Mojo(name = "generate-code", defaultPhase = LifecyclePhase.GENERATE_SOURCES, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, threadSafe = true)
+// in the PROCESS_RESOURCES phase because we want the config to be available
+// by the time code gen providers are triggered (the resources plugin copies the config files
+// to the destination location at the beginning of this phase)
+@Mojo(name = "generate-code", defaultPhase = LifecyclePhase.PROCESS_RESOURCES, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME, threadSafe = true)
 public class GenerateCodeMojo extends QuarkusBootstrapMojo {
 
     /**
@@ -27,6 +31,9 @@ public class GenerateCodeMojo extends QuarkusBootstrapMojo {
      */
     @Parameter(defaultValue = "false", property = "quarkus.generate-code.skip", alias = "quarkus.prepare.skip")
     private boolean skipSourceGeneration = false;
+
+    @Parameter(defaultValue = "NORMAL", property = "launchMode")
+    String mode;
 
     @Override
     protected boolean beforeExecute() throws MojoExecutionException, MojoFailureException {
@@ -52,25 +59,31 @@ public class GenerateCodeMojo extends QuarkusBootstrapMojo {
             Consumer<Path> sourceRegistrar,
             boolean test) throws MojoFailureException, MojoExecutionException {
 
+        final LaunchMode launchMode = test ? LaunchMode.TEST : LaunchMode.valueOf(mode);
+        if (getLog().isDebugEnabled()) {
+            getLog().debug("Bootstrapping Quarkus application in mode " + launchMode);
+        }
+
         ClassLoader originalTccl = Thread.currentThread().getContextClassLoader();
         try {
 
-            final CuratedApplication curatedApplication = bootstrapApplication();
+            final CuratedApplication curatedApplication = bootstrapApplication(launchMode);
 
             QuarkusClassLoader deploymentClassLoader = curatedApplication.createDeploymentClassLoader();
             Thread.currentThread().setContextClassLoader(deploymentClassLoader);
 
             final Class<?> codeGenerator = deploymentClassLoader.loadClass("io.quarkus.deployment.CodeGenerator");
-            final Method initAndRun = codeGenerator.getMethod("initAndRun", ClassLoader.class, Set.class, Path.class,
+            final Method initAndRun = codeGenerator.getMethod("initAndRun", ClassLoader.class, PathCollection.class,
                     Path.class,
-                    Consumer.class, AppModel.class, Map.class);
+                    Path.class,
+                    Consumer.class, ApplicationModel.class, Properties.class, String.class);
             initAndRun.invoke(null, deploymentClassLoader,
-                    Collections.singleton(sourcesDir),
+                    PathList.of(sourcesDir),
                     generatedSourcesDir(test),
                     buildDir().toPath(),
                     sourceRegistrar,
-                    curatedApplication.getAppModel(),
-                    mavenProject().getProperties());
+                    curatedApplication.getApplicationModel(),
+                    mavenProject().getProperties(), launchMode.name());
         } catch (Exception any) {
             throw new MojoExecutionException("Quarkus code generation phase has failed", any);
         } finally {

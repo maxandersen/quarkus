@@ -17,6 +17,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import javax.enterprise.inject.spi.DeploymentException;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
@@ -41,10 +42,9 @@ final class Methods {
     public static final String INIT = "<init>";
     // static initializer
     public static final String CLINIT = "<clinit>";
-    // copied from java.lang.reflect.Modifier.SYNTHETIC
-    static final int SYNTHETIC = 0x00001000;
     // copied from java.lang.reflect.Modifier.BRIDGE
     static final int BRIDGE = 0x00000040;
+
     public static final String TO_STRING = "toString";
 
     private static final List<String> IGNORED_METHODS = initIgnoredMethods();
@@ -59,18 +59,14 @@ final class Methods {
     private Methods() {
     }
 
-    static boolean isSynthetic(MethodInfo method) {
-        return (method.flags() & SYNTHETIC) != 0;
-    }
-
     static boolean isBridge(MethodInfo method) {
         return (method.flags() & BRIDGE) != 0;
     }
 
     static void addDelegatingMethods(IndexView index, ClassInfo classInfo, Map<MethodKey, MethodInfo> methods,
             Set<NameAndDescriptor> methodsFromWhichToRemoveFinal, boolean transformUnproxyableClasses) {
-        // TODO support interfaces default methods
         if (classInfo != null) {
+            // First methods declared on the class
             for (MethodInfo method : classInfo.methods()) {
                 if (skipForClientProxy(method, transformUnproxyableClasses, methodsFromWhichToRemoveFinal)) {
                     continue;
@@ -88,18 +84,20 @@ final class Methods {
                             key.method.exceptions().toArray(Type.EMPTY_ARRAY));
                 });
             }
-            // Interfaces
-            for (Type interfaceType : classInfo.interfaceTypes()) {
-                ClassInfo interfaceClassInfo = getClassByName(index, interfaceType.name());
-                if (interfaceClassInfo != null) {
-                    addDelegatingMethods(index, interfaceClassInfo, methods, methodsFromWhichToRemoveFinal,
-                            transformUnproxyableClasses);
-                }
-            }
+            // Methods declared on superclasses
             if (classInfo.superClassType() != null) {
                 ClassInfo superClassInfo = getClassByName(index, classInfo.superName());
                 if (superClassInfo != null) {
                     addDelegatingMethods(index, superClassInfo, methods, methodsFromWhichToRemoveFinal,
+                            transformUnproxyableClasses);
+                }
+            }
+            // Methods declared on implemented interfaces
+            // TODO support interfaces default methods
+            for (DotName interfaceName : classInfo.interfaceNames()) {
+                ClassInfo interfaceClassInfo = getClassByName(index, interfaceName);
+                if (interfaceClassInfo != null) {
+                    addDelegatingMethods(index, interfaceClassInfo, methods, methodsFromWhichToRemoveFinal,
                             transformUnproxyableClasses);
                 }
             }
@@ -157,53 +155,40 @@ final class Methods {
             Map<MethodKey, Set<AnnotationInstance>> candidates,
             List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
             boolean transformUnproxyableClasses) {
-        return addInterceptedMethodCandidates(beanDeployment, classInfo, candidates, classLevelBindings,
+        return addInterceptedMethodCandidates(beanDeployment, classInfo, classInfo, candidates, Set.copyOf(classLevelBindings),
                 bytecodeTransformerConsumer, transformUnproxyableClasses,
-                new SubclassSkipPredicate(beanDeployment.getAssignabilityCheck()::isAssignableFrom), false);
+                new SubclassSkipPredicate(beanDeployment.getAssignabilityCheck()::isAssignableFrom,
+                        beanDeployment.getBeanArchiveIndex()),
+                false);
     }
 
     static Set<MethodInfo> addInterceptedMethodCandidates(BeanDeployment beanDeployment, ClassInfo classInfo,
+            ClassInfo originalClassInfo,
             Map<MethodKey, Set<AnnotationInstance>> candidates,
-            List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
+            Set<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
             boolean transformUnproxyableClasses, SubclassSkipPredicate skipPredicate, boolean ignoreMethodLevelBindings) {
 
         Set<NameAndDescriptor> methodsFromWhichToRemoveFinal = new HashSet<>();
         Set<MethodInfo> finalMethodsFoundAndNotChanged = new HashSet<>();
-        skipPredicate.startProcessing(classInfo);
+        skipPredicate.startProcessing(classInfo, originalClassInfo);
 
         for (MethodInfo method : classInfo.methods()) {
-            if (skipPredicate.test(method)) {
+            Set<AnnotationInstance> merged = mergeBindings(beanDeployment, originalClassInfo, classLevelBindings,
+                    ignoreMethodLevelBindings, method);
+            if (merged.isEmpty() || skipPredicate.test(method)) {
                 continue;
             }
-            Set<AnnotationInstance> merged = new HashSet<>();
-            if (ignoreMethodLevelBindings) {
-                merged.addAll(classLevelBindings);
-            } else {
-                Collection<AnnotationInstance> methodAnnnotations = beanDeployment.getAnnotations(method);
-                List<AnnotationInstance> methodLevelBindings = methodAnnnotations.stream()
-                        .flatMap(a -> beanDeployment.extractInterceptorBindings(a).stream())
-                        .collect(Collectors.toList());
-                merged.addAll(methodLevelBindings);
-                for (AnnotationInstance classLevelBinding : classLevelBindings) {
-                    if (methodLevelBindings.isEmpty()
-                            || methodLevelBindings.stream().noneMatch(a -> classLevelBinding.name().equals(a.name()))) {
-                        merged.add(classLevelBinding);
-                    }
+            boolean addToCandidates = true;
+            if (Modifier.isFinal(method.flags())) {
+                if (transformUnproxyableClasses) {
+                    methodsFromWhichToRemoveFinal.add(NameAndDescriptor.fromMethodInfo(method));
+                } else {
+                    addToCandidates = false;
+                    finalMethodsFoundAndNotChanged.add(method);
                 }
             }
-            if (!merged.isEmpty()) {
-                boolean addToCandidates = true;
-                if (Modifier.isFinal(method.flags())) {
-                    if (transformUnproxyableClasses) {
-                        methodsFromWhichToRemoveFinal.add(NameAndDescriptor.fromMethodInfo(method));
-                    } else {
-                        addToCandidates = false;
-                        finalMethodsFoundAndNotChanged.add(method);
-                    }
-                }
-                if (addToCandidates) {
-                    candidates.computeIfAbsent(new Methods.MethodKey(method), key -> merged);
-                }
+            if (addToCandidates) {
+                candidates.computeIfAbsent(new Methods.MethodKey(method), key -> merged);
             }
         }
         skipPredicate.methodsProcessed();
@@ -218,7 +203,7 @@ final class Methods {
             ClassInfo superClassInfo = getClassByName(beanDeployment.getBeanArchiveIndex(), classInfo.superName());
             if (superClassInfo != null) {
                 finalMethodsFoundAndNotChanged
-                        .addAll(addInterceptedMethodCandidates(beanDeployment, superClassInfo, candidates,
+                        .addAll(addInterceptedMethodCandidates(beanDeployment, superClassInfo, classInfo, candidates,
                                 classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses, skipPredicate,
                                 ignoreMethodLevelBindings));
             }
@@ -228,12 +213,68 @@ final class Methods {
             ClassInfo interfaceInfo = getClassByName(beanDeployment.getBeanArchiveIndex(), i);
             if (interfaceInfo != null) {
                 //interfaces can't have final methods
-                addInterceptedMethodCandidates(beanDeployment, interfaceInfo, candidates,
+                addInterceptedMethodCandidates(beanDeployment, interfaceInfo, originalClassInfo, candidates,
                         classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses,
                         skipPredicate, true);
             }
         }
         return finalMethodsFoundAndNotChanged;
+    }
+
+    private static Set<AnnotationInstance> mergeBindings(BeanDeployment beanDeployment, ClassInfo classInfo,
+            Set<AnnotationInstance> classLevelBindings, boolean ignoreMethodLevelBindings, MethodInfo method) {
+
+        if (beanDeployment.getAnnotation(method, DotNames.NO_CLASS_INTERCEPTORS) != null) {
+            classLevelBindings = Set.of();
+        }
+
+        if (ignoreMethodLevelBindings) {
+            return classLevelBindings;
+        }
+
+        Collection<AnnotationInstance> methodAnnotations = beanDeployment.getAnnotations(method);
+        if (methodAnnotations.isEmpty()) {
+            // No annotations declared on the method
+            return classLevelBindings;
+        }
+        List<AnnotationInstance> methodLevelBindings = new ArrayList<>();
+        for (AnnotationInstance annotation : methodAnnotations) {
+            methodLevelBindings.addAll(beanDeployment.extractInterceptorBindings(annotation));
+        }
+
+        Set<AnnotationInstance> merged;
+        if (methodLevelBindings.isEmpty()) {
+            merged = classLevelBindings;
+        } else {
+            merged = new HashSet<>(methodLevelBindings);
+            for (AnnotationInstance binding : classLevelBindings) {
+                if (methodLevelBindings.stream().noneMatch(a -> binding.name().equals(a.name()))) {
+                    merged.add(binding);
+                }
+            }
+
+            if (Modifier.isPrivate(method.flags())
+                    && !Annotations.contains(methodAnnotations, DotNames.PRODUCES)
+                    && !Annotations.contains(methodAnnotations, DotNames.OBSERVES)
+                    && !Annotations.contains(methodAnnotations, DotNames.OBSERVES_ASYNC)) {
+                String message;
+                if (methodLevelBindings.size() == 1) {
+                    message = String.format("%s will have no effect on method %s.%s() because the method is private",
+                            methodLevelBindings.iterator().next(), classInfo.name(), method.name());
+                } else {
+                    message = String.format(
+                            "Annotations %s will have no effect on method %s.%s() because the method is private",
+                            methodLevelBindings.stream().map(AnnotationInstance::toString).collect(Collectors.joining(",")),
+                            classInfo.name(), method.name());
+                }
+                if (beanDeployment.failOnInterceptedPrivateMethod) {
+                    throw new DeploymentException(message);
+                } else {
+                    LOGGER.warn(message);
+                }
+            }
+        }
+        return merged;
     }
 
     static class NameAndDescriptor {
@@ -277,11 +318,13 @@ final class Methods {
 
         final String name;
         final List<DotName> params;
+        final DotName returnType;
         final MethodInfo method;
 
         public MethodKey(MethodInfo method) {
-            this.method = method;
+            this.method = Objects.requireNonNull(method, "Method must not be null");
             this.name = method.name();
+            this.returnType = method.returnType().name();
             this.params = new ArrayList<>();
             for (Type i : method.parameters()) {
                 params.add(i.name());
@@ -292,8 +335,9 @@ final class Methods {
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + ((name == null) ? 0 : name.hashCode());
-            result = prime * result + ((params == null) ? 0 : params.hashCode());
+            result = prime * result + name.hashCode();
+            result = prime * result + params.hashCode();
+            result = prime * result + returnType.hashCode();
             return result;
         }
 
@@ -313,6 +357,9 @@ final class Methods {
                 return false;
             }
             if (!params.equals(other.params)) {
+                return false;
+            }
+            if (!returnType.equals(other.returnType)) {
                 return false;
             }
             return true;
@@ -378,13 +425,13 @@ final class Methods {
         }
     }
 
-    static void addDelegateTypeMethods(IndexView index, ClassInfo delegateTypeClass, List<MethodInfo> methods) {
+    static void addDelegateTypeMethods(IndexView index, ClassInfo delegateTypeClass, Set<MethodKey> methods) {
         if (delegateTypeClass != null) {
             for (MethodInfo method : delegateTypeClass.methods()) {
                 if (skipForDelegateSubclass(method)) {
                     continue;
                 }
-                methods.add(method);
+                methods.add(new MethodKey(method));
             }
             // Interfaces
             for (Type interfaceType : delegateTypeClass.interfaceTypes()) {
@@ -440,22 +487,27 @@ final class Methods {
     /**
      * This stateful predicate can be used to skip methods that should not be added to the generated subclass.
      * <p>
-     * Don't forget to call {@link SubclassSkipPredicate#startProcessing(ClassInfo)} before the methods are processed and
+     * Don't forget to call {@link SubclassSkipPredicate#startProcessing(ClassInfo, ClassInfo)} before the methods are processed
+     * and
      * {@link SubclassSkipPredicate#methodsProcessed()} afterwards.
      */
     static class SubclassSkipPredicate implements Predicate<MethodInfo> {
 
         private final BiFunction<Type, Type, Boolean> assignableFromFun;
+        private final IndexView beanArchiveIndex;
         private ClassInfo clazz;
+        private ClassInfo originalClazz;
         private List<MethodInfo> regularMethods;
         private Set<MethodInfo> bridgeMethods = new HashSet<>();
 
-        public SubclassSkipPredicate(BiFunction<Type, Type, Boolean> assignableFromFun) {
+        public SubclassSkipPredicate(BiFunction<Type, Type, Boolean> assignableFromFun, IndexView beanArchiveIndex) {
             this.assignableFromFun = assignableFromFun;
+            this.beanArchiveIndex = beanArchiveIndex;
         }
 
-        void startProcessing(ClassInfo clazz) {
+        void startProcessing(ClassInfo clazz, ClassInfo originalClazz) {
             this.clazz = clazz;
+            this.originalClazz = originalClazz;
             this.regularMethods = new ArrayList<>();
             for (MethodInfo method : clazz.methods()) {
                 if (!Modifier.isAbstract(method.flags()) && !method.isSynthetic() && !isBridge(method)) {
@@ -479,6 +531,10 @@ final class Methods {
                 // The algorithm we use to detect these methods is best effort, i.e. there might be use cases where the detection fails
                 return hasImplementation(method);
             }
+            if (method.hasAnnotation(DotNames.POST_CONSTRUCT) || method.hasAnnotation(DotNames.PRE_DESTROY)) {
+                // @PreDestroy and @PostConstruct methods declared on the bean are NOT candidates for around invoke interception
+                return true;
+            }
             if (isOverridenByBridgeMethod(method)) {
                 return true;
             }
@@ -497,6 +553,43 @@ final class Methods {
                 // Do not skip default methods - public non-abstract instance methods declared in an interface
                 return false;
             }
+
+            List<Type> parameters = method.parameters();
+            if (!parameters.isEmpty() && (beanArchiveIndex != null)) {
+                String originalClassPackage = DotNames.packageName(originalClazz.name());
+                for (Type type : parameters) {
+                    if (type.kind() == Kind.PRIMITIVE) {
+                        continue;
+                    }
+                    DotName typeName = type.name();
+                    if (type.kind() == Kind.ARRAY) {
+                        Type componentType = type.asArrayType().component();
+                        if (componentType.kind() == Kind.PRIMITIVE) {
+                            continue;
+                        }
+                        typeName = componentType.name();
+                    }
+                    ClassInfo param = beanArchiveIndex.getClassByName(typeName);
+                    if (param == null) {
+                        LOGGER.warn(String.format(
+                                "Parameter type info not available: %s - unable to validate the parameter type's visibility for method %s declared on %s",
+                                type.name(), method.name(), method.declaringClass().name()));
+                        continue;
+                    }
+                    if (Modifier.isPublic(param.flags()) || Modifier.isProtected(param.flags())) {
+                        continue;
+                    }
+                    // e.g. parameters whose class is package-private and the package is not the same as the package of the method for which we are checking can not be loaded,
+                    // as we would end up with IllegalAccessError when trying to access the use the load the class
+                    if (!DotNames.packageName(param.name()).equals(originalClassPackage)) {
+                        LOGGER.warn(String.format(
+                                "A method %s() declared on %s has a non-public parameter of type %s which prevents it from being intercepted. Please change the parameter type visibility in order to make it intercepted.",
+                                method.name(), method.declaringClass().name(), type));
+                        return true;
+                    }
+                }
+            }
+
             // Note that we intentionally do not skip final methods here - these are handled later
             return false;
         }

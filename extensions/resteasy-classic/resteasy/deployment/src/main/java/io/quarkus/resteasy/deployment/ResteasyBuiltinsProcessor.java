@@ -5,6 +5,7 @@ import static io.quarkus.security.spi.SecurityTransformerUtils.hasSecurityAnnota
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import org.jboss.jandex.ClassInfo;
@@ -18,7 +19,6 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.resteasy.common.spi.ResteasyJaxrsProviderBuildItem;
 import io.quarkus.resteasy.runtime.AuthenticationCompletionExceptionMapper;
@@ -36,7 +36,7 @@ import io.quarkus.resteasy.runtime.vertx.JsonArrayWriter;
 import io.quarkus.resteasy.runtime.vertx.JsonObjectReader;
 import io.quarkus.resteasy.runtime.vertx.JsonObjectWriter;
 import io.quarkus.resteasy.server.common.deployment.ResteasyDeploymentBuildItem;
-import io.quarkus.security.spi.AdditionalSecuredClassesBuildIem;
+import io.quarkus.security.spi.AdditionalSecuredClassesBuildItem;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.RouteDescriptionBuildItem;
@@ -48,16 +48,11 @@ public class ResteasyBuiltinsProcessor {
     protected static final String META_INF_RESOURCES = "META-INF/resources";
 
     @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.RESTEASY);
-    }
-
-    @BuildStep
     void setUpDenyAllJaxRs(CombinedIndexBuildItem index,
             JaxRsSecurityConfig config,
             ResteasyDeploymentBuildItem resteasyDeployment,
-            BuildProducer<AdditionalSecuredClassesBuildIem> additionalSecuredClasses) {
-        if (config.denyJaxRs) {
+            BuildProducer<AdditionalSecuredClassesBuildItem> additionalSecuredClasses) {
+        if ((config.denyJaxRs) && (resteasyDeployment != null)) {
             final List<ClassInfo> classes = new ArrayList<>();
 
             List<String> resourceClasses = resteasyDeployment.getDeployment().getScannedResourceClasses();
@@ -68,7 +63,18 @@ public class ResteasyBuiltinsProcessor {
                 }
             }
 
-            additionalSecuredClasses.produce(new AdditionalSecuredClassesBuildIem(classes));
+            additionalSecuredClasses.produce(new AdditionalSecuredClassesBuildItem(classes));
+        } else if (config.defaultRolesAllowed.isPresent() && resteasyDeployment != null) {
+            final List<ClassInfo> classes = new ArrayList<>();
+
+            List<String> resourceClasses = resteasyDeployment.getDeployment().getScannedResourceClasses();
+            for (String className : resourceClasses) {
+                ClassInfo classInfo = index.getIndex().getClassByName(DotName.createSimple(className));
+                if (!hasSecurityAnnotation(classInfo)) {
+                    classes.add(classInfo);
+                }
+            }
+            additionalSecuredClasses.produce(new AdditionalSecuredClassesBuildItem(classes, config.defaultRolesAllowed));
         }
     }
 
@@ -91,13 +97,12 @@ public class ResteasyBuiltinsProcessor {
     }
 
     @BuildStep
-    void vertxProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers, Capabilities capabilities) {
-        if (capabilities.isPresent(Capability.JACKSON)) {
-            providers.produce(new ResteasyJaxrsProviderBuildItem(JsonArrayReader.class.getName()));
-            providers.produce(new ResteasyJaxrsProviderBuildItem(JsonArrayWriter.class.getName()));
-            providers.produce(new ResteasyJaxrsProviderBuildItem(JsonObjectReader.class.getName()));
-            providers.produce(new ResteasyJaxrsProviderBuildItem(JsonObjectWriter.class.getName()));
-        }
+    void vertxProviders(BuildProducer<ResteasyJaxrsProviderBuildItem> providers) {
+        // These providers should work even if jackson-databind is not on the classpath
+        providers.produce(new ResteasyJaxrsProviderBuildItem(JsonArrayReader.class.getName()));
+        providers.produce(new ResteasyJaxrsProviderBuildItem(JsonArrayWriter.class.getName()));
+        providers.produce(new ResteasyJaxrsProviderBuildItem(JsonObjectReader.class.getName()));
+        providers.produce(new ResteasyJaxrsProviderBuildItem(JsonObjectWriter.class.getName()));
     }
 
     @Record(STATIC_INIT)
@@ -113,9 +118,11 @@ public class ResteasyBuiltinsProcessor {
     void addStaticResourcesExceptionMapper(ApplicationArchivesBuildItem applicationArchivesBuildItem,
             ExceptionMapperRecorder recorder) {
         recorder.setStaticResourceRoots(applicationArchivesBuildItem.getAllApplicationArchives().stream()
-                .map(i -> i.getChildPath(META_INF_RESOURCES))
-                .filter(p -> p != null)
-                .map(p -> p.toAbsolutePath().toString())
+                .map(i -> i.apply(t -> {
+                    var p = t.getPath(META_INF_RESOURCES);
+                    return p == null ? null : p.toAbsolutePath().toString();
+                }))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
     }
 

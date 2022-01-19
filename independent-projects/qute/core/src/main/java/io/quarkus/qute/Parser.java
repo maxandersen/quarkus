@@ -1,12 +1,12 @@
 package io.quarkus.qute;
 
+import static java.util.function.Predicate.not;
+
 import io.quarkus.qute.Expression.Part;
-import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.SectionHelperFactory.ParametersInfo;
 import io.quarkus.qute.TemplateNode.Origin;
 import java.io.IOException;
 import java.io.Reader;
-import java.io.StringReader;
 import java.nio.CharBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -21,8 +21,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.jboss.logging.Logger;
@@ -74,6 +76,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
     private boolean ignoreContent;
     private AtomicInteger expressionIdGenerator;
     private final List<Function<String, String>> contentFilters;
+    private boolean hasLineSeparator;
 
     public Parser(EngineImpl engine, Reader reader, String templateId, String generatedId, Optional<Variant> variant) {
         this.engine = engine;
@@ -116,7 +119,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 .setEngine(engine)
                 .setHelperFactory(ROOT_SECTION_HELPER_FACTORY));
 
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
         Reader r = reader;
 
         try {
@@ -162,8 +165,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
             }
             TemplateImpl template = new TemplateImpl(engine, root.build(), generatedId, variant);
 
-            Set<TemplateNode> nodesToRemove;
-            if (engine.removeStandaloneLines) {
+            Set<TemplateNode> nodesToRemove = Collections.emptySet();
+            if (hasLineSeparator && engine.removeStandaloneLines) {
                 nodesToRemove = new HashSet<>();
                 List<List<TemplateNode>> lines = readLines(template.root);
                 for (List<TemplateNode> line : lines) {
@@ -176,12 +179,13 @@ class Parser implements Function<String, Expression>, ParserHelper {
                         }
                     }
                 }
-            } else {
-                nodesToRemove = Collections.emptySet();
+                if (nodesToRemove.isEmpty()) {
+                    nodesToRemove = Collections.emptySet();
+                }
             }
             template.root.optimizeNodes(nodesToRemove);
 
-            LOGGER.tracef("Parsing finished in %s ms", System.currentTimeMillis() - start);
+            LOGGER.tracef("Parsing finished in %s ms", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start));
             return template;
 
         } catch (IOException e) {
@@ -254,6 +258,8 @@ class Parser implements Function<String, Expression>, ParserHelper {
             state = State.TEXT;
             processCharacter(character);
         }
+        // Parsing of one-line templates can be optimized 
+        hasLineSeparator = true;
     }
 
     private void comment(char character) {
@@ -476,10 +482,13 @@ class Parser implements Function<String, Expression>, ParserHelper {
             // Parameter declaration
             // {@org.acme.Foo foo}
             Scope currentScope = scopeStack.peek();
-            int spaceIdx = content.indexOf(" ");
-            String key = content.substring(spaceIdx + 1, content.length());
-            String value = content.substring(1, spaceIdx);
-            currentScope.putBinding(key, Expressions.TYPE_INFO_SEPARATOR + value + Expressions.TYPE_INFO_SEPARATOR);
+            String[] parts = content.substring(1).trim().split("[ ]{1,}");
+            if (parts.length != 2) {
+                throw parserError("invalid parameter declaration " + START_DELIMITER + buffer.toString() + END_DELIMITER);
+            }
+            String value = parts[0];
+            String key = parts[1];
+            currentScope.putBinding(key, Expressions.typeInfoFrom(value));
             sectionStack.peek().currentBlock().addNode(new ParameterDeclarationNode(content, origin(0)));
         } else {
             // Expression
@@ -490,19 +499,24 @@ class Parser implements Function<String, Expression>, ParserHelper {
     }
 
     private TemplateException parserError(String message) {
+        return parserError(message, origin(0));
+    }
+
+    static TemplateException parserError(String message, Origin origin) {
         StringBuilder builder = new StringBuilder("Parser error");
-        if (!templateId.equals(generatedId)) {
-            builder.append(" in template [").append(templateId).append("]");
+        if (!origin.getTemplateId().equals(origin.getTemplateGeneratedId())) {
+            builder.append(" in template [").append(origin.getTemplateId()).append("]");
         }
-        builder.append(" on line ").append(line).append(": ")
+        builder.append(" on line ").append(origin.getLine()).append(": ")
                 .append(message);
-        return new TemplateException(origin(0),
+        return new TemplateException(origin,
                 builder.toString());
     }
 
     private void processParams(String tag, String label, Iterator<String> iter, SectionBlock.Builder block) {
         Map<String, String> params = new LinkedHashMap<>();
-        List<Parameter> factoryParams = paramsStack.peek().get(label);
+        ParametersInfo factoryParamsInfo = paramsStack.peek();
+        List<Parameter> factoryParams = factoryParamsInfo.get(label);
         List<String> paramValues = new ArrayList<>();
 
         while (iter.hasNext()) {
@@ -512,61 +526,92 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 paramValues.add(val);
             }
         }
-        if (paramValues.size() > factoryParams.size()) {
-            LOGGER.debugf("Too many params [label=%s, params=%s, factoryParams=%s]", label, paramValues, factoryParams);
+
+        int actualSize = paramValues.size();
+        if (factoryParamsInfo.isCheckNumberOfParams()
+                && actualSize > factoryParams.size()
+                && LOGGER.isDebugEnabled()) {
+            StringBuilder builder = new StringBuilder("Too many section params for ").append(tag);
+            Origin origin = origin(0);
+            if (!origin.getTemplateId().equals(origin.getTemplateGeneratedId())) {
+                builder.append(" in template [").append(origin.getTemplateId()).append("]");
+            }
+            builder.append(" on line ").append(origin.getLine());
+            builder.append(String.format("[label=%s, params=%s, factoryParams=%s]", label, paramValues, factoryParams));
+            LOGGER.debugf(builder.toString());
         }
-        if (paramValues.size() < factoryParams.size()) {
+
+        // Process named params first
+        for (Iterator<String> it = paramValues.iterator(); it.hasNext();) {
+            String param = it.next();
+            int equalsPosition = getFirstDeterminingEqualsCharPosition(param);
+            if (equalsPosition != -1) {
+                // Named param
+                params.put(param.substring(0, equalsPosition), param.substring(equalsPosition + 1,
+                        param.length()));
+                it.remove();
+            }
+        }
+
+        Predicate<String> included = params::containsKey;
+        // Then process positional params
+        if (actualSize < factoryParams.size()) {
+            // The number of actual params is less than factory params
+            // We need to choose the best fit for positional params
             for (String param : paramValues) {
-                int equalsPosition = getFirstDeterminingEqualsCharPosition(param);
-                if (equalsPosition != -1) {
-                    // Named param
-                    params.put(param.substring(0, equalsPosition), param.substring(equalsPosition + 1,
-                            param.length()));
-                } else {
-                    // Positional param - first non-default section param
-                    for (Parameter factoryParam : factoryParams) {
-                        if (factoryParam.defaultValue == null && !params.containsKey(factoryParam.name)) {
-                            params.put(factoryParam.name, param);
-                            break;
-                        }
-                    }
+                Parameter found = findFactoryParameter(param, factoryParams, included, true);
+                if (found != null) {
+                    params.put(found.name, param);
                 }
             }
         } else {
+            // The number of actual params is greater or equals to factory params
             int generatedIdx = 0;
             for (String param : paramValues) {
-                int equalsPosition = getFirstDeterminingEqualsCharPosition(param);
-                if (equalsPosition != -1) {
-                    // Named param
-                    params.put(param.substring(0, equalsPosition), param.substring(equalsPosition + 1,
-                            param.length()));
+                // Positional param
+                Parameter found = findFactoryParameter(param, factoryParams, included, false);
+                if (found != null) {
+                    params.put(found.name, param);
                 } else {
-                    // Positional param - first non-default section param
-                    Parameter found = null;
-                    for (Parameter factoryParam : factoryParams) {
-                        if (!params.containsKey(factoryParam.name)) {
-                            found = factoryParam;
-                            params.put(factoryParam.name, param);
-                            break;
-                        }
-                    }
-                    if (found == null) {
-                        params.put("" + generatedIdx++, param);
-                    }
+                    params.put("" + generatedIdx++, param);
                 }
             }
         }
 
-        factoryParams.stream().filter(p -> p.defaultValue != null).forEach(p -> params.putIfAbsent(p.name, p.defaultValue));
+        // Use the default values if needed
+        factoryParams.stream()
+                .filter(Parameter::hasDefaultValue)
+                .forEach(p -> params.putIfAbsent(p.name, p.defaultValue));
 
-        // TODO validate params
-        List<Parameter> undeclaredParams = factoryParams.stream().filter(p -> !p.optional && !params.containsKey(p.name))
+        // Find undeclared mandatory params
+        List<String> undeclaredParams = factoryParams.stream()
+                .filter(not(Parameter::isOptional))
+                .map(Parameter::getName)
+                .filter(not(params::containsKey))
                 .collect(Collectors.toList());
         if (!undeclaredParams.isEmpty()) {
             throw parserError("mandatory section parameters not declared for " + tag + ": " + undeclaredParams);
         }
 
         params.forEach(block::addParameter);
+    }
+
+    private Parameter findFactoryParameter(String paramValue, List<Parameter> factoryParams, Predicate<String> included,
+            boolean noDefaultValueTakesPrecedence) {
+        if (noDefaultValueTakesPrecedence) {
+            for (Parameter param : factoryParams) {
+                // Params with no default value take precedence
+                if (param.accepts(paramValue) && !param.hasDefaultValue() && !included.test(param.name)) {
+                    return param;
+                }
+            }
+        }
+        for (Parameter param : factoryParams) {
+            if (param.accepts(paramValue) && !included.test(param.name)) {
+                return param;
+            }
+        }
+        return null;
     }
 
     /**
@@ -600,6 +645,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
 
         boolean stringLiteral = false;
         short composite = 0;
+        byte brackets = 0;
         boolean space = false;
         List<String> parts = new ArrayList<>();
         StringBuilder buffer = new StringBuilder();
@@ -608,7 +654,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
             char c = content.charAt(i);
             if (c == ' ') {
                 if (!space) {
-                    if (!stringLiteral && composite == 0) {
+                    if (!stringLiteral && composite == 0 && brackets == 0) {
                         if (buffer.length() > 0) {
                             parts.add(buffer.toString());
                             buffer = new StringBuilder();
@@ -629,6 +675,12 @@ class Parser implements Function<String, Expression>, ParserHelper {
                 } else if (!stringLiteral
                         && isCompositeEnd(c) && composite > 0) {
                     composite--;
+                } else if (!stringLiteral
+                        && Parser.isLeftBracket(c)) {
+                    brackets++;
+                } else if (!stringLiteral
+                        && Parser.isRightBracket(c) && brackets > 0) {
+                    brackets--;
                 }
                 space = false;
                 buffer.append(c);
@@ -695,59 +747,63 @@ class Parser implements Function<String, Expression>, ParserHelper {
         }
         String namespace = null;
         int namespaceIdx = value.indexOf(NAMESPACE_SEPARATOR);
-        int spaceIdx = value.indexOf(' ');
-        int bracketIdx = value.indexOf('(');
+        int spaceIdx;
+        int bracketIdx;
 
         List<String> strParts;
         if (namespaceIdx != -1
                 // No space or colon before the space
-                && (spaceIdx == -1 || namespaceIdx < spaceIdx)
+                && ((spaceIdx = value.indexOf(' ')) == -1 || namespaceIdx < spaceIdx)
                 // No bracket or colon before the bracket
-                && (bracketIdx == -1 || namespaceIdx < bracketIdx)
+                && ((bracketIdx = value.indexOf('(')) == -1 || namespaceIdx < bracketIdx)
                 // No string literal
                 && !LiteralSupport.isStringLiteralSeparator(value.charAt(0))) {
             // Expression that starts with a namespace
             strParts = Expressions.splitParts(value.substring(namespaceIdx + 1, value.length()));
             namespace = value.substring(0, namespaceIdx);
         } else {
-            strParts = Expressions.splitParts(value);
-            if (strParts.size() == 1) {
-                String literal = strParts.get(0);
-                Object literalValue = LiteralSupport.getLiteralValue(literal);
-                if (!Result.NOT_FOUND.equals(literalValue)) {
-                    return ExpressionImpl.literal(idGenerator.get(), literal, literalValue, origin);
-                }
+            Object literalValue = LiteralSupport.getLiteralValue(value);
+            if (!Results.isNotFound(literalValue)) {
+                return ExpressionImpl.literal(idGenerator.get(), value, literalValue, origin);
             }
+            strParts = Expressions.splitParts(value);
         }
+
+        if (strParts.isEmpty()) {
+            throw parserError("empty expression found {" + value + "}", origin);
+        }
+
+        // Safe expressions
+        int lastIdx = strParts.size() - 1;
+        String last = strParts.get(lastIdx);
+        if (last.endsWith("??")) {
+            // foo.val?? -> foo.val.or(null)
+            strParts = ImmutableList.<String> builder().addAll(strParts.subList(0, lastIdx))
+                    .add(last.substring(0, last.length() - 2)).add("or(null)").build();
+        }
+
         List<Part> parts = new ArrayList<>(strParts.size());
         Part first = null;
         Iterator<String> strPartsIterator = strParts.iterator();
         while (strPartsIterator.hasNext()) {
-            Part part = createPart(idGenerator, namespace, first, strPartsIterator, scope, origin);
+            Part part = createPart(idGenerator, namespace, first, strPartsIterator, scope, origin, value);
             if (!isValidIdentifier(part.getName())) {
-                StringBuilder builder = new StringBuilder("Invalid identifier found [");
-                builder.append(value).append("]");
-                if (!origin.getTemplateId().equals(origin.getTemplateGeneratedId())) {
-                    builder.append(" in template [").append(origin.getTemplateId()).append("]");
-                }
-                builder.append(" on line ").append(origin.getLine());
-                throw new TemplateException(builder.toString());
+                throw parserError("invalid identifier found {" + value + "}", origin);
             }
             if (first == null) {
                 first = part;
             }
             parts.add(part);
         }
-        return new ExpressionImpl(idGenerator.get(), namespace, parts, Result.NOT_FOUND, origin);
+        return new ExpressionImpl(idGenerator.get(), namespace, ImmutableList.copyOf(parts), Results.NotFound.EMPTY, origin);
     }
 
     private static Part createPart(Supplier<Integer> idGenerator, String namespace, Part first,
-            Iterator<String> strPartsIterator, Scope scope,
-            Origin origin) {
+            Iterator<String> strPartsIterator, Scope scope, Origin origin, String exprValue) {
         String value = strPartsIterator.next();
         if (Expressions.isVirtualMethod(value)) {
             String name = Expressions.parseVirtualMethodName(value);
-            List<String> strParams = new ArrayList<>(Expressions.parseVirtualMethodParams(value));
+            List<String> strParams = new ArrayList<>(Expressions.parseVirtualMethodParams(value, origin, exprValue));
             List<Expression> params = new ArrayList<>(strParams.size());
             for (String strParam : strParams) {
                 params.add(parseExpression(idGenerator, strParam.trim(), scope, origin));
@@ -758,9 +814,9 @@ class Parser implements Function<String, Expression>, ParserHelper {
         }
         // Try to parse the literal for bracket notation
         if (Expressions.isBracketNotation(value)) {
-            value = Expressions.parseBracketContent(value);
+            value = Expressions.parseBracketContent(value, origin, exprValue);
             Object literal = LiteralSupport.getLiteralValue(value);
-            if (literal != null && !Result.NOT_FOUND.equals(literal)) {
+            if (literal != null && !Results.isNotFound(literal)) {
                 value = literal.toString();
             } else {
                 StringBuilder builder = new StringBuilder(literal == null ? "Null" : "Non-literal");
@@ -822,12 +878,15 @@ class Parser implements Function<String, Expression>, ParserHelper {
         if (currentLine == null) {
             currentLine = new ArrayList<>();
         }
-        if (!ROOT_HELPER_NAME.equals(sectionNode.name)) {
+        boolean isRoot = ROOT_HELPER_NAME.equals(sectionNode.name);
+        if (!isRoot) {
             // Simulate the start tag
             currentLine.add(sectionNode);
         }
         for (SectionBlock block : sectionNode.blocks) {
-            currentLine.add(BLOCK_NODE);
+            if (!isRoot) {
+                currentLine.add(BLOCK_NODE);
+            }
             for (TemplateNode node : block.nodes) {
                 if (node instanceof SectionNode) {
                     currentLine = readLines(lines, currentLine, (SectionNode) node);
@@ -840,7 +899,9 @@ class Parser implements Function<String, Expression>, ParserHelper {
                     currentLine.add(node);
                 }
             }
-            currentLine.add(BLOCK_NODE);
+            if (!isRoot) {
+                currentLine.add(BLOCK_NODE);
+            }
         }
         if (!ROOT_HELPER_NAME.equals(sectionNode.name)) {
             // Simulate the end tag
@@ -886,6 +947,9 @@ class Parser implements Function<String, Expression>, ParserHelper {
 
     private static String toString(Reader in)
             throws IOException {
+        if (in instanceof StringReader) {
+            return ((StringReader) in).str;
+        }
         StringBuilder out = new StringBuilder();
         CharBuffer buffer = CharBuffer.allocate(8192);
         while (in.read(buffer) != -1) {
@@ -894,6 +958,18 @@ class Parser implements Function<String, Expression>, ParserHelper {
             buffer.clear();
         }
         return out.toString();
+    }
+
+    static class StringReader extends java.io.StringReader {
+
+        // make the underlying string accessible
+        final String str;
+
+        public StringReader(String s) {
+            super(s);
+            this.str = s;
+        }
+
     }
 
     static class OriginImpl implements Origin {
@@ -984,7 +1060,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
     public void addParameter(String name, String type) {
         // {@org.acme.Foo foo}
         Scope currentScope = scopeStack.peek();
-        currentScope.putBinding(name, Expressions.TYPE_INFO_SEPARATOR + type + Expressions.TYPE_INFO_SEPARATOR);
+        currentScope.putBinding(name, Expressions.typeInfoFrom(type));
     }
 
     @Override

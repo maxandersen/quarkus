@@ -1,11 +1,10 @@
 package io.quarkus.it.kafka;
 
 import io.quarkus.test.common.QuarkusTestResource;
-import io.quarkus.test.junit.NativeImageTest;
+import io.quarkus.test.junit.QuarkusIntegrationTest;
 
-@NativeImageTest
-@QuarkusTestResource(KafkaTestResource.class)
-@QuarkusTestResource(SchemaRegistryTestResource.class)
+@QuarkusIntegrationTest
+@QuarkusTestResource(KafkaAndSchemaRegistryTestResource.class)
 public class KafkaAvroIT extends KafkaAvroTest {
 
 }

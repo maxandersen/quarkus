@@ -1,6 +1,14 @@
 
 package io.quarkus.kubernetes.deployment;
 
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_CONFIG;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_CONFIG_GROUP;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_CONFIG_VERSION;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_GROUP;
+import static io.quarkus.kubernetes.deployment.Constants.DEPLOYMENT_VERSION;
+import static io.quarkus.kubernetes.deployment.Constants.STATEFULSET;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,6 +27,22 @@ public class OpenshiftConfig implements PlatformConfiguration {
         v4;
     }
 
+    public static enum DeploymentResourceKind {
+        Deployment(DEPLOYMENT, DEPLOYMENT_GROUP, DEPLOYMENT_VERSION),
+        DeploymentConfig(DEPLOYMENT_CONFIG, DEPLOYMENT_CONFIG_GROUP, DEPLOYMENT_CONFIG_VERSION),
+        StatefulSet(STATEFULSET, DEPLOYMENT_GROUP, DEPLOYMENT_VERSION);
+
+        final String kind;
+        final String apiGroup;
+        final String apiVersion;
+
+        DeploymentResourceKind(String kind, String apiGroup, String apiVersion) {
+            this.kind = kind;
+            this.apiGroup = apiGroup;
+            this.apiVersion = apiVersion;
+        }
+    }
+
     /**
      * The OpenShift flavor / version to use.
      * Older versions of OpenShift have minor differrences in the labels and fields they support.
@@ -26,6 +50,13 @@ public class OpenshiftConfig implements PlatformConfiguration {
      */
     @ConfigItem(defaultValue = "v4")
     OpenshiftFlavor flavor;
+
+    /**
+     * The kind of the deployment resource to use.
+     * Supported values are 'Deployment' and 'DeploymentConfig' defaulting to the later.
+     */
+    @ConfigItem(defaultValue = "DeploymentConfig")
+    DeploymentResourceKind deploymentKind;
 
     /**
      * The name of the group this component belongs too
@@ -472,5 +503,17 @@ public class OpenshiftConfig implements PlatformConfiguration {
     @Override
     public Optional<ExpositionConfig> getExposition() {
         return Optional.of(route);
+    }
+
+    public String getDepoymentResourceGroup() {
+        return deploymentKind.apiGroup;
+    }
+
+    public String getDepoymentResourceVersion() {
+        return deploymentKind.apiVersion;
+    }
+
+    public String getDepoymentResourceKind() {
+        return deploymentKind.kind;
     }
 }

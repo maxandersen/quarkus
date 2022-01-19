@@ -1,10 +1,13 @@
 package io.quarkus.test.junit;
 
+import static io.quarkus.test.junit.IntegrationTestUtil.DEFAULT_HTTPS_PORT;
+import static io.quarkus.test.junit.IntegrationTestUtil.DEFAULT_PORT;
 import static io.quarkus.test.junit.IntegrationTestUtil.determineTestProfileAndProperties;
 import static io.quarkus.test.junit.IntegrationTestUtil.doProcessTestInstance;
 import static io.quarkus.test.junit.IntegrationTestUtil.ensureNoInjectAnnotationIsUsed;
+import static io.quarkus.test.junit.IntegrationTestUtil.getAdditionalTestResources;
 import static io.quarkus.test.junit.IntegrationTestUtil.getSysPropsToRestore;
-import static io.quarkus.test.junit.IntegrationTestUtil.handleDevDb;
+import static io.quarkus.test.junit.IntegrationTestUtil.handleDevServices;
 import static io.quarkus.test.junit.IntegrationTestUtil.startLauncher;
 
 import java.util.Collections;
@@ -12,8 +15,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.function.Function;
 
+import org.eclipse.microprofile.config.Config;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -22,10 +27,15 @@ import org.junit.jupiter.api.extension.TestInstancePostProcessor;
 import org.opentest4j.TestAbortedException;
 
 import io.quarkus.runtime.test.TestHttpEndpointProvider;
+import io.quarkus.test.common.ArtifactLauncher;
+import io.quarkus.test.common.DefaultNativeImageLauncher;
+import io.quarkus.test.common.LauncherUtil;
 import io.quarkus.test.common.NativeImageLauncher;
 import io.quarkus.test.common.RestAssuredURLManager;
 import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.test.common.TestScopeManager;
+import io.quarkus.test.junit.launcher.ConfigUtil;
+import io.quarkus.test.junit.launcher.NativeImageLauncherProvider;
 
 public class NativeTestExtension
         implements BeforeEachCallback, AfterEachCallback, BeforeAllCallback, TestInstancePostProcessor {
@@ -102,7 +112,7 @@ public class NativeTestExtension
 
     private IntegrationTestExtensionState doNativeStart(ExtensionContext context, Class<? extends QuarkusTestProfile> profile)
             throws Throwable {
-        Map<String, String> devDbProps = handleDevDb(context);
+        Map<String, String> devServicesProps = handleDevServices(context, false).properties();
         quarkusTestProfile = profile;
         currentJUnitTestClass = context.getRequiredTestClass();
         TestResourceManager testResourceManager = null;
@@ -113,20 +123,47 @@ public class NativeTestExtension
             TestProfileAndProperties testProfileAndProperties = determineTestProfileAndProperties(profile, sysPropRestore);
 
             testResourceManager = new TestResourceManager(requiredTestClass, quarkusTestProfile,
-                    Collections.emptyList(), testProfileAndProperties.testProfile != null
+                    getAdditionalTestResources(testProfileAndProperties.testProfile, currentJUnitTestClass.getClassLoader()),
+                    testProfileAndProperties.testProfile != null
                             && testProfileAndProperties.testProfile.disableGlobalTestResources());
-            testResourceManager.init();
+            testResourceManager.init(
+                    testProfileAndProperties.testProfile != null ? testProfileAndProperties.testProfile.getClass().getName()
+                            : null);
             hasPerTestResources = testResourceManager.hasPerTestResources();
 
             Map<String, String> additionalProperties = new HashMap<>(testProfileAndProperties.properties);
-            additionalProperties.putAll(devDbProps);
-            additionalProperties.putAll(testResourceManager.start());
+            additionalProperties.putAll(devServicesProps);
+            Map<String, String> resourceManagerProps = testResourceManager.start();
+            Map<String, String> old = new HashMap<>();
+            for (Map.Entry<String, String> i : resourceManagerProps.entrySet()) {
+                old.put(i.getKey(), System.getProperty(i.getKey()));
+                if (i.getValue() == null) {
+                    System.clearProperty(i.getKey());
+                } else {
+                    System.setProperty(i.getKey(), i.getValue());
+                }
+            }
+            context.getStore(ExtensionContext.Namespace.GLOBAL).put(NativeTestExtension.class.getName() + ".systemProps",
+                    new ExtensionContext.Store.CloseableResource() {
+                        @Override
+                        public void close() throws Throwable {
+                            for (Map.Entry<String, String> i : old.entrySet()) {
+                                old.put(i.getKey(), System.getProperty(i.getKey()));
+                                if (i.getValue() == null) {
+                                    System.clearProperty(i.getKey());
+                                } else {
+                                    System.setProperty(i.getKey(), i.getValue());
+                                }
+                            }
+                        }
+                    });
+            additionalProperties.putAll(resourceManagerProps);
 
-            NativeImageLauncher launcher = new NativeImageLauncher(requiredTestClass);
+            NativeImageLauncher launcher = createLauncher(requiredTestClass);
             startLauncher(launcher, additionalProperties, () -> ssl = true);
 
-            final IntegrationTestExtensionState state = new IntegrationTestExtensionState(testResourceManager, launcher,
-                    sysPropRestore);
+            final IntegrationTestExtensionState state = new IntegrationTestExtensionState(testResourceManager,
+                    launcher, sysPropRestore);
 
             testHttpEndpointProviders = TestHttpEndpointProvider.load();
 
@@ -144,6 +181,41 @@ public class NativeTestExtension
         }
     }
 
+    private DefaultNativeImageLauncher createLauncher(Class<?> requiredTestClass) {
+        DefaultNativeImageLauncher launcher = new DefaultNativeImageLauncher();
+        Config config = LauncherUtil.installAndGetSomeConfig();
+        launcher.init(new NativeImageLauncherProvider.DefaultNativeImageInitContext(
+                config.getValue("quarkus.http.test-port", OptionalInt.class).orElse(DEFAULT_PORT),
+                config.getValue("quarkus.http.test-ssl-port", OptionalInt.class).orElse(DEFAULT_HTTPS_PORT),
+                ConfigUtil.waitTimeValue(config),
+                config.getOptionalValue("quarkus.test.native-image-profile", String.class).orElse(null),
+                ConfigUtil.argLineValue(config),
+                new ArtifactLauncher.InitContext.DevServicesLaunchResult() {
+                    @Override
+                    public Map<String, String> properties() {
+                        return Collections.emptyMap();
+                    }
+
+                    @Override
+                    public String networkId() {
+                        return null;
+                    }
+
+                    @Override
+                    public boolean manageNetwork() {
+                        return false;
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                },
+                System.getProperty("native.image.path"),
+                requiredTestClass));
+        return launcher;
+    }
+
     @Override
     public void postProcessTestInstance(Object testInstance, ExtensionContext context) {
         if (!failedBoot) {
@@ -151,10 +223,15 @@ public class NativeTestExtension
         }
     }
 
-    private void throwBootFailureException() {
+    private void throwBootFailureException() throws Exception {
         if (firstException != null) {
             Throwable throwable = firstException;
             firstException = null;
+
+            if (throwable instanceof Exception) {
+                throw (Exception) throwable;
+            }
+
             throw new RuntimeException(throwable);
         } else {
             throw new TestAbortedException("Boot failed");

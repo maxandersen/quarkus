@@ -32,6 +32,16 @@ public class HttpRemoteDevClient implements RemoteDevClient {
 
     private final Logger log = Logger.getLogger(HttpRemoteDevClient.class);
 
+    /**
+     * The default Accept header defined in sun.net.www.protocol.http.HttpURLConnection is invalid and
+     * does not respect the RFC so we override it with a valid value.
+     * RESTEasy is quite strict regarding the RFC and throws an error.
+     * Note that this is just the default HttpURLConnection header value made valid.
+     * See https://bugs.openjdk.java.net/browse/JDK-8163921 and https://bugs.openjdk.java.net/browse/JDK-8177439
+     * and https://github.com/quarkusio/quarkus/issues/20904
+     */
+    private static final String DEFAULT_ACCEPT = "text/html, image/gif, image/jpeg; q=0.2, */*; q=0.2";
+
     private final String url;
     private final String password;
     private final long reconnectTimeoutMillis;
@@ -95,6 +105,7 @@ public class HttpRemoteDevClient implements RemoteDevClient {
             connection = (HttpURLConnection) new URL(url + "/" + entry.getKey()).openConnection();
             connection.setRequestMethod("PUT");
             connection.setDoOutput(true);
+            connection.setRequestProperty(HttpHeaders.ACCEPT.toString(), DEFAULT_ACCEPT);
             connection.addRequestProperty(HttpHeaders.CONTENT_TYPE.toString(), RemoteSyncHandler.APPLICATION_QUARKUS);
             connection.addRequestProperty(RemoteSyncHandler.QUARKUS_SESSION_COUNT, Integer.toString(currentSessionCounter));
 
@@ -120,6 +131,7 @@ public class HttpRemoteDevClient implements RemoteDevClient {
 
             HttpURLConnection connection = (HttpURLConnection) new URL(url + RemoteSyncHandler.CONNECT)
                     .openConnection();
+            connection.setRequestProperty(HttpHeaders.ACCEPT.toString(), DEFAULT_ACCEPT);
             connection.addRequestProperty(HttpHeaders.CONTENT_TYPE.toString(), RemoteSyncHandler.APPLICATION_QUARKUS);
             //for the connection we use the hash of the password and the contents
             //this can be replayed, but only with the same contents, and this does not affect the server
@@ -134,10 +146,11 @@ public class HttpRemoteDevClient implements RemoteDevClient {
             String session = connection.getHeaderField(RemoteSyncHandler.QUARKUS_SESSION);
             String error = connection.getHeaderField(RemoteSyncHandler.QUARKUS_ERROR);
             if (error != null) {
-                throw new IOException("Server did not start a remote dev session: " + error);
+                throw createIOException("Server did not start a remote dev session: " + error);
             }
             if (session == null) {
-                throw new IOException("Server did not start a remote dev session");
+                throw createIOException(
+                        "Server did not start a remote dev session. Make sure the environment variable 'QUARKUS_LAUNCH_DEVMODE' is set to 'true' when launching the server");
             }
             String result = new String(IoUtil.readBytes(connection.getInputStream()), StandardCharsets.UTF_8);
             Set<String> changed = new HashSet<>();
@@ -164,6 +177,12 @@ public class HttpRemoteDevClient implements RemoteDevClient {
             return session;
         }
 
+        private IOException createIOException(String message) {
+            IOException result = new IOException(message);
+            result.setStackTrace(new StackTraceElement[] {});
+            return result;
+        }
+
         @Override
         public void close() throws IOException {
             closed = true;
@@ -188,6 +207,7 @@ public class HttpRemoteDevClient implements RemoteDevClient {
                     //long polling request
                     //we always send the current problem state
                     connection = (HttpURLConnection) devUrl.openConnection();
+                    connection.setRequestProperty(HttpHeaders.ACCEPT.toString(), DEFAULT_ACCEPT);
                     connection.setRequestMethod("POST");
                     connection.addRequestProperty(HttpHeaders.CONTENT_TYPE.toString(), RemoteSyncHandler.APPLICATION_QUARKUS);
                     connection.addRequestProperty(RemoteSyncHandler.QUARKUS_SESSION_COUNT,
@@ -216,6 +236,7 @@ public class HttpRemoteDevClient implements RemoteDevClient {
                             }
                             log.info("deleting " + file);
                             connection = (HttpURLConnection) new URL(url + "/" + file).openConnection();
+                            connection.setRequestProperty(HttpHeaders.ACCEPT.toString(), DEFAULT_ACCEPT);
                             connection.setRequestMethod("DELETE");
                             connection.addRequestProperty(HttpHeaders.CONTENT_TYPE.toString(),
                                     RemoteSyncHandler.APPLICATION_QUARKUS);
@@ -263,6 +284,7 @@ public class HttpRemoteDevClient implements RemoteDevClient {
             while (System.currentTimeMillis() < timeout) {
                 try {
                     HttpURLConnection connection = (HttpURLConnection) probeUrl.openConnection();
+                    connection.setRequestProperty(HttpHeaders.ACCEPT.toString(), DEFAULT_ACCEPT);
                     connection.setRequestMethod("POST");
                     connection.addRequestProperty(HttpHeaders.CONTENT_TYPE.toString(), RemoteSyncHandler.APPLICATION_QUARKUS);
                     IoUtil.readBytes(connection.getInputStream());

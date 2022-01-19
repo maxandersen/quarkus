@@ -24,8 +24,6 @@ import com.amazonaws.services.lambda.runtime.RequestStreamHandler;
 
 import io.quarkus.amazon.lambda.runtime.AmazonLambdaRecorder;
 import io.quarkus.amazon.lambda.runtime.FunctionError;
-import io.quarkus.amazon.lambda.runtime.LambdaBuildTimeConfig;
-import io.quarkus.amazon.lambda.runtime.LambdaConfig;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.builder.BuildException;
@@ -164,15 +162,17 @@ public final class AmazonLambdaProcessor {
         // for reflection.  Shouldn't have to do this.
         for (Method method : handlerClass.getMethods()) {
             if (method.getName().equals("handleRequest")
-                    && method.getParameterTypes().length == 2
-                    && !method.getParameterTypes()[0].equals(Object.class)) {
-                reflectiveClassBuildItemBuildProducer
-                        .produce(new ReflectiveClassBuildItem(true, true, true, method.getParameterTypes()[0].getName()));
-                reflectiveClassBuildItemBuildProducer
-                        .produce(new ReflectiveClassBuildItem(true, true, true, method.getReturnType().getName()));
-                reflectiveClassBuildItemBuildProducer.produce(new ReflectiveClassBuildItem(true, true, true,
-                        DateTime.class));
-                break;
+                    && method.getParameterCount() == 2) {
+                Class<?>[] parameterTypes = method.getParameterTypes();
+                if (!parameterTypes[0].equals(Object.class)) {
+                    reflectiveClassBuildItemBuildProducer
+                            .produce(new ReflectiveClassBuildItem(true, true, true, parameterTypes[0].getName()));
+                    reflectiveClassBuildItemBuildProducer
+                            .produce(new ReflectiveClassBuildItem(true, true, true, method.getReturnType().getName()));
+                    reflectiveClassBuildItemBuildProducer.produce(new ReflectiveClassBuildItem(true, true, true,
+                            DateTime.class));
+                    break;
+                }
             }
         }
     }
@@ -183,7 +183,6 @@ public final class AmazonLambdaProcessor {
             Optional<ProvidedAmazonLambdaHandlerBuildItem> providedLambda,
             BeanContainerBuildItem beanContainerBuildItem,
             AmazonLambdaRecorder recorder,
-            LambdaConfig config,
             List<ServiceStartBuildItem> orderServicesFirst, // try to order this after service recorders
             RecorderContext context) {
         if (providedLambda.isPresent()) {
@@ -230,7 +229,7 @@ public final class AmazonLambdaProcessor {
             }
 
             recorder.chooseHandlerClass(unnamed, named, unnamedStreamHandler, namedStreamHandler,
-                    beanContainerBuildItem.getValue(), config);
+                    beanContainerBuildItem.getValue());
         }
     }
 
@@ -241,21 +240,21 @@ public final class AmazonLambdaProcessor {
     @Record(value = ExecutionTime.RUNTIME_INIT)
     void startPoolLoop(AmazonLambdaRecorder recorder,
             ShutdownContextBuildItem shutdownContextBuildItem,
+            LaunchModeBuildItem launchModeBuildItem,
             List<ServiceStartBuildItem> orderServicesFirst // try to order this after service recorders
     ) {
-        recorder.startPollLoop(shutdownContextBuildItem);
+        recorder.startPollLoop(shutdownContextBuildItem, launchModeBuildItem.getLaunchMode());
     }
 
     @BuildStep
     @Record(value = ExecutionTime.RUNTIME_INIT)
-    void enableNativeEventLoop(LambdaBuildTimeConfig config,
-            AmazonLambdaRecorder recorder,
+    void startPoolLoopDevOrTest(AmazonLambdaRecorder recorder,
             List<ServiceStartBuildItem> orderServicesFirst, // force some ordering of recorders
             ShutdownContextBuildItem shutdownContextBuildItem,
             LaunchModeBuildItem launchModeBuildItem) {
         LaunchMode mode = launchModeBuildItem.getLaunchMode();
-        if (config.enablePollingJvmMode && mode.isDevOrTest()) {
-            recorder.startPollLoop(shutdownContextBuildItem);
+        if (mode.isDevOrTest()) {
+            recorder.startPollLoop(shutdownContextBuildItem, mode);
         }
     }
 

@@ -13,7 +13,6 @@ import java.nio.file.Paths;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,17 +27,17 @@ import io.quarkus.container.spi.AvailableContainerImageExtensionBuildItem;
 import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImagePushRequestBuildItem;
-import io.quarkus.deployment.Capability;
+import io.quarkus.deployment.IsDockerWorking;
 import io.quarkus.deployment.IsNormalNotRemoteDev;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.AppCDSResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
+import io.quarkus.deployment.pkg.builditem.UpxCompressedBuildItem;
 import io.quarkus.deployment.pkg.steps.NativeBuild;
 import io.quarkus.deployment.util.ExecUtil;
 
@@ -52,16 +51,11 @@ public class DockerProcessor {
     private static final String DOCKER_DIRECTORY_NAME = "docker";
     static final String DOCKER_CONTAINER_IMAGE_NAME = "docker";
 
-    private final DockerWorking dockerWorking = new DockerWorking();
+    private final IsDockerWorking isDockerWorking = new IsDockerWorking();
 
     @BuildStep
     public AvailableContainerImageExtensionBuildItem availability() {
         return new AvailableContainerImageExtensionBuildItem(DOCKER);
-    }
-
-    @BuildStep(onlyIf = DockerBuild.class)
-    public CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.CONTAINER_IMAGE_DOCKER);
     }
 
     @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, DockerBuild.class }, onlyIfNot = NativeBuild.class)
@@ -77,12 +71,16 @@ public class DockerProcessor {
             @SuppressWarnings("unused") // used to ensure that the jar has been built
             JarBuildItem jar) {
 
-        if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
-                && !pushRequest.isPresent()) {
+        if (containerImageConfig.isBuildExplicitlyDisabled()) {
             return;
         }
 
-        if (!dockerWorking.getAsBoolean()) {
+        if (!containerImageConfig.isBuildExplicitlyEnabled() && !containerImageConfig.isPushExplicitlyEnabled()
+                && !buildRequest.isPresent() && !pushRequest.isPresent()) {
+            return;
+        }
+
+        if (!isDockerWorking.getAsBoolean()) {
             throw new RuntimeException("Unable to build docker image. Please check your docker installation");
         }
 
@@ -93,8 +91,10 @@ public class DockerProcessor {
                 false,
                 pushRequest.isPresent(), packageConfig);
 
+        // a pull is not required when using this image locally because the docker strategy always builds the container image
+        // locally before pushing it to the registry
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container",
-                Collections.singletonMap("container-image", builtContainerImage)));
+                Map.of("container-image", builtContainerImage, "pull-required", "false")));
     }
 
     @BuildStep(onlyIf = { IsNormalNotRemoteDev.class, NativeBuild.class, DockerBuild.class })
@@ -104,17 +104,22 @@ public class DockerProcessor {
             Optional<ContainerImageBuildRequestBuildItem> buildRequest,
             Optional<ContainerImagePushRequestBuildItem> pushRequest,
             OutputTargetBuildItem out,
+            Optional<UpxCompressedBuildItem> upxCompressed, // used to ensure that we work with the compressed native binary if compression was enabled
             BuildProducer<ArtifactResultBuildItem> artifactResultProducer,
             PackageConfig packageConfig,
             // used to ensure that the native binary has been built
             NativeImageBuildItem nativeImage) {
 
-        if (!containerImageConfig.build && !containerImageConfig.push && !buildRequest.isPresent()
-                && !pushRequest.isPresent()) {
+        if (containerImageConfig.isBuildExplicitlyDisabled()) {
             return;
         }
 
-        if (!dockerWorking.getAsBoolean()) {
+        if (!containerImageConfig.isBuildExplicitlyEnabled() && !containerImageConfig.isPushExplicitlyEnabled()
+                && !buildRequest.isPresent() && !pushRequest.isPresent()) {
+            return;
+        }
+
+        if (!isDockerWorking.getAsBoolean()) {
             throw new RuntimeException("Unable to build docker image. Please check your docker installation");
         }
 
@@ -128,8 +133,11 @@ public class DockerProcessor {
         ImageIdReader reader = new ImageIdReader();
         String builtContainerImage = createContainerImage(containerImageConfig, dockerConfig, containerImage, out, reader, true,
                 pushRequest.isPresent(), packageConfig);
+
+        // a pull is not required when using this image locally because the docker strategy always builds the container image
+        // locally before pushing it to the registry
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container",
-                Collections.singletonMap("container-image", builtContainerImage)));
+                Map.of("container-image", builtContainerImage, "pull-required", "false")));
     }
 
     private String createContainerImage(ContainerImageConfig containerImageConfig, DockerConfig dockerConfig,
@@ -138,7 +146,7 @@ public class DockerProcessor {
             PackageConfig packageConfig) {
 
         DockerfilePaths dockerfilePaths = getDockerfilePaths(dockerConfig, forNative, packageConfig, out);
-        String[] dockerArgs = getDockerArgs(containerImageInfo.getImage(), dockerfilePaths, dockerConfig);
+        String[] dockerArgs = getDockerArgs(containerImageInfo.getImage(), dockerfilePaths, containerImageConfig, dockerConfig);
         log.infof("Executing the following command to build docker image: '%s %s'", dockerConfig.executableName,
                 String.join(" ", dockerArgs));
         boolean buildSuccessful = ExecUtil.exec(out.getOutputDirectory().toFile(), reader, dockerConfig.executableName,
@@ -153,7 +161,7 @@ public class DockerProcessor {
             createAdditionalTags(containerImageInfo.getImage(), containerImageInfo.getAdditionalImageTags(), dockerConfig);
         }
 
-        if (pushRequested || containerImageConfig.push) {
+        if (pushRequested || containerImageConfig.isPushExplicitlyEnabled()) {
             String registry = "docker.io";
             if (!containerImageInfo.getRegistry().isPresent()) {
                 log.info("No container image registry was set, so 'docker.io' will be used");
@@ -180,11 +188,15 @@ public class DockerProcessor {
         return containerImageInfo.getImage();
     }
 
-    private String[] getDockerArgs(String image, DockerfilePaths dockerfilePaths, DockerConfig dockerConfig) {
+    private String[] getDockerArgs(String image, DockerfilePaths dockerfilePaths, ContainerImageConfig containerImageConfig,
+            DockerConfig dockerConfig) {
         List<String> dockerArgs = new ArrayList<>(6 + dockerConfig.buildArgs.size());
         dockerArgs.addAll(Arrays.asList("build", "-f", dockerfilePaths.getDockerfilePath().toAbsolutePath().toString()));
         for (Map.Entry<String, String> entry : dockerConfig.buildArgs.entrySet()) {
             dockerArgs.addAll(Arrays.asList("--build-arg", entry.getKey() + "=" + entry.getValue()));
+        }
+        for (Map.Entry<String, String> entry : containerImageConfig.labels.entrySet()) {
+            dockerArgs.addAll(Arrays.asList("--label", String.format("%s=%s", entry.getKey(), entry.getValue())));
         }
         if (dockerConfig.cacheFrom.isPresent()) {
             List<String> cacheFrom = dockerConfig.cacheFrom.get();
@@ -192,6 +204,10 @@ public class DockerProcessor {
                 dockerArgs.add("--cache-from");
                 dockerArgs.add(String.join(",", cacheFrom));
             }
+        }
+        if (dockerConfig.network.isPresent()) {
+            dockerArgs.add("--network");
+            dockerArgs.add(dockerConfig.network.get());
         }
         dockerArgs.addAll(Arrays.asList("-t", image));
         dockerArgs.add(dockerfilePaths.getDockerExecutionPath().toAbsolutePath().toString());

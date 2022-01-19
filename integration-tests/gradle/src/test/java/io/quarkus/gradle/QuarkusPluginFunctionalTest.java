@@ -31,16 +31,6 @@ public class QuarkusPluginFunctionalTest extends QuarkusGradleDevToolsTestBase {
         this.projectRoot = projectRoot;
     }
 
-    @Test
-    public void canGenerateConfig() throws Exception {
-        createProject(SourceType.JAVA);
-
-        BuildResult build = runGradleWrapper(projectRoot, "generateConfig");
-
-        assertThat(build.getTasks().get(":generateConfig")).isEqualTo(BuildResult.SUCCESS_OUTCOME);
-        assertThat(projectRoot.toPath().resolve("src/main/resources/application.properties.example")).exists();
-    }
-
     @ParameterizedTest(name = "Build {0} project")
     @EnumSource(SourceType.class)
     public void canBuild(SourceType sourceType) throws Exception {
@@ -161,6 +151,16 @@ public class QuarkusPluginFunctionalTest extends QuarkusGradleDevToolsTestBase {
         assertThat(buildResult.getTasks().get(":test")).isEqualTo(BuildResult.SUCCESS_OUTCOME);
     }
 
+    @Test
+    public void generateCodeBeforeTests() throws Exception {
+        createProject(SourceType.JAVA);
+
+        BuildResult firstBuild = runGradleWrapper(projectRoot, "test", "--stacktrace");
+        assertThat(firstBuild.getOutput()).contains("Task :quarkusGenerateCode");
+        assertThat(firstBuild.getOutput()).contains("Task :quarkusGenerateCodeTests");
+        assertThat(firstBuild.getTasks().get(":test")).isEqualTo(BuildResult.SUCCESS_OUTCOME);
+    }
+
     private void createProject(SourceType sourceType) throws Exception {
         Map<String, Object> context = new HashMap<>();
         context.put("path", "/greeting");
@@ -169,7 +169,7 @@ public class QuarkusPluginFunctionalTest extends QuarkusGradleDevToolsTestBase {
                         .groupId("com.acme.foo")
                         .artifactId("foo")
                         .version("1.0.0-SNAPSHOT")
-                        .className("org.acme.foo.GreetingResource")
+                        .packageName("org.acme.foo")
                         .sourceType(sourceType)
                         .doCreateProject(context))
                                 .withFailMessage("Project was not created")

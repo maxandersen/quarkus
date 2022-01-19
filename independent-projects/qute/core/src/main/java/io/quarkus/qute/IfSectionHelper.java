@@ -2,21 +2,17 @@ package io.quarkus.qute;
 
 import static io.quarkus.qute.Booleans.isFalsy;
 
-import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.SectionHelperFactory.ParserDelegate;
 import io.quarkus.qute.SectionHelperFactory.SectionInitContext;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.stream.Collectors;
 
 /**
  * Basic {@code if} statement.
@@ -27,50 +23,121 @@ public class IfSectionHelper implements SectionHelper {
     private static final String IF = "if";
     private static final String LOGICAL_COMPLEMENT = "!";
 
-    private final List<IfBlock> blocks;
+    private final IfContext ifContext;
 
     IfSectionHelper(SectionInitContext context) {
-        ImmutableList.Builder<IfBlock> builder = ImmutableList.builder();
+        List<ConditionBlock> conditionBlocks = new ArrayList<>();
         for (SectionBlock part : context.getBlocks()) {
             if (SectionHelperFactory.MAIN_BLOCK_NAME.equals(part.label) || ELSE.equals(part.label)) {
-                builder.add(new IfBlock(part, context));
+                conditionBlocks.add(new ConditionBlock(part, context));
             }
         }
-        this.blocks = builder.build();
+        if (conditionBlocks.size() == 1) {
+            this.ifContext = new SingletonContext(conditionBlocks.get(0));
+        } else if (conditionBlocks.size() == 2) {
+            this.ifContext = new DoubletonContext(conditionBlocks.get(0), conditionBlocks.get(1));
+        } else {
+            this.ifContext = new ListContext(ImmutableList.copyOf(conditionBlocks));
+        }
     }
 
     @Override
     public CompletionStage<ResultNode> resolve(SectionResolutionContext context) {
-        if (blocks.size() == 1) {
-            IfBlock block = blocks.get(0);
+        return ifContext.resolve(context);
+    }
+
+    interface IfContext {
+
+        CompletionStage<ResultNode> resolve(SectionResolutionContext context);
+
+    }
+
+    static final class SingletonContext implements IfContext {
+
+        private final ConditionBlock block;
+
+        SingletonContext(ConditionBlock block) {
+            this.block = block;
+        }
+
+        @Override
+        public CompletionStage<ResultNode> resolve(SectionResolutionContext context) {
             return block.condition.evaluate(context).thenCompose(r -> {
                 if (isFalsy(r)) {
                     return ResultNode.NOOP;
                 } else {
-                    return context.execute(block.block, context.resolutionContext());
+                    return context.execute(block.section, context.resolutionContext());
                 }
             });
         }
-        return resolveBlocks(context, blocks.iterator());
+
     }
 
-    private CompletionStage<ResultNode> resolveBlocks(SectionResolutionContext context,
-            Iterator<IfBlock> blocks) {
-        IfBlock block = blocks.next();
-        if (block.condition.isEmpty()) {
-            // else without operands
-            return context.execute(block.block, context.resolutionContext());
+    static final class DoubletonContext implements IfContext {
+
+        private final ConditionBlock block;
+        private final ConditionBlock next;
+
+        public DoubletonContext(ConditionBlock block, ConditionBlock next) {
+            this.block = block;
+            this.next = next;
         }
-        return block.condition.evaluate(context).thenCompose(r -> {
-            if (isFalsy(r)) {
-                if (blocks.hasNext()) {
-                    return resolveBlocks(context, blocks);
+
+        @Override
+        public CompletionStage<ResultNode> resolve(SectionResolutionContext context) {
+            return block.condition.evaluate(context).thenCompose(r -> {
+                if (isFalsy(r)) {
+                    if (next.condition.isEmpty()) {
+                        // else without operands
+                        return context.execute(next.section, context.resolutionContext());
+                    }
+                    return next.condition.evaluate(context).thenCompose(nr -> {
+                        if (isFalsy(nr)) {
+                            return ResultNode.NOOP;
+                        } else {
+                            return context.execute(next.section, context.resolutionContext());
+                        }
+                    });
+                } else {
+                    return context.execute(block.section, context.resolutionContext());
                 }
-                return ResultNode.NOOP;
-            } else {
-                return context.execute(block.block, context.resolutionContext());
+            });
+        }
+
+    }
+
+    static final class ListContext implements IfContext {
+
+        private final List<ConditionBlock> blocks;
+
+        ListContext(List<ConditionBlock> blocks) {
+            this.blocks = blocks;
+        }
+
+        @Override
+        public CompletionStage<ResultNode> resolve(SectionResolutionContext context) {
+            return resolveBlocks(context, blocks.iterator());
+        }
+
+        private CompletionStage<ResultNode> resolveBlocks(SectionResolutionContext context,
+                Iterator<ConditionBlock> blocks) {
+            ConditionBlock block = blocks.next();
+            if (block.condition.isEmpty()) {
+                // else without operands
+                return context.execute(block.section, context.resolutionContext());
             }
-        });
+            return block.condition.evaluate(context).thenCompose(r -> {
+                if (isFalsy(r)) {
+                    if (blocks.hasNext()) {
+                        return resolveBlocks(context, blocks);
+                    }
+                    return ResultNode.NOOP;
+                } else {
+                    return context.execute(block.section, context.resolutionContext());
+                }
+            });
+        }
+
     }
 
     public static class Factory implements SectionHelperFactory<IfSectionHelper> {
@@ -82,15 +149,15 @@ public class IfSectionHelper implements SectionHelper {
 
         @Override
         public ParametersInfo getParameters() {
-            ParametersInfo.Builder builder = ParametersInfo.builder();
-            // {#if} must declare at least one condition param
-            builder.addParameter("condition");
-            return builder
+            return ParametersInfo.builder()
+                    .checkNumberOfParams(false)
+                    // {#if} must declare at least one condition param
+                    .addParameter("condition")
                     .build();
         }
 
         public List<String> getBlockLabels() {
-            return Collections.singletonList(ELSE);
+            return ImmutableList.of(ELSE);
         }
 
         @Override
@@ -130,13 +197,13 @@ public class IfSectionHelper implements SectionHelper {
 
     }
 
-    static class IfBlock {
+    static class ConditionBlock {
 
-        final SectionBlock block;
+        final SectionBlock section;
         final Condition condition;
 
-        public IfBlock(SectionBlock block, SectionInitContext context) {
-            this.block = block;
+        public ConditionBlock(SectionBlock block, SectionInitContext context) {
+            this.section = block;
             List<Object> params = parseParams(new ArrayList<>(block.parameters.values()), context);
             if (!params.isEmpty() && !SectionHelperFactory.MAIN_BLOCK_NAME.equals(block.label)) {
                 params = params.subList(1, params.size());
@@ -152,21 +219,16 @@ public class IfSectionHelper implements SectionHelper {
 
         Operator getOperator();
 
-        /**
-         * Short-circuiting evaluation.
-         * 
-         * @return null if evaluation should continue
-         */
-        default Boolean evaluate(Object value) {
-            return getOperator() != null ? getOperator().evaluate(value) : null;
-        }
-
-        default boolean isLogicalComplement() {
-            return Operator.NOT.equals(getOperator());
-        }
-
         default boolean isEmpty() {
             return false;
+        }
+
+        default Object getLiteralValue() {
+            return null;
+        }
+
+        default Boolean logicalComplement(Object val) {
+            return Booleans.isFalsy(val) ? Boolean.TRUE : Boolean.FALSE;
         }
 
     }
@@ -175,20 +237,31 @@ public class IfSectionHelper implements SectionHelper {
 
         final Operator operator;
         final Expression expression;
+        final Object literalValue;
 
         OperandCondition(Operator operator, Expression expression) {
             this.operator = operator;
             this.expression = expression;
+            this.literalValue = expression.getLiteral();
         }
 
         @Override
         public CompletionStage<Object> evaluate(SectionResolutionContext context) {
-            return context.resolutionContext().evaluate(expression);
+            CompletionStage<Object> ret = context.resolutionContext().evaluate(expression);
+            if (operator == Operator.NOT) {
+                return ret.thenApply(this::logicalComplement);
+            }
+            return ret;
         }
 
         @Override
         public Operator getOperator() {
             return operator;
+        }
+
+        @Override
+        public Object getLiteralValue() {
+            return literalValue;
         }
 
         @Override
@@ -210,61 +283,44 @@ public class IfSectionHelper implements SectionHelper {
 
         @Override
         public CompletionStage<Object> evaluate(SectionResolutionContext context) {
-            return evaluateNext(context, null, conditions.iterator());
+            CompletionStage<Object> ret = evaluateNext(context, null, conditions.iterator());
+            if (operator == Operator.NOT) {
+                return ret.thenApply(this::logicalComplement);
+            }
+            return ret;
         }
 
-        CompletionStage<Object> evaluateNext(SectionResolutionContext context, Object value, Iterator<Condition> iter) {
-            CompletableFuture<Object> result = new CompletableFuture<>();
-            if (!iter.hasNext()) {
-                result.complete(value);
+        CompletionStage<Object> evaluateNext(SectionResolutionContext context, Object previousValue,
+                Iterator<Condition> iter) {
+            Condition next = iter.next();
+            Boolean shortResult = null;
+            Operator operator = next.getOperator();
+            if (operator != null && operator.isShortCircuiting()) {
+                shortResult = operator.evaluate(previousValue);
+            }
+            if (shortResult != null) {
+                // There is no need to continue with the next operand
+                return CompletedStage.of(shortResult);
             } else {
-                Condition next = iter.next();
-                Boolean shortResult = null;
-                Operator operator = next.getOperator();
-                if (operator != null && operator.isShortCircuiting()) {
-                    shortResult = operator.evaluate(value);
-                }
-                if (shortResult != null) {
-                    // There is no need to continue with the next operand
-                    result.complete(shortResult);
+                CompletableFuture<Object> result = new CompletableFuture<>();
+                Object literalVal = next.getLiteralValue();
+                if (literalVal != null) {
+                    // A literal value does not need to be evaluated
+                    if (operator == Operator.NOT) {
+                        literalVal = logicalComplement(literalVal);
+                    }
+                    processConditionValue(context, operator, previousValue, literalVal, result, iter);
                 } else {
                     next.evaluate(context).whenComplete((r, t) -> {
                         if (t != null) {
                             result.completeExceptionally(t);
                         } else {
-                            Object val;
-                            if (next.isLogicalComplement()) {
-                                r = Booleans.isFalsy(r) ? Boolean.TRUE : Boolean.FALSE;
-                            }
-                            if (operator == null || !operator.isBinary()) {
-                                val = r;
-                            } else {
-                                try {
-                                    if (Result.NOT_FOUND.equals(r)) {
-                                        r = null;
-                                    }
-                                    Object localValue = value;
-                                    if (Result.NOT_FOUND.equals(localValue)) {
-                                        localValue = null;
-                                    }
-                                    val = operator.evaluate(localValue, r);
-                                } catch (Throwable e) {
-                                    result.completeExceptionally(e);
-                                    throw e;
-                                }
-                            }
-                            evaluateNext(context, val, iter).whenComplete((r2, t2) -> {
-                                if (t2 != null) {
-                                    result.completeExceptionally(t2);
-                                } else {
-                                    result.complete(r2);
-                                }
-                            });
+                            processConditionValue(context, operator, previousValue, r, result, iter);
                         }
                     });
                 }
+                return result;
             }
-            return result;
         }
 
         @Override
@@ -280,6 +336,40 @@ public class IfSectionHelper implements SectionHelper {
         @Override
         public String toString() {
             return "CompositeCondition [conditions=" + conditions.size() + ", operator=" + operator + "]";
+        }
+
+        void processConditionValue(SectionResolutionContext context, Operator operator,
+                Object previousValue, Object conditionValue, CompletableFuture<Object> result, Iterator<Condition> iter) {
+            Object val;
+            if (operator == null || !operator.isBinary()) {
+                val = conditionValue;
+            } else {
+                // Binary operator
+                try {
+                    if (Results.isNotFound(conditionValue)) {
+                        conditionValue = null;
+                    }
+                    Object localValue = previousValue;
+                    if (Results.isNotFound(localValue)) {
+                        localValue = null;
+                    }
+                    val = operator.evaluate(localValue, conditionValue);
+                } catch (Throwable e) {
+                    result.completeExceptionally(e);
+                    throw e;
+                }
+            }
+            if (!iter.hasNext()) {
+                result.complete(val);
+            } else {
+                evaluateNext(context, val, iter).whenComplete((r2, t2) -> {
+                    if (t2 != null) {
+                        result.completeExceptionally(t2);
+                    } else {
+                        result.complete(r2);
+                    }
+                });
+            }
         }
 
     }
@@ -300,7 +390,7 @@ public class IfSectionHelper implements SectionHelper {
         private final int precedence;
 
         Operator(int precedence, String... aliases) {
-            this.aliases = Arrays.asList(aliases);
+            this.aliases = List.of(aliases);
             this.precedence = precedence;
         }
 
@@ -393,12 +483,14 @@ public class IfSectionHelper implements SectionHelper {
                 decimal = (BigDecimal) value;
             } else if (value instanceof BigInteger) {
                 decimal = new BigDecimal((BigInteger) value);
-            } else if (value instanceof Long) {
-                decimal = new BigDecimal((Long) value);
             } else if (value instanceof Integer) {
                 decimal = new BigDecimal((Integer) value);
+            } else if (value instanceof Long) {
+                decimal = new BigDecimal((Long) value);
             } else if (value instanceof Double) {
                 decimal = new BigDecimal((Double) value);
+            } else if (value instanceof Float) {
+                decimal = new BigDecimal((Float) value);
             } else if (value instanceof String) {
                 decimal = new BigDecimal(value.toString());
             } else {
@@ -411,18 +503,77 @@ public class IfSectionHelper implements SectionHelper {
 
     static List<Object> parseParams(List<Object> params, ParserDelegate parserDelegate) {
 
-        int highestPrecedence = 0;
-        // Replace operators and composite params if needed
+        replaceOperatorsAndCompositeParams(params, parserDelegate);
+        int highestPrecedence = getHighestPrecedence(params);
+
+        if (!isGroupingNeeded(params)) {
+            // No operators or all of the same precedence
+            return params;
+        }
+
+        // Take the operators with highest precedence and form groups
+        // For example "user.active && target.status == NEW && !target.voted" becomes "user.active && [target.status == NEW] && [!target.voted]"
+        // The algorithm used is not very robust and should be improved later
+        List<Object> highestGroup = null;
+        List<Object> ret = new ArrayList<>();
+        int lastGroupdIdx = 0;
+
+        for (ListIterator<Object> iterator = params.listIterator(); iterator.hasNext();) {
+            int prevIdx = iterator.previousIndex();
+            Object param = iterator.next();
+            if (param instanceof Operator) {
+                Operator op = (Operator) param;
+                if (op.precedence == highestPrecedence) {
+                    if (highestGroup == null) {
+                        highestGroup = new ArrayList<>();
+                        if (op.isBinary()) {
+                            highestGroup.add(params.get(prevIdx));
+                        }
+                    }
+                    highestGroup.add(param);
+                    // Add non-grouped elements 
+                    if (prevIdx > lastGroupdIdx) {
+                        int from = lastGroupdIdx > 0 ? lastGroupdIdx + 1 : 0;
+                        int to = op.isBinary() ? prevIdx : prevIdx + 1;
+                        params.subList(from, to).forEach(ret::add);
+                    }
+                } else if (op.precedence < highestPrecedence) {
+                    if (highestGroup != null) {
+                        ret.add(highestGroup);
+                        lastGroupdIdx = prevIdx;
+                        highestGroup = null;
+                    }
+                } else {
+                    throw new IllegalStateException();
+                }
+            } else if (highestGroup != null) {
+                highestGroup.add(param);
+            }
+        }
+        if (highestGroup != null) {
+            ret.add(highestGroup);
+        } else {
+            // Add all remaining non-grouped elements
+            if (lastGroupdIdx + 1 != params.size()) {
+                params.subList(lastGroupdIdx + 1, params.size()).forEach(ret::add);
+            }
+        }
+        return parseParams(ret, parserDelegate);
+    }
+
+    private static boolean isGroupingNeeded(List<Object> params) {
+        // No operators or all of the same precedence
+        return params.stream().filter(p -> (p instanceof Operator)).map(p -> ((Operator) p).getPrecedence()).distinct()
+                .count() > 1;
+    }
+
+    private static void replaceOperatorsAndCompositeParams(List<Object> params, ParserDelegate parserDelegate) {
         for (ListIterator<Object> iterator = params.listIterator(); iterator.hasNext();) {
             Object param = iterator.next();
             if (param instanceof String) {
                 String stringParam = param.toString();
                 Operator operator = Operator.from(stringParam);
                 if (operator != null) {
-                    // Binary operator
-                    if (operator.getPrecedence() > highestPrecedence) {
-                        highestPrecedence = operator.getPrecedence();
-                    }
                     if (operator.isBinary() && !iterator.hasNext()) {
                         throw parserDelegate.createParserError(
                                 "binary operator [" + operator + "] set but the second operand not present for {#if} section");
@@ -446,50 +597,19 @@ public class IfSectionHelper implements SectionHelper {
                 }
             }
         }
+    }
 
-        if (params.stream().filter(p -> p instanceof Operator).map(p -> ((Operator) p).getPrecedence())
-                .collect(Collectors.toSet()).size() <= 1) {
-            // No binary operators or all of the same precedence
-            return params;
-        }
-
-        // Take the operators with highest precedence and form groups
-        List<Object> highestGroup = null;
-        List<Object> ret = new ArrayList<>();
-        int lastGroupdIdx = 0;
-
-        for (ListIterator<Object> iterator = params.listIterator(); iterator.hasNext();) {
-            int prevIdx = iterator.previousIndex();
-            Object param = iterator.next();
-            if (isBinaryOperatorEq(param, highestPrecedence)) {
-                if (highestGroup == null) {
-                    highestGroup = new ArrayList<>();
-                    highestGroup.add(params.get(prevIdx));
+    private static int getHighestPrecedence(List<Object> params) {
+        int highestPrecedence = 0;
+        for (Object param : params) {
+            if (param instanceof Operator) {
+                Operator op = (Operator) param;
+                if (op.precedence > highestPrecedence) {
+                    highestPrecedence = op.precedence;
                 }
-                highestGroup.add(param);
-                // Add non-grouped elements 
-                if (prevIdx > lastGroupdIdx) {
-                    params.subList(lastGroupdIdx > 0 ? lastGroupdIdx + 1 : 0, prevIdx).forEach(ret::add);
-                }
-            } else if (isBinaryOperatorLt(param, highestPrecedence)) {
-                if (highestGroup != null) {
-                    ret.add(highestGroup);
-                    lastGroupdIdx = prevIdx;
-                    highestGroup = null;
-                }
-            } else if (highestGroup != null) {
-                highestGroup.add(param);
             }
         }
-        if (highestGroup != null) {
-            ret.add(highestGroup);
-        } else {
-            // Add all remaining non-grouped elements
-            if (lastGroupdIdx + 1 != params.size()) {
-                params.subList(lastGroupdIdx + 1, params.size()).forEach(ret::add);
-            }
-        }
-        return parseParams(ret, parserDelegate);
+        return highestPrecedence;
     }
 
     static List<Object> processCompositeParam(String stringParam, ParserDelegate parserDelegate) {
@@ -501,14 +621,6 @@ public class IfSectionHelper implements SectionHelper {
         Parser.splitSectionParams(stringParam.substring(1, stringParam.length() - 1), TemplateException::new)
                 .forEachRemaining(split::add);
         return parseParams(split, parserDelegate);
-    }
-
-    private static boolean isBinaryOperatorEq(Object val, int precedence) {
-        return val instanceof Operator && ((Operator) val).getPrecedence() == precedence;
-    }
-
-    private static boolean isBinaryOperatorLt(Object val, int precedence) {
-        return val instanceof Operator && ((Operator) val).getPrecedence() < precedence;
     }
 
     @SuppressWarnings("unchecked")
@@ -544,7 +656,12 @@ public class IfSectionHelper implements SectionHelper {
                     nextOperator = null;
                 }
             }
-            condition = new CompositeCondition(operator, conditions);
+
+            if (operator == null && conditions.size() == 1) {
+                condition = conditions.get(0);
+            } else {
+                condition = new CompositeCondition(operator, ImmutableList.copyOf(conditions));
+            }
         } else {
             throw new TemplateException("Unsupported param type: " + param);
         }

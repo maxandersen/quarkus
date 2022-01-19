@@ -6,7 +6,7 @@ import io.quarkus.bootstrap.resolver.TsArtifact;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
 import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
 import io.quarkus.bootstrap.util.IoUtils;
-import io.quarkus.bootstrap.util.ZipUtils;
+import io.quarkus.fs.util.ZipUtils;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ public abstract class CreatorOutcomeTestBase extends ResolverSetupCleanup {
         IoUtils.recursiveDelete(ws);
         final Path outputDir = IoUtils.mkdirs(ws.resolve("target"));
 
-        Path applicationRoot = resolver.resolve(appJar.toAppArtifact());
+        Path applicationRoot = resolver.resolve(appJar.toArtifact()).getResolvedPaths().getSinglePath();
         final QuarkusBootstrap.Builder bootstrap = QuarkusBootstrap.builder()
                 .setApplicationRoot(applicationRoot)
                 .setProjectRoot(applicationRoot)
@@ -55,8 +55,16 @@ public abstract class CreatorOutcomeTestBase extends ResolverSetupCleanup {
         }
 
         initProps(bootstrap);
-        testCreator(bootstrap.build());
+        try {
+            testCreator(bootstrap.build());
+        } catch (Exception e) {
+            assertError(e);
+        }
 
+    }
+
+    protected void assertError(Exception e) throws Exception {
+        throw e;
     }
 
     protected abstract TsArtifact modelApp() throws Exception;

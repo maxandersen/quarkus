@@ -18,10 +18,27 @@ public class AdminResource {
     @Inject
     SecurityIdentity identity;
 
+    @Path("bearer")
     @GET
     @RolesAllowed("admin")
     @Produces(MediaType.APPLICATION_JSON)
     public String admin() {
+        return "granted:" + identity.getRoles();
+    }
+
+    @Path("bearer-no-introspection")
+    @GET
+    @RolesAllowed("admin")
+    @Produces(MediaType.APPLICATION_JSON)
+    public String adminNoIntrospection() {
+        return "granted:" + identity.getRoles();
+    }
+
+    @Path("bearer-wrong-role-path")
+    @GET
+    @RolesAllowed("admin")
+    @Produces(MediaType.APPLICATION_JSON)
+    public String adminWrongRolePath() {
         return "granted:" + identity.getRoles();
     }
 }

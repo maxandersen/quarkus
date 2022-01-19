@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
@@ -82,6 +83,7 @@ public class InjectionPointInfo {
 
     private final TypeAndQualifiers typeAndQualifiers;
     private final AtomicReference<BeanInfo> resolvedBean;
+    private final AtomicReference<BeanInfo> targetBean;
     private final InjectionPointKind kind;
     private final boolean hasDefaultedQualifier;
     private final AnnotationTarget target;
@@ -101,6 +103,7 @@ public class InjectionPointInfo {
                         ? Collections.singleton(AnnotationInstance.create(DotNames.DEFAULT, null, Collections.emptyList()))
                         : requiredQualifiers);
         this.resolvedBean = new AtomicReference<BeanInfo>(null);
+        this.targetBean = new AtomicReference<BeanInfo>(null);
         this.kind = kind;
         this.hasDefaultedQualifier = requiredQualifiers.isEmpty();
         this.target = target;
@@ -117,12 +120,48 @@ public class InjectionPointInfo {
         return resolvedBean.get();
     }
 
+    public Optional<BeanInfo> getTargetBean() {
+        return Optional.ofNullable(targetBean.get());
+    }
+
+    public void setTargetBean(BeanInfo bean) {
+        this.targetBean.set(bean);
+    }
+
     InjectionPointKind getKind() {
         return kind;
     }
 
+    /**
+     * Note that for programmatic lookup, the required type is the type parameter specified at the injection point. For example,
+     * the required type for an injection point of type {@code Instance<org.acme.Foo>} is {@code org.acme.Foo}.
+     * 
+     * @return the required type of this injection point
+     */
     public Type getRequiredType() {
+        Type requiredType = typeAndQualifiers.type;
+        if (isProgrammaticLookup() && requiredType.kind() == org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE) {
+            requiredType = requiredType.asParameterizedType().arguments().get(0);
+        }
+        return requiredType;
+    }
+
+    /**
+     * This method always returns the original type declared on the injection point, unlike {@link #getRequiredType()}.
+     * 
+     * @return the type specified at the injection point
+     */
+    public Type getType() {
         return typeAndQualifiers.type;
+    }
+
+    /**
+     * @return <code>true</code> if this injection represents a dynamically obtained instance, <code>false</code> otherwise
+     */
+    public boolean isProgrammaticLookup() {
+        DotName requiredTypeName = typeAndQualifiers.type.name();
+        return DotNames.INSTANCE.equals(requiredTypeName) || DotNames.INJECTABLE_INSTANCE.equals(requiredTypeName)
+                || DotNames.PROVIDER.equals(requiredTypeName);
     }
 
     public Set<AnnotationInstance> getRequiredQualifiers() {
@@ -181,6 +220,10 @@ public class InjectionPointInfo {
         return isDelegate;
     }
 
+    public boolean hasResolvedBean() {
+        return resolvedBean.get() != null;
+    }
+
     /**
      * @return the parameter position or {@code -1} for a field injection point
      */
@@ -193,7 +236,17 @@ public class InjectionPointInfo {
             case FIELD:
                 return target.asField().declaringClass().name() + "#" + target.asField().name();
             case METHOD:
-                return target.asMethod().declaringClass().name() + "#" + target.asMethod().name() + "()";
+                String param = target.asMethod().parameterName(position);
+                if (param == null || param.isBlank()) {
+                    param = "arg" + position;
+                }
+                String method = target.asMethod().name();
+                if (method.equals(Methods.INIT)) {
+                    method = "";
+                } else {
+                    method = "#" + method;
+                }
+                return target.asMethod().declaringClass().name() + method + "()" + "." + param;
             default:
                 return target.toString();
         }
@@ -241,11 +294,11 @@ public class InjectionPointInfo {
         RESOURCE
     }
 
-    static class TypeAndQualifiers {
+    public static class TypeAndQualifiers {
 
-        final Type type;
+        public final Type type;
 
-        final Set<AnnotationInstance> qualifiers;
+        public final Set<AnnotationInstance> qualifiers;
 
         public TypeAndQualifiers(Type type, Set<AnnotationInstance> qualifiers) {
             this.type = type;

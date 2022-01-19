@@ -2,6 +2,7 @@ package io.quarkus.platform.catalog.processor;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 final class MetadataValue {
@@ -63,11 +64,19 @@ final class MetadataValue {
     }
 
     public <T extends Enum<T>> T toEnum(Class<T> clazz) {
+        return toEnum(clazz, null);
+    }
+
+    public <T extends Enum<T>> T toEnum(Class<T> clazz, T defaultValue) {
         final String name = asString();
         if (name == null) {
-            return null;
+            return defaultValue;
         }
-        return T.valueOf(clazz, name.toUpperCase().replace("-", "_"));
+        try {
+            return T.valueOf(clazz, name.toUpperCase(Locale.ROOT).replace('-', '_'));
+        } catch (IllegalArgumentException e) {
+            return defaultValue;
+        }
     }
 
 }

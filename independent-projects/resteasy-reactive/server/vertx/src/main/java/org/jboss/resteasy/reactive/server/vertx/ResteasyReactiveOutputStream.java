@@ -6,7 +6,6 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.vertx.core.Context;
 import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
-import io.vertx.core.http.HttpConnection;
 import io.vertx.core.http.HttpServerRequest;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -17,15 +16,14 @@ import org.jboss.resteasy.reactive.server.core.ResteasyReactiveRequestContext;
 
 public class ResteasyReactiveOutputStream extends OutputStream {
 
-    private static final Logger log = Logger.getLogger("io.quarkus.quarkus-rest");
+    private static final Logger log = Logger.getLogger("org.jboss.resteasy.reactive.server.vertx.ResteasyReactiveOutputStream");
     private final ResteasyReactiveRequestContext context;
     protected final HttpServerRequest request;
+    private final int outputBufferSize;
     private ByteBuf pooledBuffer;
-    private long written;
     private boolean committed;
 
     private boolean closed;
-    private boolean finished;
     protected boolean waitingForDrain;
     protected boolean drainHandlerRegistered;
     protected boolean first = true;
@@ -35,6 +33,7 @@ public class ResteasyReactiveOutputStream extends OutputStream {
     public ResteasyReactiveOutputStream(VertxResteasyReactiveRequestContext context) {
         this.context = context;
         this.request = context.getContext().request();
+        this.outputBufferSize = context.getDeployment().getResteasyReactiveConfig().getOutputBufferSize();
         request.response().exceptionHandler(new Handler<Throwable>() {
             @Override
             public void handle(Throwable event) {
@@ -45,7 +44,7 @@ public class ResteasyReactiveOutputStream extends OutputStream {
                 request.connection().close();
                 synchronized (request.connection()) {
                     if (waitingForDrain) {
-                        request.connection().notify();
+                        request.connection().notifyAll();
                     }
                 }
             }
@@ -56,7 +55,7 @@ public class ResteasyReactiveOutputStream extends OutputStream {
             public void handle(Void event) {
                 synchronized (request.connection()) {
                     if (waitingForDrain) {
-                        request.connection().notify();
+                        request.connection().notifyAll();
                     }
                 }
                 terminateResponse();
@@ -95,6 +94,7 @@ public class ResteasyReactiveOutputStream extends OutputStream {
                     if (last) {
                         closed = true;
                     }
+                    data.release();
                 } else {
                     if (last) {
                         request.response().end(createBuffer(data));
@@ -146,10 +146,9 @@ public class ResteasyReactiveOutputStream extends OutputStream {
             Handler<Void> handler = new Handler<Void>() {
                 @Override
                 public void handle(Void event) {
-                    HttpConnection connection = request.connection();
-                    synchronized (connection) {
+                    synchronized (request.connection()) {
                         if (waitingForDrain) {
-                            connection.notifyAll();
+                            request.connection().notifyAll();
                         }
                         if (overflow != null) {
                             if (overflow.size() > 0) {
@@ -199,7 +198,7 @@ public class ResteasyReactiveOutputStream extends OutputStream {
         ByteBuf buffer = pooledBuffer;
         try {
             if (buffer == null) {
-                pooledBuffer = buffer = PooledByteBufAllocator.DEFAULT.directBuffer();
+                pooledBuffer = buffer = PooledByteBufAllocator.DEFAULT.directBuffer(outputBufferSize);
             }
             while (rem > 0) {
                 int toWrite = Math.min(rem, buffer.writableBytes());
@@ -208,7 +207,7 @@ public class ResteasyReactiveOutputStream extends OutputStream {
                 idx += toWrite;
                 if (!buffer.isWritable()) {
                     ByteBuf tmpBuf = buffer;
-                    this.pooledBuffer = buffer = PooledByteBufAllocator.DEFAULT.directBuffer();
+                    this.pooledBuffer = buffer = PooledByteBufAllocator.DEFAULT.directBuffer(outputBufferSize);
                     writeBlocking(tmpBuf, false);
                 }
             }
@@ -218,7 +217,6 @@ public class ResteasyReactiveOutputStream extends OutputStream {
             }
             throw new IOException(e);
         }
-        updateWritten(len);
     }
 
     public void writeBlocking(ByteBuf buffer, boolean finished) throws IOException {
@@ -239,13 +237,6 @@ public class ResteasyReactiveOutputStream extends OutputStream {
                 request.response().setChunked(true);
             }
         }
-        if (finished) {
-            this.finished = true;
-        }
-    }
-
-    void updateWritten(final long len) throws IOException {
-        this.written += len;
     }
 
     /**

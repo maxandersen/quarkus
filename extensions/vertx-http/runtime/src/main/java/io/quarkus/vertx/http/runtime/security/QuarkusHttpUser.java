@@ -10,6 +10,7 @@ import io.vertx.core.Handler;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.auth.AuthProvider;
 import io.vertx.ext.auth.User;
+import io.vertx.ext.auth.authorization.Authorization;
 import io.vertx.ext.web.RoutingContext;
 
 /**
@@ -24,7 +25,7 @@ public class QuarkusHttpUser implements User {
     /**
      * The key that stores a BiConsumer that handles auth failures
      *
-     * This can be overriden by downstream handlers such as Undertow to control auth failure handling.
+     * This can be overridden by downstream handlers such as Undertow to control auth failure handling.
      */
     public static final String AUTH_FAILURE_HANDLER = "io.quarkus.vertx.http.auth-failure-handler";
 
@@ -35,18 +36,24 @@ public class QuarkusHttpUser implements User {
     }
 
     @Override
+    public JsonObject attributes() {
+        // Vert.x 4 Migration: Check this, probably wrong.
+        return principal();
+    }
+
+    @Override
+    public User isAuthorized(Authorization authority, Handler<AsyncResult<Boolean>> resultHandler) {
+        return null;
+    }
+
+    @Override
     public User isAuthorized(String authority, Handler<AsyncResult<Boolean>> resultHandler) {
         resultHandler.handle(Future.succeededFuture(securityIdentity.hasRole(authority)));
         return this;
     }
 
     @Override
-    public User isAuthorised(String authority, Handler<AsyncResult<Boolean>> resultHandler) {
-        resultHandler.handle(Future.succeededFuture(securityIdentity.hasRole(authority)));
-        return this;
-    }
-
-    @Override
+    @Deprecated
     public User clearCache() {
         return this;
     }
@@ -59,6 +66,7 @@ public class QuarkusHttpUser implements User {
     }
 
     @Override
+    @Deprecated
     public void setAuthProvider(AuthProvider authProvider) {
 
     }
@@ -87,6 +95,19 @@ public class QuarkusHttpUser implements User {
             return identityProviderManager.authenticate(AnonymousAuthenticationRequest.INSTANCE).await().indefinitely();
         }
         return null;
+    }
+
+    @Override
+    public User merge(User other) {
+        if (other == null) {
+            return this;
+        }
+
+        principal()
+                // merge in the rhs
+                .mergeIn(other.principal());
+
+        return this;
     }
 
     /**
